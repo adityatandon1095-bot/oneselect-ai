@@ -4,17 +4,22 @@ import { supabase } from './supabase'
 const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
-  const [user, setUser]       = useState(null)
-  const [profile, setProfile] = useState(null)
-  const [loading, setLoading] = useState(true)
+  const [user, setUser]                     = useState(null)
+  const [profile, setProfile]               = useState(null)
+  const [loading, setLoading]               = useState(true)
+  const [profileLoading, setProfileLoading] = useState(false)
 
   async function fetchProfile(u) {
-    const { data } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', u.id)
-      .single()
-    setProfile(data ?? null)
+    try {
+      const { data } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', u.id)
+        .single()
+      setProfile(data ?? null)
+    } finally {
+      setProfileLoading(false)
+    }
   }
 
   useEffect(() => {
@@ -24,10 +29,9 @@ export function AuthProvider({ children }) {
       if (cancelled) return
       if (session?.user) {
         setUser(session.user)
-        // Fetch profile in background — don't block loading on it
-        fetchProfile(session.user).catch(() => {})
+        setProfileLoading(true)
+        fetchProfile(session.user).catch(() => { setProfileLoading(false) })
       }
-      // Unblock the UI immediately once we know the auth state
       setLoading(false)
     }).catch(() => {
       if (!cancelled) setLoading(false)
@@ -41,10 +45,12 @@ export function AuthProvider({ children }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         setUser(session.user)
-        fetchProfile(session.user).catch(() => {})
+        setProfileLoading(true)
+        fetchProfile(session.user).catch(() => { setProfileLoading(false) })
       } else {
         setUser(null)
         setProfile(null)
+        setProfileLoading(false)
       }
     })
 
@@ -58,7 +64,7 @@ export function AuthProvider({ children }) {
   const signOut = () => supabase.auth.signOut()
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, signOut }}>
+    <AuthContext.Provider value={{ user, profile, profileLoading, loading, signOut }}>
       {children}
     </AuthContext.Provider>
   )

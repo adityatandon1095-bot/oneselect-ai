@@ -32,7 +32,11 @@ export default function Login() {
       return
     }
 
-    navigate(profile.user_role === 'admin' ? '/admin' : '/recruiter', { replace: true })
+    if (profile.user_role === 'admin') {
+      navigate('/admin/dashboard', { replace: true })
+    } else {
+      navigate('/recruiter/dashboard', { replace: true })
+    }
     setLoading(false)
   }
 

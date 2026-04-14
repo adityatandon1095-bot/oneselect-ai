@@ -24,21 +24,20 @@ function Loader() {
 }
 
 function ProtectedRoute({ children, role }) {
-  const { user, profile, loading } = useAuth()
-  if (loading) return <Loader />
+  const { user, profile, profileLoading, loading } = useAuth()
+  if (loading || profileLoading) return <Loader />
   if (!user) return <Navigate to="/login" replace />
   if (role && profile && profile.user_role !== role) {
-    return <Navigate to={profile.user_role === 'admin' ? '/admin' : '/recruiter'} replace />
+    return <Navigate to={profile.user_role === 'admin' ? '/admin/dashboard' : '/recruiter/dashboard'} replace />
   }
   return children
 }
 
 function RootRedirect() {
-  const { user, profile, loading } = useAuth()
-  if (loading) return <Loader />
+  const { user, profile, profileLoading, loading } = useAuth()
+  if (loading || profileLoading) return <Loader />
   if (!user) return <Navigate to="/login" replace />
-  // Profile loads in background — default to /recruiter if it hasn't arrived yet
-  return <Navigate to={profile?.user_role === 'admin' ? '/admin' : '/recruiter'} replace />
+  return <Navigate to={profile?.user_role === 'admin' ? '/admin/dashboard' : '/recruiter/dashboard'} replace />
 }
 
 export default function App() {
@@ -51,6 +50,7 @@ export default function App() {
 
           <Route path="/admin" element={<ProtectedRoute role="admin"><AdminLayout /></ProtectedRoute>}>
             <Route index element={<AdminDashboard />} />
+            <Route path="dashboard" element={<AdminDashboard />} />
             <Route path="clients" element={<AdminClients />} />
             <Route path="jobs" element={<AdminJobs />} />
             <Route path="pipeline" element={<AdminPipeline />} />
@@ -59,6 +59,7 @@ export default function App() {
 
           <Route path="/recruiter" element={<ProtectedRoute role="recruiter"><RecruiterLayout /></ProtectedRoute>}>
             <Route index element={<RecruiterDashboard />} />
+            <Route path="dashboard" element={<RecruiterDashboard />} />
             <Route path="jobs" element={<RecruiterJobs />} />
             <Route path="candidates" element={<RecruiterCandidates />} />
             <Route path="reports" element={<RecruiterReports />} />
