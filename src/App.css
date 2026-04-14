@@ -352,6 +352,91 @@ select option { background: var(--surface); color: var(--text); }
 /* ── Transcript chat ─────────────────────────────────────────────── */
 .transcript-wrap { background: var(--bg); border: 1px solid var(--border); border-radius: var(--r); padding: 14px; max-height: 320px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
 
+/* ── Modal ───────────────────────────────────────────────────────── */
+.modal-overlay {
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(45,55,72,0.45);
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+  animation: fade-in 0.15s ease;
+}
+@keyframes fade-in { from { opacity: 0 } to { opacity: 1 } }
+
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-xl);
+  width: 100%; max-width: 520px;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.14);
+  animation: slide-up 0.18s ease;
+}
+@keyframes slide-up { from { transform: translateY(12px); opacity: 0 } to { transform: translateY(0); opacity: 1 } }
+
+.modal-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--border);
+}
+.modal-head h3 { margin: 0; font-size: 16px; }
+
+.modal-close {
+  background: none; border: none; cursor: pointer;
+  font-size: 22px; line-height: 1; color: var(--text-3);
+  padding: 0 2px;
+  transition: color 0.12s;
+}
+.modal-close:hover { color: var(--text); }
+
+.modal-body { padding: 24px; }
+
+/* Invite success state */
+.invite-success {
+  text-align: center;
+  padding: 8px 0 4px;
+}
+.invite-success-icon {
+  width: 48px; height: 48px; border-radius: 50%;
+  background: var(--green-d); border: 1.5px solid var(--green);
+  color: var(--green); font-size: 22px;
+  display: flex; align-items: center; justify-content: center;
+  margin: 0 auto 16px;
+}
+
+/* Welcome modal card */
+.welcome-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--accent);
+  border-radius: var(--r-xl);
+  padding: 40px 36px;
+  max-width: 460px; width: 100%;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.14);
+  animation: slide-up 0.2s ease;
+}
+
+/* ── Client table ─────────────────────────────────────────────────── */
+.client-table-head {
+  display: grid;
+  grid-template-columns: 1.4fr 1.6fr 60px 80px 80px 80px 1fr;
+  gap: 8px;
+  padding: 8px 20px;
+  background: var(--surface2);
+  font-family: var(--font-mono); font-size: 9px;
+  text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-3);
+  border-bottom: 1px solid var(--border);
+}
+.client-table-row {
+  display: grid;
+  grid-template-columns: 1.4fr 1.6fr 60px 80px 80px 80px 1fr;
+  gap: 8px;
+  padding: 13px 20px;
+  border-bottom: 1px solid var(--border);
+  align-items: center;
+  transition: background 0.1s;
+}
+.client-table-row:last-child { border-bottom: none; }
+.client-table-row:hover { background: var(--surface2); }
+
 /* ── Print ───────────────────────────────────────────────────────── */
 @media print {
   .sidebar, .no-print { display: none !important; }

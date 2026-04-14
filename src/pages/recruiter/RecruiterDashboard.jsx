@@ -10,6 +10,7 @@ export default function RecruiterDashboard() {
   const [recentCandidates, setRecentCandidates] = useState([])
   const [recentJobs, setRecentJobs] = useState([])
   const [loading, setLoading] = useState(true)
+  const [showWelcome, setShowWelcome] = useState(false)
 
   useEffect(() => { if (user) load() }, [user])
 
@@ -18,7 +19,12 @@ export default function RecruiterDashboard() {
     const jobIds = (jobs ?? []).map(j => j.id)
     setRecentJobs((jobs ?? []).slice(0, 4))
 
-    if (!jobIds.length) { setLoading(false); return }
+    if (!jobIds.length) {
+      // First-time user: no jobs yet — show welcome modal once
+      if (!localStorage.getItem(`welcomed_${user.id}`)) setShowWelcome(true)
+      setLoading(false)
+      return
+    }
 
     const { data: allCandidates } = await supabase
       .from('candidates')
@@ -38,6 +44,12 @@ export default function RecruiterDashboard() {
     setLoading(false)
   }
 
+  function dismissWelcome(goCreate = false) {
+    localStorage.setItem(`welcomed_${user.id}`, '1')
+    setShowWelcome(false)
+    if (goCreate) navigate('/recruiter/jobs')
+  }
+
   function getStatus(c) {
     if (c.interview_scores) return { label: c.interview_scores.recommendation ?? 'Interviewed', color: c.interview_scores.recommendation === 'Strong Hire' ? 'var(--green)' : c.interview_scores.recommendation === 'Hire' ? 'var(--accent)' : c.interview_scores.recommendation === 'Reject' ? 'var(--red)' : 'var(--amber)', bg: 'var(--accent-d)' }
     if (c.match_pass === true)  return { label: 'Awaiting Interview', color: 'var(--amber)', bg: 'var(--amber-d)' }
@@ -46,12 +58,43 @@ export default function RecruiterDashboard() {
     return { label: 'Pending', color: 'var(--text-3)', bg: 'var(--surface2)' }
   }
 
-  const firstName = profile?.company_name || user?.email?.split('@')[0] || 'there'
-
   if (loading) return <div className="page"><span className="spinner" /></div>
 
   return (
     <div className="page">
+      {/* ── First-login welcome modal ── */}
+      {showWelcome && (
+        <div className="modal-overlay">
+          <div className="welcome-card">
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.2em', color: 'var(--accent)', marginBottom: 20 }}>
+              One Select
+            </div>
+            <h2 style={{ marginBottom: 14 }}>
+              Welcome{profile?.company_name ? `, ${profile.company_name}` : ''}!
+            </h2>
+            <p style={{ color: 'var(--text-2)', lineHeight: 1.8, marginBottom: 28 }}>
+              Your AI hiring pipeline is ready. Start by creating your first job —
+              then your One Select admin will upload and screen CVs for you.
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <button
+                className="btn btn-primary"
+                style={{ justifyContent: 'center', padding: '12px 24px' }}
+                onClick={() => dismissWelcome(true)}
+              >
+                Create Your First Job
+              </button>
+              <button
+                className="btn btn-secondary"
+                style={{ justifyContent: 'center' }}
+                onClick={() => dismissWelcome(false)}
+              >
+                Skip for now
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="page-head">
         <div>
           <h2>Welcome back{profile?.company_name ? `, ${profile.company_name}` : ''}</h2>
