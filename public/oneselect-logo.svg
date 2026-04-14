@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 175" fill="none">
+  <defs>
+    <linearGradient id="bronzeGrad" x1="0.5" y1="0" x2="0.5" y2="1">
+      <stop offset="0%"   stop-color="#6B4D22"/>
+      <stop offset="45%"  stop-color="#9B7530"/>
+      <stop offset="100%" stop-color="#C4A24A"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Four parallel strokes forming the "1" mark -->
+  <!-- Each stroke: diagonal cap (lower-left to upper-right) → vertical body → short foot -->
+  <!-- Strokes offset ~6px apart horizontally to create the layered depth effect -->
+
+  <!-- Stroke 1 – leftmost -->
+  <polyline
+    points="68,70 84,18 84,128 91,128"
+    stroke="url(#bronzeGrad)" stroke-width="3.2"
+    stroke-linecap="square" stroke-linejoin="miter"/>
+
+  <!-- Stroke 2 -->
+  <polyline
+    points="74,70 90,18 90,128 97,128"
+    stroke="url(#bronzeGrad)" stroke-width="3.2"
+    stroke-linecap="square" stroke-linejoin="miter"/>
+
+  <!-- Stroke 3 -->
+  <polyline
+    points="80,70 96,18 96,128 103,128"
+    stroke="url(#bronzeGrad)" stroke-width="3.2"
+    stroke-linecap="square" stroke-linejoin="miter"/>
+
+  <!-- Stroke 4 – rightmost / main vertical -->
+  <polyline
+    points="86,70 102,18 102,128 109,128"
+    stroke="url(#bronzeGrad)" stroke-width="3.2"
+    stroke-linecap="square" stroke-linejoin="miter"/>
+
+  <!-- "ONE SELECT" wordmark -->
+  <text
+    x="110" y="163"
+    text-anchor="middle"
+    font-family="'Arial Black','Helvetica Neue',Arial,sans-serif"
+    font-size="17.5"
+    font-weight="900"
+    letter-spacing="0.22em"
+    fill="#1A2744">ONE SELECT</text>
+</svg>

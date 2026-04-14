@@ -1,0 +1,84 @@
+import { useState, useEffect } from 'react'
+import { supabase } from '../../lib/supabase'
+
+export default function AdminDashboard() {
+  const [stats, setStats] = useState({ clients: 0, jobs: 0, candidates: 0, interviews: 0 })
+  const [recentJobs, setRecentJobs] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => { load() }, [])
+
+  async function load() {
+    const [
+      { count: clients },
+      { count: jobs },
+      { count: candidates },
+      { count: interviews },
+      { data: recent },
+    ] = await Promise.all([
+      supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('user_role', 'recruiter'),
+      supabase.from('jobs').select('*', { count: 'exact', head: true }),
+      supabase.from('candidates').select('*', { count: 'exact', head: true }),
+      supabase.from('candidates').select('*', { count: 'exact', head: true }).not('interview_scores', 'is', null),
+      supabase.from('jobs').select('id, title, status, created_at, profiles(company_name)').order('created_at', { ascending: false }).limit(8),
+    ])
+    setStats({ clients: clients ?? 0, jobs: jobs ?? 0, candidates: candidates ?? 0, interviews: interviews ?? 0 })
+    setRecentJobs(recent ?? [])
+    setLoading(false)
+  }
+
+  if (loading) return <div className="page" style={{ display: 'flex', alignItems: 'center', gap: 10 }}><span className="spinner" /> Loading…</div>
+
+  return (
+    <div className="page">
+      <div className="page-head">
+        <div>
+          <h2>Dashboard</h2>
+          <p>Platform-wide overview</p>
+        </div>
+      </div>
+
+      <div className="metrics-row">
+        <div className="metric-card blue">
+          <span className="metric-val">{stats.clients}</span>
+          <span className="metric-label">Total Clients</span>
+        </div>
+        <div className="metric-card">
+          <span className="metric-val">{stats.jobs}</span>
+          <span className="metric-label">Active Jobs</span>
+        </div>
+        <div className="metric-card amber">
+          <span className="metric-val">{stats.candidates}</span>
+          <span className="metric-label">Candidates Processed</span>
+        </div>
+        <div className="metric-card green">
+          <span className="metric-val">{stats.interviews}</span>
+          <span className="metric-label">Interviews Done</span>
+        </div>
+      </div>
+
+      <div className="section-card">
+        <div className="section-card-head"><h3>Recent Jobs</h3></div>
+        {recentJobs.length === 0
+          ? <div className="empty-state">No jobs yet</div>
+          : recentJobs.map((j) => (
+            <div key={j.id} className="table-row">
+              <div className="col-main">
+                <div className="col-name">{j.title}</div>
+                <div className="col-sub">{j.profiles?.company_name ?? '—'}</div>
+              </div>
+              <div className="col-right">
+                <span className={`badge ${j.status === 'active' ? 'badge-green' : 'badge-amber'}`}>
+                  {j.status ?? 'active'}
+                </span>
+                <span className="mono text-muted" style={{ fontSize: 11 }}>
+                  {new Date(j.created_at).toLocaleDateString()}
+                </span>
+              </div>
+            </div>
+          ))
+        }
+      </div>
+    </div>
+  )
+}
