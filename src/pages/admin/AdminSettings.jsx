@@ -83,7 +83,7 @@ export default function AdminSettings() {
                   <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2 }}>{desc}</div>
                 </div>
                 <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--accent)', letterSpacing: '0.04em' }}>claude-sonnet-4</div>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--accent)', letterSpacing: '0.04em' }}>{import.meta.env.VITE_CLAUDE_MODEL || 'claude-sonnet-4-6'}</div>
                   <span className="badge badge-green" style={{ marginTop: 4 }}>Active</span>
                 </div>
               </div>

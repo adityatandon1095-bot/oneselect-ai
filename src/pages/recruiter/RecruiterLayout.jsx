@@ -2,7 +2,7 @@ import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../lib/AuthContext'
 
 const NAV = [
-  { to: '/recruiter',             label: 'Dashboard',  icon: '◈', end: true },
+  { to: '/recruiter/dashboard',   label: 'Dashboard',  icon: '◈' },
   { to: '/recruiter/jobs',        label: 'My Jobs',    icon: '◫' },
   { to: '/recruiter/candidates',  label: 'Candidates', icon: '◉' },
   { to: '/recruiter/reports',     label: 'Reports',    icon: '◧' },

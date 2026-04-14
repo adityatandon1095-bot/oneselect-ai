@@ -8,7 +8,7 @@ export async function callClaude(messages, systemPrompt, maxTokens = 1000) {
       'anthropic-dangerous-direct-browser-access': 'true',
     },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
+      model: import.meta.env.VITE_CLAUDE_MODEL || 'claude-sonnet-4-6',
       max_tokens: maxTokens,
       system: systemPrompt,
       messages,

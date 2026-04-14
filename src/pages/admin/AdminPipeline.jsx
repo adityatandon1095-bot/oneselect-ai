@@ -67,7 +67,7 @@ export default function AdminPipeline() {
   const [ivStates, setIvStates] = useState({})
   const [selectedIvId, setSelectedIvId] = useState(null)
   const [log, setLog] = useState([])
-  const [running, setRunning] = useState(false)
+  const running = parsing || screening
   const fileInputRef = useRef()
   const logRef = useRef()
   const chatRef = useRef()
@@ -78,8 +78,7 @@ export default function AdminPipeline() {
   useEffect(() => { chatRef.current?.scrollTo(0, chatRef.current.scrollHeight) }, [ivStates])
 
   async function loadClients() {
-    const { data, error } = await supabase.from('profiles').select('id, full_name, company_name, email').eq('user_role', 'recruiter').order('company_name')
-    console.log('[Pipeline] loadClients →', { data, error })
+    const { data } = await supabase.from('profiles').select('id, full_name, company_name, email').eq('user_role', 'recruiter').order('company_name')
     setClients(data ?? [])
   }
 
@@ -191,6 +190,8 @@ export default function AdminPipeline() {
     setScreening(true)
     const system = screeningSystem(activeJob)
     const toScreen = candidates.filter(c => c._status === 'parsed')
+    // Accumulate locally — don't rely on stale candidates closure at the end
+    const passedThisRun = []
     for (const c of toScreen) {
       setCandidates(p => p.map(x => x.id === c.id ? { ...x, _status: 'screening' } : x))
       addLog(`Screening ${c.full_name}…`, 'info')
@@ -200,6 +201,7 @@ export default function AdminPipeline() {
         const s = JSON.parse(reply.trim())
         await supabase.from('candidates').update({ match_score: s.matchScore, match_pass: s.pass, match_reason: s.reason, match_rank: s.rank }).eq('id', c.id)
         setCandidates(p => p.map(x => x.id === c.id ? { ...x, _status: 'screened', match_score: s.matchScore, match_pass: s.pass, match_reason: s.reason, match_rank: s.rank } : x))
+        if (s.pass) passedThisRun.push(c)
         addLog(`✓ ${c.full_name}: ${s.matchScore}/100 → ${s.pass ? 'PASS' : 'FAIL'}`, s.pass ? 'ok' : '')
       } catch (err) {
         addLog(`✗ ${c.full_name}: ${err.message}`, 'err')
@@ -208,10 +210,9 @@ export default function AdminPipeline() {
     }
     setScreening(false)
     setScreeningDone(true)
-    const passed = candidates.filter(c => c.match_pass)
-    setIvStates(Object.fromEntries(passed.map(c => [c.id, { messages: [], input: '', loading: false, complete: false, scoring: false, scores: null }])))
-    if (passed.length > 0) setSelectedIvId(passed[0].id)
-    addLog(`Screening complete. ${passed.length} passed.`, 'info')
+    setIvStates(Object.fromEntries(passedThisRun.map(c => [c.id, { messages: [], input: '', loading: false, complete: false, scoring: false, scores: null }])))
+    if (passedThisRun.length > 0) setSelectedIvId(passedThisRun[0].id)
+    addLog(`Screening complete. ${passedThisRun.length} passed.`, 'info')
   }
 
   // ── Interviews ────────────────────────────────────────────────────────────

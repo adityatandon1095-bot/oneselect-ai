@@ -23,8 +23,6 @@ export default function Login() {
       .eq('id', data.user.id)
       .single()
 
-    console.log('[Login] profile →', { profile, profileError })
-
     if (profileError || !profile) {
       setError('Could not load your profile. Please try again or contact support.')
       await supabase.auth.signOut()

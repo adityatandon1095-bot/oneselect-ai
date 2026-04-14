@@ -17,7 +17,7 @@ export default function AdminDashboard() {
       { data: recent },
     ] = await Promise.all([
       supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('user_role', 'recruiter'),
-      supabase.from('jobs').select('*', { count: 'exact', head: true }),
+      supabase.from('jobs').select('*', { count: 'exact', head: true }).eq('status', 'active'),
       supabase.from('candidates').select('*', { count: 'exact', head: true }),
       supabase.from('candidates').select('*', { count: 'exact', head: true }).not('interview_scores', 'is', null),
       supabase.from('jobs').select('id, title, status, created_at, profiles(company_name)').order('created_at', { ascending: false }).limit(8),
