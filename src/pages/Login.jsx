@@ -17,13 +17,22 @@ export default function Login() {
     const { data, error: authError } = await supabase.auth.signInWithPassword({ email, password })
     if (authError) { setError(authError.message); setLoading(false); return }
 
-    const { data: profile } = await supabase
+    const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('user_role')
       .eq('id', data.user.id)
       .single()
 
-    navigate(profile?.user_role === 'admin' ? '/admin' : '/recruiter', { replace: true })
+    console.log('[Login] profile →', { profile, profileError })
+
+    if (profileError || !profile) {
+      setError('Could not load your profile. Please try again or contact support.')
+      await supabase.auth.signOut()
+      setLoading(false)
+      return
+    }
+
+    navigate(profile.user_role === 'admin' ? '/admin' : '/recruiter', { replace: true })
     setLoading(false)
   }
 
