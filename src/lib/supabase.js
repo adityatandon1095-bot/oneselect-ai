@@ -1,8 +1,11 @@
 import { createClient } from '@supabase/supabase-js'
 
+const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+console.log('Supabase key format:', anonKey?.slice(0, 10))
+
 export const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY,
+  anonKey,
   {
     auth: {
       // Bypass navigator.locks — prevents the lock-stealing error in dev
@@ -17,7 +20,7 @@ export const supabase = createClient(
 // the admin's session stored under the default key.
 export const supabaseSignup = createClient(
   import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY,
+  anonKey,
   {
     auth: {
       storageKey:       'oneselect-signup-client',

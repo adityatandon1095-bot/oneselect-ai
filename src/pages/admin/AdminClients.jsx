@@ -18,8 +18,7 @@ export default function AdminClients() {
   const [contactName,     setContactName]     = useState('')
   const [loading,         setLoading]         = useState(false)
   const [error,           setError]           = useState('')
-  const [credentials,     setCredentials]     = useState(null)
-  const [showCredentials, setShowCredentials] = useState(false)
+  const [inviteSuccess,   setInviteSuccess]   = useState(null) // { email, password, emailSent }
 
   useEffect(() => { loadClients() }, [])
 
@@ -90,39 +89,72 @@ export default function AdminClients() {
     setError('')
 
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) throw new Error('Not authenticated')
+      const tempPassword = 'OneSelect-' + Math.random().toString(36).slice(2, 8).toUpperCase()
 
-      const res = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/invite-user`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({
-            email:        email.trim().toLowerCase(),
-            company_name: companyName.trim(),
-            contact_name: contactName.trim(),
-          }),
-        }
-      )
+      // Save admin session before signUp clobbers it
+      const { data: adminSession } = await supabase.auth.getSession()
+      const adminToken   = adminSession.session?.access_token
+      const adminRefresh = adminSession.session?.refresh_token
 
-      const result = await res.json()
-      console.log('Edge function result:', result)
-
-      if (!res.ok || result.error) {
-        throw new Error(result.error || 'Invitation failed')
-      }
-
-      setCredentials({
-        email:        email.trim().toLowerCase(),
-        company:      companyName.trim(),
-        emailSent:    result.emailSent,
-        tempPassword: result.tempPassword,
+      // Create the new user account
+      const { data, error } = await supabase.auth.signUp({
+        email:    email.trim().toLowerCase(),
+        password: tempPassword,
       })
-      setShowCredentials(true)
+      if (error) throw error
+      if (!data.user) throw new Error('No user created')
+      const newUserId = data.user.id
+
+      // Immediately restore admin session
+      await supabase.auth.setSession({ access_token: adminToken, refresh_token: adminRefresh })
+
+      // Insert recruiter profile using restored admin session
+      const { error: profileError } = await supabase.from('profiles').insert({
+        id:           newUserId,
+        user_role:    'recruiter',
+        company_name: companyName.trim(),
+        email:        email.trim().toLowerCase(),
+        full_name:    contactName.trim(),
+        first_login:  true,
+      })
+      if (profileError) throw new Error('Profile error: ' + profileError.message)
+
+      // Send welcome email via Resend
+      const emailRes = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Content-Type':  'application/json',
+          'Authorization': 'Bearer ' + import.meta.env.VITE_RESEND_API_KEY,
+        },
+        body: JSON.stringify({
+          from:    'One Select <noreply@oneselect.ai>',
+          to:      [email.trim().toLowerCase()],
+          subject: 'Welcome to One Select — Your Portal is Ready',
+          html: `<div style="font-family:Georgia,serif;max-width:600px;margin:0 auto;background:#F8F7F4;padding:40px;">
+            <div style="text-align:center;padding:32px 0;border-bottom:1px solid #E8E4DC;margin-bottom:32px;">
+              <h1 style="color:#B8924A;font-weight:300;letter-spacing:0.15em;font-size:28px;margin:0;">ONE SELECT</h1>
+              <p style="color:#9CA3AF;font-size:11px;letter-spacing:0.2em;text-transform:uppercase;margin:8px 0 0;">Strategic Talent Solutions</p>
+            </div>
+            <div style="background:white;padding:40px;border:1px solid #E8E4DC;">
+              <h2 style="color:#2D3748;font-weight:400;font-size:22px;margin:0 0 16px;">Welcome, ${contactName.trim()}!</h2>
+              <p style="color:#6B7280;line-height:1.8;font-size:15px;margin:0 0 24px;">Your AI-powered hiring portal is ready for <strong>${companyName.trim()}</strong>. Log in to create your first job posting and our team will handle the rest.</p>
+              <div style="background:#F8F7F4;border-left:4px solid #B8924A;padding:24px;margin:24px 0;">
+                <p style="margin:0 0 12px;color:#6B7280;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;">Your Login Details</p>
+                <p style="margin:0 0 8px;color:#2D3748;"><strong>Portal:</strong> <a href="https://oneselect-ai-t6uo-phi.vercel.app" style="color:#B8924A;">oneselect-ai-t6uo-phi.vercel.app</a></p>
+                <p style="margin:0 0 8px;color:#2D3748;"><strong>Email:</strong> ${email.trim().toLowerCase()}</p>
+                <p style="margin:0;color:#2D3748;"><strong>Password:</strong> <span style="font-family:monospace;font-size:20px;color:#B8924A;font-weight:bold;">${tempPassword}</span></p>
+              </div>
+              <div style="text-align:center;margin:32px 0;">
+                <a href="https://oneselect-ai-t6uo-phi.vercel.app" style="background:#B8924A;color:white;padding:14px 40px;text-decoration:none;font-size:12px;letter-spacing:0.1em;text-transform:uppercase;">ACCESS YOUR PORTAL →</a>
+              </div>
+            </div>
+          </div>`,
+        }),
+      })
+      const emailData = await emailRes.json()
+      console.log('Email result:', emailData)
+
+      setInviteSuccess({ email: email.trim().toLowerCase(), password: tempPassword, emailSent: emailRes.ok })
       setShowInviteModal(false)
       await loadClients()
 
@@ -156,12 +188,12 @@ export default function AdminClients() {
 
   // ── Copy login details ─────────────────────────────────────────────────
   function copyLoginDetails() {
-    if (!credentials) return
+    if (!inviteSuccess) return
     const text =
       `One Select Portal Login\n` +
       `Portal:   https://oneselect-ai-t6uo-phi.vercel.app\n` +
-      `Email:    ${credentials.email}\n` +
-      `Password: ${credentials.tempPassword}`
+      `Email:    ${inviteSuccess.email}\n` +
+      `Password: ${inviteSuccess.password}`
     navigator.clipboard.writeText(text).catch(() => {})
   }
 
@@ -325,15 +357,12 @@ export default function AdminClients() {
         </div>
       )}
 
-      {/* ── Credentials Modal — cannot be dismissed by clicking outside ── */}
-      {showCredentials && credentials && (
+      {/* ── Success Modal — no outside-click dismiss ── */}
+      {inviteSuccess && (
         <div className="modal-overlay">
           <div className="modal" style={{ maxWidth: 480 }}>
-            <div className="modal-head">
-              <h3>Client Invited!</h3>
-            </div>
+            <div className="modal-head"><h3>Client Invited!</h3></div>
             <div className="modal-body">
-              {/* Green checkmark */}
               <div style={{ textAlign: 'center', marginBottom: 24 }}>
                 <div style={{
                   width: 56, height: 56, borderRadius: '50%',
@@ -343,19 +372,17 @@ export default function AdminClients() {
                 }}>✓</div>
               </div>
 
-              {/* Email sent status */}
               <div style={{
                 padding: '10px 14px', marginBottom: 20, fontSize: 13,
-                background: credentials.emailSent ? 'var(--green-d)' : 'var(--amber-d)',
-                borderLeft: `2px solid ${credentials.emailSent ? 'var(--green)' : 'var(--amber)'}`,
-                color: credentials.emailSent ? 'var(--green)' : 'var(--amber)',
+                background: inviteSuccess.emailSent ? 'var(--green-d)' : 'var(--amber-d)',
+                borderLeft: `2px solid ${inviteSuccess.emailSent ? 'var(--green)' : 'var(--amber)'}`,
+                color: inviteSuccess.emailSent ? 'var(--green)' : 'var(--amber)',
               }}>
-                {credentials.emailSent
-                  ? `Email sent to ${credentials.email}`
+                {inviteSuccess.emailSent
+                  ? `Email sent to ${inviteSuccess.email}`
                   : 'Email delivery failed — share login details below manually'}
               </div>
 
-              {/* Login details box */}
               <div style={{
                 background: 'var(--surface2)', border: '1px solid var(--border)',
                 borderRadius: 'var(--r)', padding: '16px 20px', marginBottom: 20,
@@ -365,36 +392,23 @@ export default function AdminClients() {
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   <div style={{ display: 'flex', gap: 12, alignItems: 'baseline' }}>
-                    <span style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--font-mono)', width: 72, flexShrink: 0 }}>Company</span>
-                    <span style={{ fontSize: 13, color: 'var(--text)' }}>{credentials.company}</span>
-                  </div>
-                  <div style={{ display: 'flex', gap: 12, alignItems: 'baseline' }}>
                     <span style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--font-mono)', width: 72, flexShrink: 0 }}>Email</span>
-                    <span style={{ fontSize: 13, color: 'var(--text)', fontFamily: 'var(--font-mono)' }}>{credentials.email}</span>
+                    <span style={{ fontSize: 13, color: 'var(--text)', fontFamily: 'var(--font-mono)' }}>{inviteSuccess.email}</span>
                   </div>
                   <div style={{ display: 'flex', gap: 12, alignItems: 'baseline' }}>
                     <span style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--font-mono)', width: 72, flexShrink: 0 }}>Password</span>
                     <span style={{ fontSize: 22, color: 'var(--accent)', fontFamily: 'var(--font-mono)', fontWeight: 700, letterSpacing: '0.15em' }}>
-                      {credentials.tempPassword}
+                      {inviteSuccess.password}
                     </span>
                   </div>
                 </div>
               </div>
 
-              {/* Actions */}
               <div style={{ display: 'flex', gap: 10 }}>
-                <button
-                  className="btn btn-secondary"
-                  style={{ flex: 1, justifyContent: 'center' }}
-                  onClick={copyLoginDetails}
-                >
+                <button className="btn btn-secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={copyLoginDetails}>
                   Copy Login Details
                 </button>
-                <button
-                  className="btn btn-primary"
-                  style={{ flex: 1, justifyContent: 'center' }}
-                  onClick={() => { setShowCredentials(false); setCredentials(null) }}
-                >
+                <button className="btn btn-primary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setInviteSuccess(null)}>
                   Done
                 </button>
               </div>

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
 import { supabaseAdmin } from '../../lib/supabaseAdmin'
 import { callClaude } from '../../utils/api'
+import mammoth from 'mammoth'
 import { extractContent, isSupported, fileExt, ACCEPT_ATTR } from '../../utils/fileExtract'
 import { triggerTalentPoolMatch, mapMatchToCandidate } from '../../utils/talentPool'
 import TagInput from '../../components/TagInput'
@@ -186,12 +187,20 @@ export default function AdminPipeline() {
       patchFile(entry.id, { status: 'parsing' })
       addLog(`Parsing ${entry.file.name}…`, 'info')
       try {
-        const content = await extractContent(entry.file)
+        let content
+        if (entry.ext === 'docx') {
+          const arrayBuffer = await entry.file.arrayBuffer()
+          const result = await mammoth.extractRawText({ arrayBuffer })
+          if (!result.value?.trim()) throw new Error('No text extracted from DOCX')
+          content = { kind: 'text', text: result.value }
+        } else {
+          content = await extractContent(entry.file)
+        }
         const msgs = content.kind === 'image'
           ? [{ role: 'user', content: [{ type: 'image', source: { type: 'base64', media_type: content.mediaType, data: content.base64 } }, { type: 'text', text: 'Parse this CV image.' }] }]
           : [{ role: 'user', content: `Parse this CV:\n\n${content.text}` }]
         const reply = await callClaude(msgs, CV_PARSE_SYSTEM, 1024)
-        const parsed = JSON.parse(reply.trim())
+        const parsed = JSON.parse(reply.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, ''))
 
         const { data: saved, error } = await supabase.from('candidates').insert({
           job_id: activeJob.id,
@@ -233,7 +242,7 @@ export default function AdminPipeline() {
       try {
         const msg = `Name: ${c.full_name}\nRole: ${c.candidate_role}\nYears: ${c.total_years}\nSkills: ${(c.skills ?? []).join(', ')}\nSummary: ${c.summary}`
         const reply = await callClaude([{ role: 'user', content: msg }], system, 512)
-        const s = JSON.parse(reply.trim())
+        const s = JSON.parse(reply.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, ''))
         await supabase.from('candidates').update({ match_score: s.matchScore, match_pass: s.pass, match_reason: s.reason, match_rank: s.rank }).eq('id', c.id)
         setCandidates(p => p.map(x => x.id === c.id ? { ...x, _status: 'screened', match_score: s.matchScore, match_pass: s.pass, match_reason: s.reason, match_rank: s.rank } : x))
         if (s.pass) passedThisRun.push(c)
@@ -293,7 +302,7 @@ export default function AdminPipeline() {
     const transcript = messages.map(m => `${m.role === 'user' ? 'Candidate' : 'Interviewer'}: ${m.content.replace(INTERVIEW_COMPLETE,'').trim()}`).join('\n\n')
     try {
       const reply = await callClaude([{ role: 'user', content: `Score this interview:\n\n${transcript}` }], SCORING_SYSTEM, 2048)
-      const scores = JSON.parse(reply.trim())
+      const scores = JSON.parse(reply.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, ''))
       if (candidate._fromPool) {
         await supabaseAdmin.from('job_matches').update({ interview_transcript: messages, scores }).eq('id', candidate._matchId)
       } else {
