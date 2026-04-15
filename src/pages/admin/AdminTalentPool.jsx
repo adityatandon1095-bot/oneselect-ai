@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import mammoth from 'mammoth'
-
+import { supabase } from '../../lib/supabase'
 import { callClaude } from '../../utils/api'
 import { extractContent, isSupported, fileExt, ACCEPT_ATTR } from '../../utils/fileExtract'
 import { triggerTalentPoolMatch } from '../../utils/talentPool'
