@@ -103,15 +103,13 @@ export default function AdminClients() {
     const contactName = form.full_name
 
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/invite-user`,
         {
           method: 'POST',
           headers: {
             'Content-Type':  'application/json',
-            'Authorization': `Bearer ${session.access_token}`,
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
           },
           body: JSON.stringify({ email, company_name: companyName, contact_name: contactName }),
         }
