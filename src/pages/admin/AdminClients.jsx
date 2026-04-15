@@ -3,9 +3,6 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { supabaseAdmin } from '../../lib/supabaseAdmin'
 
-const APP_URL = 'https://oneselect-ai-t6uo-phi.vercel.app'
-
-
 export default function AdminClients() {
   const navigate = useNavigate()
 
@@ -19,9 +16,9 @@ export default function AdminClients() {
   const [email,       setEmail]       = useState('')
   const [companyName, setCompanyName] = useState('')
   const [contactName, setContactName] = useState('')
-  const [loading,  setLoading]  = useState(false)
-  const [error,    setError]    = useState('')
-  const [success,  setSuccess]  = useState('')  // non-empty → show credentials modal
+  const [loading,     setLoading]     = useState(false)
+  const [error,       setError]       = useState('')
+  const [success,     setSuccess]     = useState(null) // { email, company, emailSent, tempPassword }
 
   useEffect(() => { loadClients() }, [])
 
@@ -29,13 +26,13 @@ export default function AdminClients() {
   async function loadClients() {
     setPageLoading(true)
 
-    const { data: profiles, error: profileErr } = await supabaseAdmin
+    const { data: profiles } = await supabaseAdmin
       .from('profiles')
       .select('*')
       .eq('user_role', 'recruiter')
       .order('created_at', { ascending: false })
 
-    if (profileErr || !profiles?.length) {
+    if (!profiles?.length) {
       setClients([])
       setPageLoading(false)
       return
@@ -45,8 +42,14 @@ export default function AdminClients() {
     const { data: jobs } = await supabase
       .from('jobs').select('id, recruiter_id').in('recruiter_id', recruiterIds)
 
-    const jobIds = (jobs ?? []).map(j => j.id)
+    const jobsByRecruiter = {}
     const candsByRecruiter = {}
+
+    ;(jobs ?? []).forEach(j => {
+      jobsByRecruiter[j.recruiter_id] = (jobsByRecruiter[j.recruiter_id] ?? 0) + 1
+    })
+
+    const jobIds = (jobs ?? []).map(j => j.id)
     if (jobIds.length) {
       const { data: cands } = await supabase
         .from('candidates').select('job_id').in('job_id', jobIds)
@@ -56,11 +59,6 @@ export default function AdminClients() {
       })
     }
 
-    const jobsByRecruiter = {}
-    ;(jobs ?? []).forEach(j => {
-      jobsByRecruiter[j.recruiter_id] = (jobsByRecruiter[j.recruiter_id] ?? 0) + 1
-    })
-
     setClients(profiles.map(p => ({
       ...p,
       jobCount:       jobsByRecruiter[p.id] ?? 0,
@@ -69,7 +67,7 @@ export default function AdminClients() {
     setPageLoading(false)
   }
 
-  // ── Invite handlers ────────────────────────────────────────────────────
+  // ── Invite ─────────────────────────────────────────────────────────────
   function openInvite() {
     setEmail('')
     setCompanyName('')
@@ -84,112 +82,48 @@ export default function AdminClients() {
   }
 
   const handleInvite = async () => {
+    if (!companyName.trim()) { setError('Company name is required'); return }
+    if (!email.trim())       { setError('Email is required'); return }
+
     setLoading(true)
     setError('')
 
     try {
-      const tempPassword = 'OS-' + Math.random().toString(36).slice(2, 6).toUpperCase() + '-2025'
+      const { data: { session } } = await supabase.auth.getSession()
 
-      console.log('Step 1: Creating user', email)
-
-      const signupRes = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/auth/v1/signup`,
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/invite-user`,
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-            'X-Supabase-Auth-Skip-Http-Redirect': 'true',
+            'Authorization': `Bearer ${session.access_token}`,
           },
           body: JSON.stringify({
-            email: email.trim().toLowerCase(),
-            password: tempPassword,
-            data: { company_name: companyName, contact_name: contactName },
-          }),
-        }
-      )
-
-      const signupData = await signupRes.json()
-      console.log('Full signup response:', JSON.stringify(signupData))
-
-      // Handle both response formats (email confirm on vs off)
-      const userId = signupData.id || signupData.user?.id
-
-      if (!userId) {
-        const { data: existingProfile } = await supabaseAdmin
-          .from('profiles')
-          .select('id')
-          .eq('email', email.trim().toLowerCase())
-          .single()
-
-        if (existingProfile) {
-          throw new Error('This email is already registered as a client')
-        }
-
-        console.error('Signup response was:', JSON.stringify(signupData))
-        throw new Error('Could not create account. Response: ' + JSON.stringify(signupData))
-      }
-
-      console.log('Step 2: Creating profile for', userId)
-
-      const profileRes = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/profiles`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-            'Prefer': 'return=minimal',
-          },
-          body: JSON.stringify({
-            id:           userId,
-            user_role:    'recruiter',
-            company_name: companyName,
-            full_name:    contactName,
             email:        email.trim().toLowerCase(),
-            first_login:  true,
+            company_name: companyName.trim(),
+            contact_name: contactName.trim(),
           }),
         }
       )
 
-      console.log('Profile insert status:', profileRes.status)
-      const profileText = await profileRes.text()
-      console.log('Profile insert response:', profileText)
+      const result = await res.json()
+      console.log('Invite result:', result)
 
-      if (!profileRes.ok && profileRes.status !== 201) {
-        throw new Error('Profile creation failed: ' + profileText)
+      if (!res.ok || result.error) {
+        throw new Error(result.error || 'Invitation failed')
       }
 
-      console.log('Step 3: Sending email via Resend')
-      console.log('Sending email to:', email, 'from: noreply@oneselect.ai')
-      console.log('Using Resend key:', import.meta.env.VITE_RESEND_API_KEY?.slice(0, 10))
-
-      const emailRes = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ' + import.meta.env.VITE_RESEND_API_KEY,
-        },
-        body: JSON.stringify({
-          from:    'One Select <noreply@oneselect.ai>',
-          to:      [email],
-          subject: 'Your One Select Portal is Ready',
-          html:    '<p>Welcome to One Select!</p><p>Your temporary password is: <strong>' + tempPassword + '</strong></p><p>Login at: ' + APP_URL + '</p>',
-        }),
-      })
-
-      const emailData = await emailRes.json()
-      console.log('Step 3 result:', emailRes.status, emailData)
-
-      setSuccess(
-        `Account created!\nEmail: ${email}\nTemporary Password: ${tempPassword}\n` +
-        (emailRes.ok ? 'Welcome email sent!' : 'Email failed — share password manually')
-      )
       setShowInvite(false)
+      setSuccess({
+        email:       email.trim().toLowerCase(),
+        company:     companyName.trim(),
+        emailSent:   result.emailSent,
+        tempPassword: result.tempPassword,
+      })
       await loadClients()
+
     } catch (err) {
-      console.error('Invite failed:', err)
       setError(err.message)
     } finally {
       setLoading(false)
@@ -214,6 +148,17 @@ export default function AdminClients() {
     } catch (err) {
       setActionMsg({ text: `Error: ${err?.message ?? 'Failed to remove'}`, ok: false })
     }
+  }
+
+  // ── Copy login details ─────────────────────────────────────────────────
+  function copyLoginDetails() {
+    if (!success) return
+    const text =
+      `One Select Portal Login\n` +
+      `Portal:   https://oneselect-ai-t6uo-phi.vercel.app\n` +
+      `Email:    ${success.email}\n` +
+      `Password: ${success.tempPassword}`
+    navigator.clipboard.writeText(text).catch(() => {})
   }
 
   // ── Login status badge ─────────────────────────────────────────────────
@@ -363,7 +308,7 @@ export default function AdminClients() {
               <div className="form-actions" style={{ marginTop: 20 }}>
                 <button className="btn btn-primary" disabled={loading} onClick={handleInvite}>
                   {loading
-                    ? <><span className="spinner" style={{ width: 12, height: 12 }} /> Creating account…</>
+                    ? <><span className="spinner" style={{ width: 12, height: 12 }} /> Sending invitation…</>
                     : 'Send Invitation'}
                 </button>
                 <button className="btn btn-secondary" onClick={closeInvite}>Cancel</button>
@@ -376,27 +321,79 @@ export default function AdminClients() {
         </div>
       )}
 
-      {/* ── Success Modal — stays open until admin clicks Done ── */}
+      {/* ── Success Modal ── */}
       {success && (
         <div className="modal-overlay">
-          <div className="modal" style={{ maxWidth: 460 }}>
-            <div className="modal-head"><h3>Account Created</h3></div>
+          <div className="modal" style={{ maxWidth: 480 }}>
+            <div className="modal-head">
+              <h3>Client Invited Successfully</h3>
+            </div>
             <div className="modal-body">
-              <pre style={{
-                fontFamily: 'var(--font-mono)', fontSize: 13, lineHeight: 1.9,
+              {/* Green checkmark */}
+              <div style={{ textAlign: 'center', marginBottom: 24 }}>
+                <div style={{
+                  width: 56, height: 56, borderRadius: '50%',
+                  background: 'var(--green-d)', border: '1px solid var(--green)',
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 26, color: 'var(--green)',
+                }}>✓</div>
+              </div>
+
+              {/* Email sent status */}
+              <div style={{
+                padding: '10px 14px', marginBottom: 20, fontSize: 13,
+                background: success.emailSent ? 'var(--green-d)' : 'var(--amber-d)',
+                borderLeft: `2px solid ${success.emailSent ? 'var(--green)' : 'var(--amber)'}`,
+                color: success.emailSent ? 'var(--green)' : 'var(--amber)',
+              }}>
+                {success.emailSent
+                  ? `Welcome email sent to ${success.email}`
+                  : 'Email delivery failed — share login details below manually'}
+              </div>
+
+              {/* Login details box */}
+              <div style={{
                 background: 'var(--surface2)', border: '1px solid var(--border)',
                 borderRadius: 'var(--r)', padding: '16px 20px', marginBottom: 20,
-                whiteSpace: 'pre-wrap', wordBreak: 'break-all', color: 'var(--text)',
               }}>
-                {success}
-              </pre>
-              <button
-                className="btn btn-primary"
-                style={{ width: '100%', justifyContent: 'center' }}
-                onClick={() => setSuccess('')}
-              >
-                Done
-              </button>
+                <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--text-3)', marginBottom: 14 }}>
+                  Login Details
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div style={{ display: 'flex', gap: 12, alignItems: 'baseline' }}>
+                    <span style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--font-mono)', width: 72, flexShrink: 0 }}>Company</span>
+                    <span style={{ fontSize: 13, color: 'var(--text)' }}>{success.company}</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 12, alignItems: 'baseline' }}>
+                    <span style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--font-mono)', width: 72, flexShrink: 0 }}>Email</span>
+                    <span style={{ fontSize: 13, color: 'var(--text)', fontFamily: 'var(--font-mono)' }}>{success.email}</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 12, alignItems: 'baseline' }}>
+                    <span style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--font-mono)', width: 72, flexShrink: 0 }}>Password</span>
+                    <span style={{ fontSize: 18, color: 'var(--accent)', fontFamily: 'var(--font-mono)', fontWeight: 700, letterSpacing: '0.1em' }}>
+                      {success.tempPassword}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button
+                  className="btn btn-secondary"
+                  style={{ flex: 1, justifyContent: 'center' }}
+                  onClick={copyLoginDetails}
+                >
+                  Copy Login Details
+                </button>
+                <button
+                  className="btn btn-primary"
+                  style={{ flex: 1, justifyContent: 'center' }}
+                  onClick={() => setSuccess(null)}
+                >
+                  Done
+                </button>
+              </div>
             </div>
           </div>
         </div>
