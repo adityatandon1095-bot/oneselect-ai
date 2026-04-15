@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
-import { supabaseAdmin } from '../../lib/supabaseAdmin'
 import { callClaude } from '../../utils/api'
 import mammoth from 'mammoth'
 import { extractContent, isSupported, fileExt, ACCEPT_ATTR } from '../../utils/fileExtract'
@@ -84,7 +83,7 @@ export default function AdminPipeline() {
   useEffect(() => { chatRef.current?.scrollTo(0, chatRef.current.scrollHeight) }, [ivStates])
 
   async function loadClients() {
-    const { data } = await supabaseAdmin.from('profiles').select('id, full_name, company_name, email').eq('user_role', 'recruiter').order('company_name')
+    const { data } = await supabase.from('profiles').select('id, full_name, company_name, email').eq('user_role', 'recruiter').order('company_name')
     setClients(data ?? [])
   }
 
@@ -103,7 +102,7 @@ export default function AdminPipeline() {
 
     let loaded
     if (poolMode) {
-      const { data } = await supabaseAdmin
+      const { data } = await supabase
         .from('job_matches')
         .select('*, talent_pool(*)')
         .eq('job_id', id)
@@ -304,7 +303,7 @@ export default function AdminPipeline() {
       const reply = await callClaude([{ role: 'user', content: `Score this interview:\n\n${transcript}` }], SCORING_SYSTEM, 2048)
       const scores = JSON.parse(reply.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, ''))
       if (candidate._fromPool) {
-        await supabaseAdmin.from('job_matches').update({ interview_transcript: messages, scores }).eq('id', candidate._matchId)
+        await supabase.from('job_matches').update({ interview_transcript: messages, scores }).eq('id', candidate._matchId)
       } else {
         await supabase.from('candidates').update({ interview_transcript: messages, interview_scores: scores }).eq('id', candidate.id)
       }

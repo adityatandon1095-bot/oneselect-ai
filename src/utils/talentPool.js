@@ -10,10 +10,10 @@ Return ONLY valid JSON: {"matchScore":number,"pass":boolean,"reason":"string","r
 // Fetches all 'available' candidates from talent_pool, scores them against a job,
 // and upserts results into job_matches. Returns the number of candidates that passed.
 export async function triggerTalentPoolMatch(jobId, { onProgress, onLog } = {}) {
-  const { data: job } = await supabaseAdmin.from('jobs').select('*').eq('id', jobId).single()
+  const { data: job } = await supabase.from('jobs').select('*').eq('id', jobId).single()
   if (!job) throw new Error('Job not found')
 
-  const { data: candidates, error } = await supabaseAdmin
+  const { data: candidates, error } = await supabase
     .from('talent_pool')
     .select('*')
     .eq('availability', 'available')
@@ -30,7 +30,7 @@ export async function triggerTalentPoolMatch(jobId, { onProgress, onLog } = {}) 
       const msg = `Name: ${c.full_name}\nRole: ${c.candidate_role}\nYears: ${c.total_years}\nSkills: ${(c.skills ?? []).join(', ')}\nSummary: ${c.summary ?? ''}`
       const reply = await callClaude([{ role: 'user', content: msg }], system, 512)
       const s = JSON.parse(reply.trim())
-      await supabaseAdmin.from('job_matches').upsert({
+      await supabase.from('job_matches').upsert({
         talent_id: c.id,
         job_id: jobId,
         match_score: s.matchScore,

@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
-import { supabaseAdmin } from '../../lib/supabaseAdmin'
 import { useAuth } from '../../lib/AuthContext'
 import { mapMatchToCandidate } from '../../utils/talentPool'
 
@@ -191,7 +190,7 @@ export default function RecruiterCandidates() {
 
     const [{ data: cData }, { data: mData }] = await Promise.all([
       supabase.from('candidates').select('*').in('job_id', ids).order('match_score', { ascending: false, nullsFirst: false }),
-      supabaseAdmin.from('job_matches').select('*, talent_pool(*)').in('job_id', ids).order('match_score', { ascending: false, nullsFirst: false }),
+      supabase.from('job_matches').select('*, talent_pool(*)').in('job_id', ids).order('match_score', { ascending: false, nullsFirst: false }),
     ])
     setCandidates(cData ?? [])
     setPoolCandidates((mData ?? []).map(mapMatchToCandidate))

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import mammoth from 'mammoth'
-import { supabaseAdmin } from '../../lib/supabaseAdmin'
+
 import { callClaude } from '../../utils/api'
 import { extractContent, isSupported, fileExt, ACCEPT_ATTR } from '../../utils/fileExtract'
 import { triggerTalentPoolMatch } from '../../utils/talentPool'
@@ -34,8 +34,8 @@ export default function AdminTalentPool() {
 
   async function load() {
     const [{ data: pool }, { data: jobList }] = await Promise.all([
-      supabaseAdmin.from('talent_pool').select('*').order('created_at', { ascending: false }),
-      supabaseAdmin.from('jobs').select('id, title, profiles(company_name)').eq('status', 'active').order('created_at', { ascending: false }),
+      supabase.from('talent_pool').select('*').order('created_at', { ascending: false }),
+      supabase.from('jobs').select('id, title, profiles(company_name)').eq('status', 'active').order('created_at', { ascending: false }),
     ])
     setCandidates(pool ?? [])
     setJobs(jobList ?? [])
@@ -86,7 +86,7 @@ export default function AdminTalentPool() {
         const jsonStr = reply.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
         const parsed = JSON.parse(jsonStr)
 
-        const { data: saved, error } = await supabaseAdmin.from('talent_pool').insert({
+        const { data: saved, error } = await supabase.from('talent_pool').insert({
           full_name:      parsed.name,
           email:          parsed.email ?? '',
           candidate_role: parsed.currentRole ?? '',
@@ -113,7 +113,7 @@ export default function AdminTalentPool() {
   }
 
   async function updateAvailability(id, availability) {
-    await supabaseAdmin.from('talent_pool').update({ availability }).eq('id', id)
+    await supabase.from('talent_pool').update({ availability }).eq('id', id)
     setCandidates(p => p.map(c => c.id === id ? { ...c, availability } : c))
     if (selected?.id === id) setSelected(s => ({ ...s, availability }))
   }

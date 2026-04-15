@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
-import { supabaseAdmin } from '../../lib/supabaseAdmin'
 
 export default function AdminDashboard() {
   const navigate = useNavigate()
@@ -26,8 +25,8 @@ export default function AdminDashboard() {
       supabase.from('candidates').select('*', { count: 'exact', head: true }),
       supabase.from('candidates').select('*', { count: 'exact', head: true }).not('interview_scores', 'is', null),
       supabase.from('jobs').select('id, title, status, created_at, profiles(company_name)').order('created_at', { ascending: false }).limit(8),
-      supabaseAdmin.from('talent_pool').select('*', { count: 'exact', head: true }),
-      supabaseAdmin.from('talent_pool').select('*', { count: 'exact', head: true }).eq('availability', 'available'),
+      supabase.from('talent_pool').select('*', { count: 'exact', head: true }),
+      supabase.from('talent_pool').select('*', { count: 'exact', head: true }).eq('availability', 'available'),
     ])
     setStats({ clients: clients ?? 0, jobs: jobs ?? 0, candidates: candidates ?? 0, interviews: interviews ?? 0, poolTotal: poolTotal ?? 0, poolAvailable: poolAvailable ?? 0 })
     setRecentJobs(recent ?? [])

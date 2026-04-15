@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
-import { supabaseAdmin } from '../../lib/supabaseAdmin'
 
 export default function AdminClients() {
   const navigate = useNavigate()
@@ -26,7 +25,7 @@ export default function AdminClients() {
   async function loadClients() {
     setPageLoading(true)
 
-    const { data: profiles } = await supabaseAdmin
+    const { data: profiles } = await supabase
       .from('profiles')
       .select('*')
       .eq('user_role', 'recruiter')
