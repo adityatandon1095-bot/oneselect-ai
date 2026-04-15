@@ -1,8 +1,24 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { supabaseAdmin } from '../../lib/supabaseAdmin'
+import { supabase } from '../../lib/supabase'
 
-const APP_URL = 'https://oneselect-ai-t6uo-phi.vercel.app'
+const APP_URL     = 'https://oneselect-ai-t6uo-phi.vercel.app'
+const EDGE_URL    = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`
+const EDGE_HEADERS = {
+  'Content-Type':  'application/json',
+  'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+}
+
+async function edgeFn(name, body) {
+  const res = await fetch(`${EDGE_URL}/${name}`, {
+    method:  'POST',
+    headers: EDGE_HEADERS,
+    body:    JSON.stringify(body),
+  })
+  const json = await res.json()
+  if (json.error) throw new Error(json.error)
+  return json
+}
 
 export default function AdminClients() {
   const navigate = useNavigate()
@@ -20,7 +36,7 @@ export default function AdminClients() {
   async function load() {
     setLoading(true)
 
-    const { data: profiles, error: profileErr } = await supabaseAdmin
+    const { data: profiles, error: profileErr } = await supabase
       .from('profiles')
       .select('*')
       .eq('user_role', 'recruiter')
@@ -34,21 +50,15 @@ export default function AdminClients() {
 
     const recruiterIds = profiles.map(p => p.id)
 
-    // Fetch jobs, auth users in parallel
-    const [
-      { data: jobs },
-      { data: authData },
-    ] = await Promise.all([
-      supabaseAdmin.from('jobs').select('id, recruiter_id').in('recruiter_id', recruiterIds),
-      supabaseAdmin.auth.admin.listUsers({ perPage: 200 }),
+    const [{ data: jobs }] = await Promise.all([
+      supabase.from('jobs').select('id, recruiter_id').in('recruiter_id', recruiterIds),
     ])
 
     const jobIds = (jobs ?? []).map(j => j.id)
 
-    // Candidate counts per recruiter (via job_id → recruiter_id)
     const candsByRecruiter = {}
     if (jobIds.length) {
-      const { data: cands } = await supabaseAdmin
+      const { data: cands } = await supabase
         .from('candidates')
         .select('job_id')
         .in('job_id', jobIds)
@@ -61,13 +71,10 @@ export default function AdminClients() {
     const jobsByRecruiter = {}
     ;(jobs ?? []).forEach(j => { jobsByRecruiter[j.recruiter_id] = (jobsByRecruiter[j.recruiter_id] ?? 0) + 1 })
 
-    const userMap = Object.fromEntries((authData?.users ?? []).map(u => [u.id, u]))
-
     setClients(profiles.map(p => ({
       ...p,
       jobCount:       jobsByRecruiter[p.id] ?? 0,
       candidateCount: candsByRecruiter[p.id] ?? 0,
-      hasLoggedIn:    !!(userMap[p.id]?.last_sign_in_at),
     })))
     setLoading(false)
   }
@@ -92,27 +99,16 @@ export default function AdminClients() {
     setInviteSuccess('')
 
     try {
-      // Create auth user + trigger invite email
-      const { data, error } = await supabaseAdmin.auth.admin.inviteUserByEmail(form.email, {
-        redirectTo: `${APP_URL}/login`,
-      })
-      if (error) throw error
-
-      // Insert profile row (upsert in case a trigger already created it)
-      const { error: profileError } = await supabaseAdmin.from('profiles').upsert({
-        id:           data.user.id,
+      const result = await edgeFn('invite-user', {
         email:        form.email,
-        full_name:    form.full_name,
         company_name: form.company_name,
-        user_role:    'recruiter',
-      }, { onConflict: 'id' })
-      if (profileError) throw profileError
+        contact_name: form.full_name,
+      })
 
       setInviteSuccess(`Invitation sent to ${form.email}`)
 
-      // Optimistically add to list
       setClients(prev => [{
-        id:             data.user.id,
+        id:             result.user.id,
         email:          form.email,
         full_name:      form.full_name,
         company_name:   form.company_name,
@@ -120,7 +116,6 @@ export default function AdminClients() {
         created_at:     new Date().toISOString(),
         jobCount:       0,
         candidateCount: 0,
-        hasLoggedIn:    false,
       }, ...prev])
 
       setTimeout(closeInvite, 2400)
@@ -132,14 +127,16 @@ export default function AdminClients() {
 
   async function handleResendInvite(client) {
     setActionMsg({ text: '', ok: true })
-    const { error } = await supabaseAdmin.auth.admin.inviteUserByEmail(client.email, {
-      redirectTo: `${APP_URL}/login`,
-    })
-    if (error) {
-      setActionMsg({ text: `Error: ${error.message}`, ok: false })
-    } else {
+    try {
+      await edgeFn('invite-user', {
+        email:        client.email,
+        company_name: client.company_name ?? '',
+        contact_name: client.full_name ?? '',
+      })
       setActionMsg({ text: `Invitation resent to ${client.email}`, ok: true })
       setTimeout(() => setActionMsg({ text: '', ok: true }), 4000)
+    } catch (err) {
+      setActionMsg({ text: `Error: ${err.message}`, ok: false })
     }
   }
 
@@ -147,13 +144,13 @@ export default function AdminClients() {
     const label = client.company_name || client.email
     if (!window.confirm(`Remove ${label}?\n\nTheir account will be deleted. Jobs and candidates are retained.`)) return
     setActionMsg({ text: '', ok: true })
-    const { error } = await supabaseAdmin.auth.admin.deleteUser(client.id)
-    if (error) {
-      setActionMsg({ text: `Error: ${error.message}`, ok: false })
-    } else {
+    try {
+      await edgeFn('delete-user', { user_id: client.id })
       setClients(prev => prev.filter(c => c.id !== client.id))
       setActionMsg({ text: `${label} removed.`, ok: true })
       setTimeout(() => setActionMsg({ text: '', ok: true }), 4000)
+    } catch (err) {
+      setActionMsg({ text: `Error: ${err.message}`, ok: false })
     }
   }
 
@@ -214,8 +211,8 @@ export default function AdminClients() {
                 <div style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', fontSize: 13, color: c.jobCount > 0 ? 'var(--text)' : 'var(--text-3)' }}>{c.jobCount}</div>
                 <div style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', fontSize: 13, color: c.candidateCount > 0 ? 'var(--text)' : 'var(--text-3)' }}>{c.candidateCount}</div>
                 <div>
-                  <span className={`badge ${c.hasLoggedIn ? 'badge-green' : 'badge-amber'}`}>
-                    {c.hasLoggedIn ? 'Active' : 'Pending'}
+                  <span className={`badge ${c.jobCount > 0 ? 'badge-green' : 'badge-amber'}`}>
+                    {c.jobCount > 0 ? 'Active' : 'Pending'}
                   </span>
                 </div>
                 <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-3)' }}>
