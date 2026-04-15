@@ -1,4 +1,4 @@
-import { supabaseAdmin } from '../lib/supabaseAdmin'
+import { supabase } from '../lib/supabase'
 import { callClaude } from './api'
 
 const screeningSystem = (job) =>
