@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
-import { supabaseAdmin } from '../../lib/supabaseAdmin'
 
 const APP_URL     = 'https://oneselect-ai-t6uo-phi.vercel.app'
 const ADMIN_EMAIL = 'aditya.tandon1095@gmail.com'
@@ -17,16 +16,21 @@ function genTempPassword() {
 
 async function sendResendEmail(to, subject, html) {
   const key = import.meta.env.VITE_RESEND_API_KEY
-  if (!key) return { ok: false, reason: 'no-key' }
+  if (!key) return { ok: false, reason: 'VITE_RESEND_API_KEY not set' }
   try {
     const res = await fetch('https://api.resend.com/emails', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
-      body:    JSON.stringify({ from: 'One Select <noreply@oneselect.ai>', to: [to], subject, html }),
+      body:    JSON.stringify({
+        from: 'One Select <onboarding@resend.dev>',
+        to:   [to],
+        subject,
+        html,
+      }),
     })
     if (!res.ok) {
       const body = await res.json().catch(() => ({}))
-      return { ok: false, reason: body?.message ?? res.status }
+      return { ok: false, reason: body?.message ?? String(res.status) }
     }
     return { ok: true }
   } catch (e) {
@@ -36,53 +40,59 @@ async function sendResendEmail(to, subject, html) {
 
 function buildWelcomeHtml(contactName, companyName, email, tempPassword) {
   return `
-    <div style="font-family:Georgia,serif;max-width:600px;margin:0 auto;background:#F8F7F4;padding:40px;">
-      <div style="text-align:center;padding:32px 0;border-bottom:1px solid #E8E4DC;margin-bottom:32px;">
-        <h1 style="font-family:Georgia,serif;color:#B8924A;font-weight:300;letter-spacing:0.15em;font-size:28px;margin:0;">ONE SELECT</h1>
-        <p style="color:#9CA3AF;font-size:11px;letter-spacing:0.2em;text-transform:uppercase;margin:8px 0 0;">Strategic Talent Solutions</p>
-      </div>
-      <div style="background:white;padding:40px;border:1px solid #E8E4DC;">
-        <h2 style="font-family:Georgia,serif;color:#2D3748;font-weight:400;font-size:24px;margin:0 0 16px;">Welcome, ${contactName || companyName}</h2>
-        <p style="color:#6B7280;line-height:1.8;font-size:15px;margin:0 0 24px;">
-          Your One Select AI hiring portal has been set up for
-          <strong style="color:#2D3748;">${companyName}</strong>.
-          You can now access your personalised hiring dashboard where you'll be able to define roles,
-          view shortlisted candidates, and review AI-conducted interviews.
-        </p>
-        <div style="background:#F8F7F4;border:1px solid #E8E4DC;border-left:4px solid #B8924A;padding:24px;margin:24px 0;">
-          <p style="margin:0 0 12px;color:#6B7280;font-size:12px;letter-spacing:0.1em;text-transform:uppercase;font-family:monospace;">Your Login Details</p>
-          <p style="margin:0 0 8px;color:#2D3748;font-size:15px;"><strong>Portal:</strong> <a href="${APP_URL}" style="color:#B8924A;">${APP_URL}</a></p>
-          <p style="margin:0 0 8px;color:#2D3748;font-size:15px;"><strong>Email:</strong> ${email}</p>
-          <p style="margin:0;color:#2D3748;font-size:15px;">
-            <strong>Temporary Password:</strong>
-            <span style="font-family:monospace;font-size:18px;color:#B8924A;font-weight:bold;letter-spacing:0.1em;">${tempPassword}</span>
-          </p>
-        </div>
-        <div style="text-align:center;margin:32px 0;">
-          <a href="${APP_URL}" style="background:#B8924A;color:white;padding:14px 40px;text-decoration:none;font-family:monospace;font-size:12px;letter-spacing:0.1em;text-transform:uppercase;display:inline-block;">ACCESS YOUR PORTAL →</a>
-        </div>
-        <p style="color:#9CA3AF;font-size:13px;line-height:1.6;margin:24px 0 0;padding-top:24px;border-top:1px solid #E8E4DC;">
-          For security, you will be prompted to set a new password on your first login.
-          If you have any questions, reply to this email or contact your One Select account manager.
-        </p>
-      </div>
-      <p style="text-align:center;color:#9CA3AF;font-size:11px;margin-top:24px;letter-spacing:0.08em;">ONE SELECT — STRATEGIC TALENT SOLUTIONS</p>
+<div style="font-family:Georgia,serif;max-width:600px;margin:0 auto;background:#F8F7F4;padding:40px;">
+  <div style="text-align:center;padding:32px 0;border-bottom:1px solid #E8E4DC;margin-bottom:32px;">
+    <h1 style="font-family:Georgia,serif;color:#B8924A;font-weight:300;letter-spacing:0.15em;font-size:28px;margin:0;">ONE SELECT</h1>
+    <p style="color:#9CA3AF;font-size:11px;letter-spacing:0.2em;text-transform:uppercase;margin:8px 0 0;">Strategic Talent Solutions</p>
+  </div>
+  <div style="background:white;padding:40px;border:1px solid #E8E4DC;">
+    <h2 style="font-family:Georgia,serif;color:#2D3748;font-weight:400;font-size:22px;margin:0 0 16px;">Welcome, ${contactName || companyName}</h2>
+    <p style="color:#6B7280;line-height:1.8;font-size:15px;margin:0 0 24px;">
+      Your AI-powered hiring portal has been set up for <strong style="color:#2D3748;">${companyName}</strong>.
+      Log in to define your open roles, and our team will handle the rest —
+      screening CVs and conducting first-round interviews using AI.
+    </p>
+    <div style="background:#F8F7F4;border:1px solid #E8E4DC;border-left:4px solid #B8924A;padding:24px;margin:24px 0;">
+      <p style="margin:0 0 16px;color:#6B7280;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;font-family:monospace;">Your Login Details</p>
+      <table style="width:100%;border-collapse:collapse;">
+        <tr><td style="padding:6px 0;color:#6B7280;font-size:14px;width:120px;">Portal</td>
+            <td style="padding:6px 0;"><a href="${APP_URL}" style="color:#B8924A;font-size:14px;">${APP_URL}</a></td></tr>
+        <tr><td style="padding:6px 0;color:#6B7280;font-size:14px;">Email</td>
+            <td style="padding:6px 0;color:#2D3748;font-size:14px;">${email}</td></tr>
+        <tr><td style="padding:6px 0;color:#6B7280;font-size:14px;">Password</td>
+            <td style="padding:6px 0;"><span style="font-family:monospace;font-size:20px;color:#B8924A;font-weight:bold;letter-spacing:0.1em;">${tempPassword}</span></td></tr>
+      </table>
     </div>
-  `
+    <div style="text-align:center;margin:32px 0;">
+      <a href="${APP_URL}" style="background:#B8924A;color:white;padding:14px 40px;text-decoration:none;font-family:monospace;font-size:12px;letter-spacing:0.1em;text-transform:uppercase;display:inline-block;">ACCESS YOUR PORTAL →</a>
+    </div>
+    <p style="color:#9CA3AF;font-size:13px;line-height:1.6;margin:24px 0 0;padding-top:24px;border-top:1px solid #E8E4DC;">
+      For security, please change your password after your first login.
+      If you need any help, contact your One Select account manager.
+    </p>
+  </div>
+  <p style="text-align:center;color:#9CA3AF;font-size:11px;margin-top:24px;letter-spacing:0.08em;">ONE SELECT — STRATEGIC TALENT SOLUTIONS</p>
+</div>`
 }
 
 function buildAdminNotifHtml(contactName, companyName, email) {
   return `
-    <div style="font-family:sans-serif;max-width:500px;margin:0 auto;padding:32px;">
-      <h2 style="color:#B8924A;margin:0 0 16px;">New Client Invited</h2>
-      <p style="color:#374151;line-height:1.7;">
-        You have successfully invited <strong>${contactName || 'a new contact'}</strong>
-        from <strong>${companyName}</strong> (${email}) to One Select.
-        They have been sent their login credentials and should be able to access their portal shortly.
-      </p>
-      <p style="color:#9CA3AF;font-size:12px;margin-top:24px;">One Select Admin System</p>
-    </div>
-  `
+<div style="font-family:sans-serif;max-width:540px;margin:0 auto;padding:32px;background:#ffffff;">
+  <h2 style="color:#B8924A;margin:0 0 20px;font-size:20px;">New Client Invited</h2>
+  <p style="color:#374151;line-height:1.8;font-size:15px;margin:0 0 16px;">
+    <strong>${contactName || 'A new contact'}</strong> from <strong>${companyName}</strong>
+    has been invited to One Select.
+  </p>
+  <p style="color:#374151;line-height:1.8;font-size:15px;margin:0 0 16px;">
+    Their account has been created and login credentials sent to
+    <strong>${email}</strong>.
+    They can now access their portal at
+    <a href="${APP_URL}" style="color:#B8924A;">${APP_URL}</a>.
+  </p>
+  <p style="color:#9CA3AF;font-size:12px;margin-top:32px;padding-top:16px;border-top:1px solid #E8E4DC;">
+    One Select Admin System
+  </p>
+</div>`
 }
 
 export default function AdminClients() {
@@ -94,16 +104,18 @@ export default function AdminClients() {
   const [actionMsg,   setActionMsg]   = useState({ text: '', ok: true })
 
   // ── Invite form state ──────────────────────────────────────────────────
-  const [showInvite,   setShowInvite]   = useState(false)
-  const [email,        setEmail]        = useState('')
-  const [companyName,  setCompanyName]  = useState('')
-  const [contactName,  setContactName]  = useState('')
-  const [inviting,     setInviting]     = useState(false)
-  const [error,        setError]        = useState('')
+  const [showInvite,  setShowInvite]  = useState(false)
+  const [email,       setEmail]       = useState('')
+  const [companyName, setCompanyName] = useState('')
+  const [contactName, setContactName] = useState('')
+  const [inviting,    setInviting]    = useState(false)
+  const [error,       setError]       = useState('')
 
-  // ── Success modal state ────────────────────────────────────────────────
-  const [inviteResult, setInviteResult] = useState(null)
-  const [showSuccess,  setShowSuccess]  = useState(false)
+  // ── Success / error modal state ────────────────────────────────────────
+  const [result,      setResult]      = useState(null)
+  // result = { email, company, contact, emailSent, emailErr, tempPassword }
+  const [showResult,  setShowResult]  = useState(false)
+  const [copied,      setCopied]      = useState(false)
 
   useEffect(() => { loadClients() }, [])
 
@@ -139,7 +151,9 @@ export default function AdminClients() {
     }
 
     const jobsByRecruiter = {}
-    ;(jobs ?? []).forEach(j => { jobsByRecruiter[j.recruiter_id] = (jobsByRecruiter[j.recruiter_id] ?? 0) + 1 })
+    ;(jobs ?? []).forEach(j => {
+      jobsByRecruiter[j.recruiter_id] = (jobsByRecruiter[j.recruiter_id] ?? 0) + 1
+    })
 
     setClients(profiles.map(p => ({
       ...p,
@@ -178,19 +192,16 @@ export default function AdminClients() {
     const tempPassword = genTempPassword()
 
     try {
-      // 1. Create auth user via admin client — skips email confirmation,
-      //    does NOT affect the logged-in admin's session.
-      const { data: authData, error: signUpError } =
-        await supabaseAdmin.auth.admin.createUser({
-          email:         cleanEmail,
-          password:      tempPassword,
-          email_confirm: true,
-        })
+      // 1. Create auth user
+      const { data: authData, error: signUpError } = await supabase.auth.signUp({
+        email:    cleanEmail,
+        password: tempPassword,
+      })
 
       if (signUpError) { setError(signUpError.message); return }
-      if (!authData?.user?.id) { setError('User creation failed — no ID returned'); return }
+      if (!authData?.user?.id) { setError('User creation failed — please try again'); return }
 
-      // 2. Create profile row
+      // 2. Insert profile
       const { error: profileError } = await supabase
         .from('profiles')
         .insert({
@@ -208,29 +219,31 @@ export default function AdminClients() {
       }
 
       // 3. Send welcome email to client
-      const clientEmailResult = await sendResendEmail(
+      const clientEmail = await sendResendEmail(
         cleanEmail,
-        'Your One Select Portal is Ready',
+        'Welcome to One Select — Your Portal is Ready',
         buildWelcomeHtml(cleanContact, cleanCompany, cleanEmail, tempPassword)
       )
 
-      // 4. Send notification to admin
+      // 4. Send admin notification
       await sendResendEmail(
         ADMIN_EMAIL,
-        `New Client Invited — ${cleanCompany}`,
+        `New client invited — ${cleanCompany}`,
         buildAdminNotifHtml(cleanContact, cleanCompany, cleanEmail)
       )
 
-      // 5. Show success screen
-      setInviteResult({
+      // 5. Show result modal
+      setResult({
         email:     cleanEmail,
         company:   cleanCompany,
         contact:   cleanContact,
-        emailSent: clientEmailResult.ok,
-        emailErr:  clientEmailResult.reason,
+        emailSent: clientEmail.ok,
+        emailErr:  clientEmail.reason,
+        tempPassword,
       })
+      setCopied(false)
       setShowInvite(false)
-      setShowSuccess(true)
+      setShowResult(true)
       await loadClients()
     } catch (err) {
       console.error('Invite error:', err)
@@ -240,13 +253,26 @@ export default function AdminClients() {
     }
   }
 
+  function copyCredentials() {
+    if (!result) return
+    const text =
+      `One Select Portal\n` +
+      `URL: ${APP_URL}\n` +
+      `Email: ${result.email}\n` +
+      `Temporary Password: ${result.tempPassword}`
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2500)
+    })
+  }
+
   // ── Remove ─────────────────────────────────────────────────────────────
   async function handleRemove(client) {
     const label = client.company_name || client.email
     if (!window.confirm(
       `Remove ${label}?\n\nThis removes them from your clients list. ` +
       `Their jobs and candidates are retained.\n\n` +
-      `You can delete their auth account from the Supabase dashboard if needed.`
+      `Delete their auth account from the Supabase dashboard if needed.`
     )) return
     setActionMsg({ text: '', ok: true })
     try {
@@ -262,12 +288,10 @@ export default function AdminClients() {
 
   // ── Login status badge ─────────────────────────────────────────────────
   function loginStatus(client) {
-    if (!client.first_login_at) {
-      return { label: 'Never logged in', cls: 'badge-amber' }
-    }
+    if (!client.first_login_at) return { label: 'Never logged in', cls: 'badge-amber' }
     if (client.last_seen_at) {
-      const d    = new Date(client.last_seen_at)
-      const ago  = Math.round((Date.now() - d) / 86400000)
+      const d   = new Date(client.last_seen_at)
+      const ago = Math.round((Date.now() - d) / 86400000)
       const when = ago === 0 ? 'today' :
                    ago === 1 ? 'yesterday' :
                    d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
@@ -336,9 +360,7 @@ export default function AdminClients() {
                   <div style={{ fontSize: 12, color: 'var(--text-2)', fontFamily: 'var(--font-mono)', wordBreak: 'break-all' }}>{c.email}</div>
                   <div style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', fontSize: 13, color: c.jobCount > 0 ? 'var(--text)' : 'var(--text-3)' }}>{c.jobCount}</div>
                   <div style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', fontSize: 13, color: c.candidateCount > 0 ? 'var(--text)' : 'var(--text-3)' }}>{c.candidateCount}</div>
-                  <div>
-                    <span className={`badge ${ls.cls}`} style={{ fontSize: 10 }}>{ls.label}</span>
-                  </div>
+                  <div><span className={`badge ${ls.cls}`} style={{ fontSize: 10 }}>{ls.label}</span></div>
                   <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-3)' }}>
                     {new Date(c.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: '2-digit' })}
                   </div>
@@ -424,58 +446,113 @@ export default function AdminClients() {
         </div>
       )}
 
-      {/* ── Success Modal ── */}
-      {showSuccess && inviteResult && (
+      {/* ── Result Modal (success or email-failure fallback) ── */}
+      {showResult && result && (
         <div className="modal-overlay">
           <div className="modal" style={{ maxWidth: 460 }}>
             <div className="modal-head">
-              <h3>Invitation Sent</h3>
+              <h3>{result.emailSent ? 'Invitation Sent Successfully' : 'Account Created'}</h3>
             </div>
             <div className="modal-body">
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20,
-                padding: '10px 14px', background: 'var(--green-d)',
-                border: '1px solid var(--green)', borderRadius: 'var(--r)',
-              }}>
-                <span style={{ color: 'var(--green)', fontSize: 16 }}>✓</span>
-                <span style={{ fontSize: 13, color: 'var(--green)', fontWeight: 500 }}>
-                  Account created successfully!
-                </span>
-              </div>
+              {result.emailSent ? (
+                <>
+                  {/* ── Email sent: success screen ── */}
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20,
+                    padding: '14px 16px', background: 'var(--green-d)',
+                    border: '1px solid var(--green)', borderRadius: 'var(--r)',
+                  }}>
+                    <div style={{
+                      width: 32, height: 32, borderRadius: '50%',
+                      background: 'var(--green)', display: 'flex', alignItems: 'center',
+                      justifyContent: 'center', flexShrink: 0, fontSize: 16, color: '#fff',
+                    }}>✓</div>
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--green)' }}>Invitation Sent Successfully</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-2)', marginTop: 2 }}>Account created and welcome email delivered</div>
+                    </div>
+                  </div>
 
-              <p style={{ fontSize: 13, color: 'var(--text-2)', marginBottom: 16, lineHeight: 1.7 }}>
-                <strong>{inviteResult.contact || inviteResult.company}</strong> from{' '}
-                <strong>{inviteResult.company}</strong> can now log in to the portal.
-              </p>
+                  <p style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.7, marginBottom: 16 }}>
+                    A welcome email with login credentials has been sent to{' '}
+                    <span className="mono" style={{ color: 'var(--text)' }}>{result.email}</span>.
+                  </p>
 
-              {inviteResult.emailSent ? (
-                <div style={{
-                  padding: '10px 14px', marginBottom: 20,
-                  background: 'var(--accent-d)', border: '1px solid var(--border)',
-                  borderRadius: 'var(--r)', fontSize: 12, color: 'var(--text-2)', lineHeight: 1.7,
-                }}>
-                  <strong style={{ color: 'var(--accent)' }}>✉ Welcome email sent</strong> to{' '}
-                  <span className="mono">{inviteResult.email}</span> with their login credentials and portal link.
-                  They will be prompted to set a new password on first login.
-                </div>
+                  <div style={{
+                    padding: '10px 14px', marginBottom: 24,
+                    background: 'var(--surface)', border: '1px solid var(--border)',
+                    borderRadius: 'var(--r)', fontSize: 12, color: 'var(--text-3)', lineHeight: 1.6,
+                  }}>
+                    You'll receive a notification when they first log in.
+                  </div>
+
+                  <button
+                    className="btn btn-primary"
+                    style={{ width: '100%', justifyContent: 'center', background: 'var(--accent)', borderColor: 'var(--accent)' }}
+                    onClick={() => { setShowResult(false); setResult(null) }}
+                  >
+                    Done
+                  </button>
+                </>
               ) : (
-                <div style={{
-                  padding: '10px 14px', marginBottom: 20,
-                  background: 'var(--amber-d)', border: '1px solid var(--amber)',
-                  borderRadius: 'var(--r)', fontSize: 12, color: 'var(--amber)', lineHeight: 1.7,
-                }}>
-                  ⚠ Email delivery failed{inviteResult.emailErr ? ` (${inviteResult.emailErr})` : ''}.
-                  Please share login details manually with <span className="mono">{inviteResult.email}</span>.
-                </div>
-              )}
+                <>
+                  {/* ── Email failed: show credentials manually ── */}
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20,
+                    padding: '12px 14px', background: 'var(--amber-d)',
+                    border: '1px solid var(--amber)', borderRadius: 'var(--r)',
+                  }}>
+                    <span style={{ fontSize: 16 }}>⚠</span>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--amber)' }}>Account created. Email delivery failed.</div>
+                      {result.emailErr && (
+                        <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2 }}>{result.emailErr}</div>
+                      )}
+                    </div>
+                  </div>
 
-              <button
-                className="btn btn-primary"
-                style={{ width: '100%', justifyContent: 'center' }}
-                onClick={() => { setShowSuccess(false); setInviteResult(null) }}
-              >
-                Done
-              </button>
+                  <p style={{ fontSize: 13, color: 'var(--text-2)', marginBottom: 16, lineHeight: 1.6 }}>
+                    Share these credentials manually with <strong>{result.contact || result.company}</strong>:
+                  </p>
+
+                  <div style={{
+                    background: 'var(--surface2)', border: '1px solid var(--border)',
+                    borderRadius: 'var(--r)', padding: '16px 18px', marginBottom: 16,
+                    fontFamily: 'var(--font-mono)', fontSize: 12, lineHeight: 2.2,
+                  }}>
+                    <div>
+                      <span style={{ color: 'var(--text-3)', minWidth: 72, display: 'inline-block' }}>Email</span>
+                      <span style={{ color: 'var(--text)' }}>{result.email}</span>
+                    </div>
+                    <div>
+                      <span style={{ color: 'var(--text-3)', minWidth: 72, display: 'inline-block' }}>Password</span>
+                      <span style={{ color: 'var(--accent)', fontWeight: 700, fontSize: 15, letterSpacing: '0.06em' }}>
+                        {result.tempPassword}
+                      </span>
+                    </div>
+                    <div>
+                      <span style={{ color: 'var(--text-3)', minWidth: 72, display: 'inline-block' }}>Portal</span>
+                      <span style={{ color: 'var(--text)' }}>{APP_URL}</span>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: 10 }}>
+                    <button
+                      className="btn btn-primary"
+                      style={{ flex: 1, justifyContent: 'center' }}
+                      onClick={copyCredentials}
+                    >
+                      {copied ? '✓ Copied!' : 'Copy Credentials'}
+                    </button>
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => { setShowResult(false); setResult(null) }}
+                    >
+                      Done
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>

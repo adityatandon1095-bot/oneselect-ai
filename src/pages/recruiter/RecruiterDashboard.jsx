@@ -33,7 +33,7 @@ export default function RecruiterDashboard() {
     if (!profile?.first_login_at) updates.first_login_at = new Date().toISOString()
     supabase.from('profiles').update(updates).eq('id', user.id)
 
-    if (profile?.first_login) {
+    if (profile?.first_login && !sessionStorage.getItem(`pw_set_${user.id}`)) {
       // Block dashboard until they set a real password
       setLoading(false)
       setShowPasswordChange(true)
@@ -100,8 +100,15 @@ export default function RecruiterDashboard() {
 
     await supabase.from('profiles').update({ first_login: false }).eq('id', user.id)
 
-    // Hard reload so AuthContext re-fetches the updated profile (first_login: false)
-    window.location.reload()
+    // Mark in session so the modal doesn't reappear when navigating back to dashboard
+    // (AuthContext still holds the stale profile until next full page load)
+    sessionStorage.setItem(`pw_set_${user.id}`, '1')
+
+    setNewPassword('')
+    setConfirmPassword('')
+    setPasswordSaving(false)
+    setShowPasswordChange(false)
+    load()
   }
 
   // ── Welcome dismiss ────────────────────────────────────────────────────
