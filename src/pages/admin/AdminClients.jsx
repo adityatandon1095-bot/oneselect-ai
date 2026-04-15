@@ -132,20 +132,34 @@ export default function AdminClients() {
 
       console.log('Step 2: Creating profile for', userId)
 
-      const { error: profileError } = await supabaseAdmin
-        .from('profiles')
-        .insert({
-          id:           userId,
-          user_role:    'recruiter',
-          company_name: companyName,
-          full_name:    contactName,
-          email:        email.trim().toLowerCase(),
-          first_login:  true,
-        })
+      const profileRes = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/profiles`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+            'Prefer': 'return=minimal',
+          },
+          body: JSON.stringify({
+            id:           userId,
+            user_role:    'recruiter',
+            company_name: companyName,
+            full_name:    contactName,
+            email:        email.trim().toLowerCase(),
+            first_login:  true,
+          }),
+        }
+      )
 
-      console.log('Step 2 result:', profileError)
+      console.log('Profile insert status:', profileRes.status)
+      const profileText = await profileRes.text()
+      console.log('Profile insert response:', profileText)
 
-      if (profileError) throw new Error('Profile failed: ' + profileError.message)
+      if (!profileRes.ok && profileRes.status !== 201) {
+        throw new Error('Profile creation failed: ' + profileText)
+      }
 
       console.log('Step 3: Sending email via Resend')
       console.log('Sending email to:', email, 'from: noreply@oneselect.ai')
