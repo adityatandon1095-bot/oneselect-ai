@@ -92,9 +92,9 @@ export default function AdminClients() {
       const tempPassword = 'OneSelect-' + Math.random().toString(36).slice(2, 8).toUpperCase()
 
       // Save admin session before signUp clobbers it
-      const { data: adminSession } = await supabase.auth.getSession()
-      const adminToken   = adminSession.session?.access_token
-      const adminRefresh = adminSession.session?.refresh_token
+      const { data: { session: adminSession } } = await supabase.auth.getSession()
+      const adminToken   = adminSession?.access_token
+      const adminRefresh = adminSession?.refresh_token
 
       // Create the new user account
       const { data, error } = await supabase.auth.signUp({
@@ -106,7 +106,14 @@ export default function AdminClients() {
       const newUserId = data.user.id
 
       // Immediately restore admin session
-      await supabase.auth.setSession({ access_token: adminToken, refresh_token: adminRefresh })
+      const { error: sessionError } = await supabase.auth.setSession({
+        access_token:  adminToken,
+        refresh_token: adminRefresh,
+      })
+      if (sessionError) {
+        window.location.href = '/admin/clients'
+        return
+      }
 
       // Insert recruiter profile using restored admin session
       const { error: profileError } = await supabase.from('profiles').insert({
@@ -120,6 +127,8 @@ export default function AdminClients() {
       if (profileError) throw new Error('Profile error: ' + profileError.message)
 
       // Send welcome email via Resend
+      console.log('Sending to:', email.trim().toLowerCase())
+      console.log('Resend key:', import.meta.env.VITE_RESEND_API_KEY?.slice(0, 10))
       const emailRes = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: {
@@ -151,8 +160,9 @@ export default function AdminClients() {
           </div>`,
         }),
       })
-      const emailData = await emailRes.json()
-      console.log('Email result:', emailData)
+      const emailJson = await emailRes.json()
+      console.log('Resend status:', emailRes.status)
+      console.log('Resend response:', JSON.stringify(emailJson))
 
       setInviteSuccess({ email: email.trim().toLowerCase(), password: tempPassword, emailSent: emailRes.ok })
       setShowInviteModal(false)
@@ -361,7 +371,7 @@ export default function AdminClients() {
       {inviteSuccess && (
         <div className="modal-overlay">
           <div className="modal" style={{ maxWidth: 480 }}>
-            <div className="modal-head"><h3>Client Invited!</h3></div>
+            <div className="modal-head"><h3>Client account created!</h3></div>
             <div className="modal-body">
               <div style={{ textAlign: 'center', marginBottom: 24 }}>
                 <div style={{
