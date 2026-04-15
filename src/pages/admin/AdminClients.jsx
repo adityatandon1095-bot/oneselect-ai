@@ -4,26 +4,32 @@ import { supabase } from '../../lib/supabase'
 
 const APP_URL = 'https://oneselect-ai-t6uo-phi.vercel.app'
 
-function genTempPassword() {
-  return 'OneSelect' + Math.random().toString(36).slice(2, 8).toUpperCase() + '!'
-}
-
 export default function AdminClients() {
   const navigate = useNavigate()
-  const [clients, setClients]       = useState([])
-  const [loading, setLoading]       = useState(true)
+
+  // ── Page state ────────────────────────────────────────────────────────────
+  const [clients, setClients]     = useState([])
+  const [pageLoading, setPageLoading] = useState(true)
+  const [actionMsg, setActionMsg] = useState({ text: '', ok: true })
+
+  // ── Invite form state ─────────────────────────────────────────────────────
   const [showInvite, setShowInvite] = useState(false)
-  const [form, setForm]             = useState({ company_name: '', full_name: '', email: '' })
-  const [inviting, setInviting]     = useState(false)
-  const [inviteError, setInviteError]     = useState('')
-  const [inviteSuccess, setInviteSuccess] = useState(null) // { email, tempPassword }
-  const [copied, setCopied]         = useState(false)
-  const [actionMsg, setActionMsg]   = useState({ text: '', ok: true })
+  const [email, setEmail]           = useState('')
+  const [companyName, setCompanyName] = useState('')
+  const [contactName, setContactName] = useState('')
+  const [loading, setLoading]       = useState(false)
+  const [error, setError]           = useState('')
 
-  useEffect(() => { load() }, [])
+  // ── Credentials modal state ───────────────────────────────────────────────
+  const [tempCredentials, setTempCredentials] = useState(null)
+  const [showCredentials, setShowCredentials] = useState(false)
+  const [copied, setCopied] = useState(false)
 
-  async function load() {
-    setLoading(true)
+  useEffect(() => { loadClients() }, [])
+
+  // ── Data loading ──────────────────────────────────────────────────────────
+  async function loadClients() {
+    setPageLoading(true)
 
     const { data: profiles, error: profileErr } = await supabase
       .from('profiles')
@@ -31,9 +37,15 @@ export default function AdminClients() {
       .eq('user_role', 'recruiter')
       .order('created_at', { ascending: false })
 
-    if (profileErr || !profiles?.length) {
+    if (profileErr) {
       setClients([])
-      setLoading(false)
+      setPageLoading(false)
+      return
+    }
+
+    if (!profiles?.length) {
+      setClients([])
+      setPageLoading(false)
       return
     }
 
@@ -61,69 +73,90 @@ export default function AdminClients() {
       jobCount:       jobsByRecruiter[p.id] ?? 0,
       candidateCount: candsByRecruiter[p.id] ?? 0,
     })))
-    setLoading(false)
+    setPageLoading(false)
   }
 
+  // ── Invite ────────────────────────────────────────────────────────────────
   function openInvite() {
-    setForm({ company_name: '', full_name: '', email: '' })
-    setInviteError('')
-    setInviteSuccess(null)
-    setCopied(false)
+    setEmail('')
+    setCompanyName('')
+    setContactName('')
+    setError('')
     setShowInvite(true)
   }
 
   function closeInvite() {
     setShowInvite(false)
-    setInviteError('')
-    setInviteSuccess(null)
-    setCopied(false)
+    setError('')
   }
 
-  async function handleInvite(e) {
-    e.preventDefault()
-    setInviteError('')
-    setInviteSuccess(null)
-    setInviting(true)
+  const handleInvite = async () => {
+    if (!companyName || !email) {
+      setError('Company name and email are required')
+      return
+    }
 
-    const email       = form.email
-    const companyName = form.company_name
-    const tempPassword = genTempPassword()
+    setLoading(true)
+    setError('')
 
     try {
-      // Create the user account with a temporary password
+      const tempPassword = 'OS' + Math.random().toString(36).slice(2, 8).toUpperCase() + '2025!'
+
       const { data: authData, error: signUpError } = await supabase.auth.signUp({
-        email,
+        email: email.trim().toLowerCase(),
         password: tempPassword,
-        options: { emailRedirectTo: `${APP_URL}/login` },
       })
-      if (signUpError) throw signUpError
-      if (!authData.user) throw new Error('User creation failed')
 
-      // Insert their profile
-      const { error: profileError } = await supabase.from('profiles').insert({
-        id:           authData.user.id,
-        user_role:    'recruiter',
-        company_name: companyName,
-        full_name:    form.full_name,
-        email,
+      if (signUpError) {
+        setError(signUpError.message)
+        return
+      }
+
+      if (!authData?.user?.id) {
+        setError('User creation failed - no user returned')
+        return
+      }
+
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .insert({
+          id:           authData.user.id,
+          user_role:    'recruiter',
+          company_name: companyName.trim(),
+          full_name:    contactName.trim(),
+          email:        email.trim().toLowerCase(),
+        })
+
+      if (profileError) {
+        setError('Account created but profile failed: ' + profileError.message)
+        return
+      }
+
+      // Store credentials and show credentials modal
+      setTempCredentials({
+        email:    email.trim().toLowerCase(),
+        password: tempPassword,
+        company:  companyName.trim(),
       })
-      if (profileError) throw profileError
-
-      setInviteSuccess({ email, companyName, tempPassword })
-      await load()
+      setCopied(false)
+      setShowInvite(false)
+      setShowCredentials(true)
+      await loadClients()
     } catch (err) {
-      setInviteError(err?.message ?? 'An unexpected error occurred')
+      console.error('Invite error:', err)
+      setError('Unexpected error: ' + err.message)
     } finally {
-      setInviting(false)
+      setLoading(false)
     }
   }
 
-  function copyCredentials(creds) {
+  function copyCredentials() {
+    if (!tempCredentials) return
     const text =
       `OneSelect Login Details\n` +
       `URL: ${APP_URL}\n` +
-      `Email: ${creds.email}\n` +
-      `Temporary password: ${creds.tempPassword}\n\n` +
+      `Email: ${tempCredentials.email}\n` +
+      `Temporary Password: ${tempCredentials.password}\n\n` +
       `Please log in and change your password after first sign-in.`
     navigator.clipboard.writeText(text).then(() => {
       setCopied(true)
@@ -131,6 +164,13 @@ export default function AdminClients() {
     })
   }
 
+  function closeCredentials() {
+    setShowCredentials(false)
+    setTempCredentials(null)
+    setCopied(false)
+  }
+
+  // ── Remove ────────────────────────────────────────────────────────────────
   async function handleRemove(client) {
     const label = client.company_name || client.email
     if (!window.confirm(
@@ -140,8 +180,8 @@ export default function AdminClients() {
     )) return
     setActionMsg({ text: '', ok: true })
     try {
-      const { error } = await supabase.from('profiles').delete().eq('id', client.id)
-      if (error) throw error
+      const { error: delErr } = await supabase.from('profiles').delete().eq('id', client.id)
+      if (delErr) throw delErr
       setClients(prev => prev.filter(c => c.id !== client.id))
       setActionMsg({ text: `${label} removed.`, ok: true })
       setTimeout(() => setActionMsg({ text: '', ok: true }), 4000)
@@ -150,7 +190,8 @@ export default function AdminClients() {
     }
   }
 
-  if (loading) return <div className="page"><span className="spinner" /></div>
+  // ── Render ────────────────────────────────────────────────────────────────
+  if (pageLoading) return <div className="page"><span className="spinner" /></div>
 
   return (
     <div className="page">
@@ -173,6 +214,7 @@ export default function AdminClients() {
         </div>
       )}
 
+      {/* ── Client table ── */}
       <div className="section-card">
         <div className="section-card-head">
           <h3>All Clients</h3>
@@ -245,98 +287,136 @@ export default function AdminClients() {
               <button className="modal-close" onClick={closeInvite}>×</button>
             </div>
             <div className="modal-body">
-              {inviteSuccess ? (
-                <div>
-                  <div className="invite-success-icon" style={{ marginBottom: 12 }}>✓</div>
-                  <div style={{ fontFamily: 'var(--font-head)', fontSize: 22, fontWeight: 400, marginBottom: 6, color: 'var(--text)' }}>
-                    Account created
-                  </div>
-                  <p style={{ fontSize: 13, color: 'var(--text-2)', marginBottom: 20 }}>
-                    Share these login details with <strong>{inviteSuccess.companyName}</strong> via email or WhatsApp:
-                  </p>
-
-                  {/* Credentials box */}
-                  <div style={{
-                    background: 'var(--surface2)', border: '1px solid var(--border)',
-                    borderRadius: 'var(--r)', padding: '16px 18px', marginBottom: 16,
-                    fontFamily: 'var(--font-mono)', fontSize: 12, lineHeight: 2,
-                    color: 'var(--text-2)',
-                  }}>
-                    <div><span style={{ color: 'var(--text-3)' }}>URL</span>{'  '}<span style={{ color: 'var(--text)' }}>{APP_URL}</span></div>
-                    <div><span style={{ color: 'var(--text-3)' }}>Email</span>{'  '}<span style={{ color: 'var(--text)' }}>{inviteSuccess.email}</span></div>
-                    <div>
-                      <span style={{ color: 'var(--text-3)' }}>Password</span>{'  '}
-                      <span style={{ color: 'var(--accent)', fontWeight: 700 }}>{inviteSuccess.tempPassword}</span>
-                    </div>
-                  </div>
-
-                  <p style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 20, lineHeight: 1.7 }}>
-                    Ask them to change their password after first login.
-                  </p>
-
-                  <div style={{ display: 'flex', gap: 10 }}>
-                    <button
-                      className="btn btn-primary"
-                      style={{ flex: 1, justifyContent: 'center' }}
-                      onClick={() => copyCredentials(inviteSuccess)}
-                    >
-                      {copied ? '✓ Copied!' : 'Copy to clipboard'}
-                    </button>
-                    <button className="btn btn-secondary" onClick={closeInvite}>
-                      Done
-                    </button>
-                  </div>
+              <div className="form-grid">
+                <div className="field">
+                  <label>Company Name *</label>
+                  <input
+                    type="text"
+                    placeholder="Acme Recruiting"
+                    value={companyName}
+                    onChange={e => setCompanyName(e.target.value)}
+                    autoFocus
+                  />
                 </div>
-              ) : (
-                <form onSubmit={handleInvite}>
-                  <div className="form-grid">
-                    <div className="field">
-                      <label>Company Name</label>
-                      <input
-                        type="text" required
-                        placeholder="Acme Recruiting"
-                        value={form.company_name}
-                        onChange={e => setForm(f => ({ ...f, company_name: e.target.value }))}
-                      />
-                    </div>
-                    <div className="field">
-                      <label>Contact Name</label>
-                      <input
-                        type="text"
-                        placeholder="Jane Smith"
-                        value={form.full_name}
-                        onChange={e => setForm(f => ({ ...f, full_name: e.target.value }))}
-                      />
-                    </div>
-                    <div className="field span-2">
-                      <label>Email Address</label>
-                      <input
-                        type="email" required
-                        placeholder="jane@acmecorp.com"
-                        value={form.email}
-                        onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-                      />
-                    </div>
-                  </div>
-                  {inviteError && (
-                    <div className="error-banner" style={{ marginTop: 14 }}>{inviteError}</div>
-                  )}
-                  <div className="form-actions" style={{ marginTop: 20 }}>
-                    <button type="submit" className="btn btn-primary" disabled={inviting}>
-                      {inviting
-                        ? <><span className="spinner" style={{ width: 12, height: 12 }} /> Creating account…</>
-                        : 'Create Account'}
-                    </button>
-                    <button type="button" className="btn btn-secondary" onClick={closeInvite}>
-                      Cancel
-                    </button>
-                  </div>
-                  <p style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 16, lineHeight: 1.7 }}>
-                    A temporary password will be generated. Share it with the client so they can log in at{' '}
-                    <span className="mono">{APP_URL}</span>
-                  </p>
-                </form>
+                <div className="field">
+                  <label>Contact Name</label>
+                  <input
+                    type="text"
+                    placeholder="Jane Smith"
+                    value={contactName}
+                    onChange={e => setContactName(e.target.value)}
+                  />
+                </div>
+                <div className="field span-2">
+                  <label>Email Address *</label>
+                  <input
+                    type="email"
+                    placeholder="jane@acmecorp.com"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleInvite() } }}
+                  />
+                </div>
+              </div>
+
+              {error && (
+                <div className="error-banner" style={{ marginTop: 14 }}>{error}</div>
               )}
+
+              <div className="form-actions" style={{ marginTop: 20 }}>
+                <button
+                  className="btn btn-primary"
+                  disabled={loading}
+                  onClick={handleInvite}
+                >
+                  {loading
+                    ? <><span className="spinner" style={{ width: 12, height: 12 }} /> Creating account…</>
+                    : 'Create Account'}
+                </button>
+                <button className="btn btn-secondary" onClick={closeInvite}>
+                  Cancel
+                </button>
+              </div>
+              <p style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 16, lineHeight: 1.7 }}>
+                A temporary password will be generated. You'll see it on the next screen to share with your client.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Credentials Modal (no backdrop close — password must be copied) ── */}
+      {showCredentials && tempCredentials && (
+        <div className="modal-overlay">
+          <div className="modal" style={{ maxWidth: 480 }}>
+            <div className="modal-head">
+              <h3>Account Created</h3>
+              {/* No close button — force user to click Done after copying */}
+            </div>
+            <div className="modal-body">
+              {/* Success badge */}
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20,
+                padding: '10px 14px', background: 'var(--green-d)',
+                border: '1px solid var(--green)', borderRadius: 'var(--r)',
+              }}>
+                <span style={{ color: 'var(--green)', fontSize: 16 }}>✓</span>
+                <span style={{ fontSize: 13, color: 'var(--green)', fontWeight: 500 }}>
+                  Account created successfully!
+                </span>
+              </div>
+
+              <p style={{ fontSize: 13, color: 'var(--text-2)', marginBottom: 16 }}>
+                Share these login details with <strong>{tempCredentials.company}</strong>:
+              </p>
+
+              {/* Credentials box */}
+              <div style={{
+                background: 'var(--surface2)', border: '1px solid var(--border)',
+                borderRadius: 'var(--r)', padding: '16px 18px', marginBottom: 8,
+                fontFamily: 'var(--font-mono)', fontSize: 12, lineHeight: 2.2,
+              }}>
+                <div>
+                  <span style={{ color: 'var(--text-3)', minWidth: 90, display: 'inline-block' }}>Company</span>
+                  <span style={{ color: 'var(--text)' }}>{tempCredentials.company}</span>
+                </div>
+                <div>
+                  <span style={{ color: 'var(--text-3)', minWidth: 90, display: 'inline-block' }}>Login URL</span>
+                  <span style={{ color: 'var(--text)' }}>{APP_URL}</span>
+                </div>
+                <div>
+                  <span style={{ color: 'var(--text-3)', minWidth: 90, display: 'inline-block' }}>Email</span>
+                  <span style={{ color: 'var(--text)' }}>{tempCredentials.email}</span>
+                </div>
+                <div>
+                  <span style={{ color: 'var(--text-3)', minWidth: 90, display: 'inline-block' }}>Password</span>
+                  <span style={{ color: 'var(--amber)', fontWeight: 700, fontSize: 14, letterSpacing: '0.04em' }}>
+                    {tempCredentials.password}
+                  </span>
+                </div>
+              </div>
+
+              {/* Warning */}
+              <div style={{
+                padding: '9px 12px', marginBottom: 20,
+                background: 'var(--amber-d)', border: '1px solid var(--amber)',
+                borderRadius: 'var(--r)', fontSize: 11, color: 'var(--amber)', lineHeight: 1.6,
+              }}>
+                ⚠ Share these credentials with your client now. The password will not be shown again.
+              </div>
+
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button
+                  className="btn btn-primary"
+                  style={{ flex: 1, justifyContent: 'center' }}
+                  onClick={copyCredentials}
+                >
+                  {copied ? '✓ Copied!' : 'Copy Login Details'}
+                </button>
+                <button className="btn btn-secondary" onClick={closeCredentials}>
+                  Done
+                </button>
+              </div>
             </div>
           </div>
         </div>
