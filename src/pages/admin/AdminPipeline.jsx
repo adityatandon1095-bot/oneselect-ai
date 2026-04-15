@@ -13,7 +13,7 @@ const CV_PARSE_SYSTEM = `You are a CV parser. Return ONLY valid JSON — no mark
 
 const screeningSystem = (job) =>
   `You are an expert recruiter. Evaluate this candidate against the job.
-Job: ${job.title} | ${job.years_experience}+ years | Required: ${(job.required_skills ?? []).join(', ')}
+Job: ${job.title} | ${job.experience_years}+ years | Required: ${(job.required_skills ?? []).join(', ')}
 Description: ${job.description ?? ''}
 Return ONLY valid JSON: {"matchScore":number,"pass":boolean,"reason":"string","rank":"top10|strong|moderate|weak"}`
 
@@ -51,7 +51,7 @@ function ScoreRing({ score, size = 48 }) {
   )
 }
 
-const DEFAULT_JOB_FORM = { title:'', years_experience:3, required_skills:[], preferred_skills:[], description:'', tech_weight:60, comm_weight:40 }
+const DEFAULT_JOB_FORM = { title:'', experience_years:3, required_skills:[], preferred_skills:[], description:'', tech_weight:60, comm_weight:40 }
 
 export default function AdminPipeline() {
   const [clients, setClients] = useState([])
@@ -152,7 +152,7 @@ export default function AdminPipeline() {
     const { data, error } = await supabase.from('jobs').insert({
       recruiter_id: clientId,
       title: jobForm.title,
-      years_experience: jobForm.years_experience,
+      experience_years: jobForm.experience_years,
       required_skills: jobForm.required_skills,
       preferred_skills: jobForm.preferred_skills,
       description: jobForm.description,
@@ -365,7 +365,7 @@ export default function AdminPipeline() {
                 </div>
                 <div className="field">
                   <label>Years of Experience</label>
-                  <input type="number" min={0} value={jobForm.years_experience} onChange={e => setForm('years_experience', +e.target.value)} />
+                  <input type="number" min={0} value={jobForm.experience_years} onChange={e => setForm('experience_years', +e.target.value)} />
                 </div>
                 <div className="field span-2">
                   <label>Required Skills</label>

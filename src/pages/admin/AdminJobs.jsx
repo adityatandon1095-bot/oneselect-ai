@@ -82,7 +82,7 @@ export default function AdminJobs() {
               <div className="col-main">
                 <div className="col-name">{j.title}</div>
                 <div className="col-sub">
-                  {j.profiles?.company_name ?? j.profiles?.email ?? 'Unknown'} · {j.years_experience ?? 0}+ yrs
+                  {j.profiles?.company_name ?? j.profiles?.email ?? 'Unknown'} · {j.experience_years ?? 0}+ yrs
                 </div>
               </div>
               <div className="col-right">

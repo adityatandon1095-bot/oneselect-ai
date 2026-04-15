@@ -5,7 +5,7 @@ import { useAuth } from '../../lib/AuthContext'
 import { triggerTalentPoolMatch } from '../../utils/talentPool'
 import TagInput from '../../components/TagInput'
 
-const DEFAULT = { title: '', years_experience: 3, required_skills: [], preferred_skills: [], description: '', tech_weight: 60, comm_weight: 40 }
+const DEFAULT = { title: '', experience_years: 3, required_skills: [], preferred_skills: [], description: '', tech_weight: 60, comm_weight: 40 }
 
 export default function RecruiterJobs() {
   const { user } = useAuth()
@@ -36,7 +36,7 @@ export default function RecruiterJobs() {
     const { data, error: err } = await supabase.from('jobs').insert({
       recruiter_id: user.id,
       title: form.title,
-      years_experience: form.years_experience,
+      experience_years: form.experience_years,
       required_skills: form.required_skills,
       preferred_skills: form.preferred_skills,
       description: form.description,
@@ -94,7 +94,7 @@ export default function RecruiterJobs() {
                 </div>
                 <div className="field">
                   <label>Years of Experience</label>
-                  <input type="number" min={0} value={form.years_experience} onChange={e => set('years_experience', +e.target.value)} />
+                  <input type="number" min={0} value={form.experience_years} onChange={e => set('experience_years', +e.target.value)} />
                 </div>
                 <div className="field span-2">
                   <label>Required Skills</label>
@@ -153,7 +153,7 @@ export default function RecruiterJobs() {
                   <div className="col-main">
                     <div className="col-name">{j.title}</div>
                     <div className="col-sub">
-                      {j.years_experience}+ yrs
+                      {j.experience_years}+ yrs
                       {j.required_skills?.length ? ` · ${j.required_skills.slice(0, 3).join(', ')}${j.required_skills.length > 3 ? '…' : ''}` : ''}
                     </div>
                   </div>
@@ -194,7 +194,7 @@ export default function RecruiterJobs() {
                 <div key={j.id} className="table-row" style={{ opacity: 0.6 }}>
                   <div className="col-main">
                     <div className="col-name">{j.title}</div>
-                    <div className="col-sub">{j.years_experience}+ yrs</div>
+                    <div className="col-sub">{j.experience_years}+ yrs</div>
                   </div>
                   <div className="col-right">
                     <span className="badge badge-amber">closed</span>
