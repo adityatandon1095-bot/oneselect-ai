@@ -103,38 +103,26 @@ export default function AdminClients() {
     const contactName = form.full_name
 
     try {
+      const { data: { session } } = await supabase.auth.getSession()
+
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/invite-user`,
         {
           method: 'POST',
           headers: {
             'Content-Type':  'application/json',
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+            'Authorization': `Bearer ${session.access_token}`,
           },
           body: JSON.stringify({ email, company_name: companyName, contact_name: contactName }),
         }
       )
 
-      if (!response.ok) {
-        let msg = 'Invitation failed'
-        try { const err = await response.json(); msg = err.error || msg } catch {}
-        throw new Error(msg)
-      }
-
       const result = await response.json()
-      if (result.error) throw new Error(result.error)
+      if (!response.ok) throw new Error(result.error || 'Invitation failed')
+      if (result.error)  throw new Error(result.error)
 
       setInviteSuccess(`Invitation sent to ${email}`)
-      setClients(prev => [{
-        id:             result.user?.id ?? crypto.randomUUID(),
-        email,
-        full_name:      contactName,
-        company_name:   companyName,
-        user_role:      'recruiter',
-        created_at:     new Date().toISOString(),
-        jobCount:       0,
-        candidateCount: 0,
-      }, ...prev])
+      await load()
       setTimeout(closeInvite, 2400)
     } catch (err) {
       setInviteError(err?.message ?? 'An unexpected error occurred')

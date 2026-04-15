@@ -13,12 +13,23 @@ serve(async (req) => {
   }
 
   try {
-    const { email, company_name, contact_name } = await req.json()
+    const authHeader = req.headers.get('Authorization')
+    const token = authHeader?.replace('Bearer ', '')
 
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SERVICE_ROLE_KEY') ?? ''
     )
+
+    const { data: { user } } = await supabaseAdmin.auth.getUser(token)
+    if (!user) {
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    const { email, company_name, contact_name } = await req.json()
 
     const { data: userData, error: inviteError } =
       await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
