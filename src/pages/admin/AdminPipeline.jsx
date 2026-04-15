@@ -51,7 +51,7 @@ function ScoreRing({ score, size = 48 }) {
   )
 }
 
-const DEFAULT_JOB_FORM = { title:'', years_experience:3, required_skills:[], preferred_skills:[], description:'', technical_weight:60, communication_weight:40 }
+const DEFAULT_JOB_FORM = { title:'', years_experience:3, required_skills:[], preferred_skills:[], description:'', tech_weight:60, comm_weight:40 }
 
 export default function AdminPipeline() {
   const [clients, setClients] = useState([])
@@ -144,7 +144,7 @@ export default function AdminPipeline() {
   const addLog = (msg, type = '') => setLog(p => [...p, { id: Date.now() + Math.random(), msg, type }])
 
   const setForm = (k, v) => setJobForm(f => ({ ...f, [k]: v }))
-  const setTech = (v) => { setForm('technical_weight', v); setForm('communication_weight', 100 - v) }
+  const setTech = (v) => { setForm('tech_weight', v); setForm('comm_weight', 100 - v) }
 
   // ── Save new job ──────────────────────────────────────────────────────────
   async function saveJob() {
@@ -156,8 +156,8 @@ export default function AdminPipeline() {
       required_skills: jobForm.required_skills,
       preferred_skills: jobForm.preferred_skills,
       description: jobForm.description,
-      tech_weight: jobForm.technical_weight,
-      comm_weight: jobForm.communication_weight,
+      tech_weight: jobForm.tech_weight,
+      comm_weight: jobForm.comm_weight,
       status: 'active',
     }).select().single()
     if (error) { addLog(`Error: ${error.message}`, 'err'); return }
@@ -384,13 +384,13 @@ export default function AdminPipeline() {
                   <div className="weight-sliders">
                     <div className="weight-row">
                       <span>Technical</span>
-                      <input type="range" min={10} max={90} value={jobForm.technical_weight} onChange={e => setTech(+e.target.value)} />
-                      <span className="weight-val">{jobForm.technical_weight}%</span>
+                      <input type="range" min={10} max={90} value={jobForm.tech_weight} onChange={e => setTech(+e.target.value)} />
+                      <span className="weight-val">{jobForm.tech_weight}%</span>
                     </div>
                     <div className="weight-row">
                       <span>Communication</span>
-                      <input type="range" min={10} max={90} value={jobForm.communication_weight} onChange={e => { setForm('communication_weight', +e.target.value); setForm('technical_weight', 100 - +e.target.value) }} />
-                      <span className="weight-val">{jobForm.communication_weight}%</span>
+                      <input type="range" min={10} max={90} value={jobForm.comm_weight} onChange={e => { setForm('comm_weight', +e.target.value); setForm('tech_weight', 100 - +e.target.value) }} />
+                      <span className="weight-val">{jobForm.comm_weight}%</span>
                     </div>
                   </div>
                 </div>

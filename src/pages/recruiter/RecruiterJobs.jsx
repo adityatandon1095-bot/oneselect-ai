@@ -5,7 +5,7 @@ import { useAuth } from '../../lib/AuthContext'
 import { triggerTalentPoolMatch } from '../../utils/talentPool'
 import TagInput from '../../components/TagInput'
 
-const DEFAULT = { title: '', years_experience: 3, required_skills: [], preferred_skills: [], description: '', technical_weight: 60, communication_weight: 40 }
+const DEFAULT = { title: '', years_experience: 3, required_skills: [], preferred_skills: [], description: '', tech_weight: 60, comm_weight: 40 }
 
 export default function RecruiterJobs() {
   const { user } = useAuth()
@@ -27,7 +27,7 @@ export default function RecruiterJobs() {
   }
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
-  const setTech = (v) => { set('technical_weight', v); set('communication_weight', 100 - v) }
+  const setTech = (v) => { set('tech_weight', v); set('comm_weight', 100 - v) }
 
   async function handleCreate(e) {
     e.preventDefault()
@@ -40,8 +40,8 @@ export default function RecruiterJobs() {
       required_skills: form.required_skills,
       preferred_skills: form.preferred_skills,
       description: form.description,
-      tech_weight: form.technical_weight,
-      comm_weight: form.communication_weight,
+      tech_weight: form.tech_weight,
+      comm_weight: form.comm_weight,
       status: 'active',
     }).select().single()
     setSaving(false)
@@ -113,13 +113,13 @@ export default function RecruiterJobs() {
                   <div className="weight-sliders">
                     <div className="weight-row">
                       <span>Technical</span>
-                      <input type="range" min={10} max={90} value={form.technical_weight} onChange={e => setTech(+e.target.value)} />
-                      <span className="weight-val">{form.technical_weight}%</span>
+                      <input type="range" min={10} max={90} value={form.tech_weight} onChange={e => setTech(+e.target.value)} />
+                      <span className="weight-val">{form.tech_weight}%</span>
                     </div>
                     <div className="weight-row">
                       <span>Communication</span>
-                      <input type="range" min={10} max={90} value={form.communication_weight} onChange={e => { set('communication_weight', +e.target.value); set('technical_weight', 100 - +e.target.value) }} />
-                      <span className="weight-val">{form.communication_weight}%</span>
+                      <input type="range" min={10} max={90} value={form.comm_weight} onChange={e => { set('comm_weight', +e.target.value); set('tech_weight', 100 - +e.target.value) }} />
+                      <span className="weight-val">{form.comm_weight}%</span>
                     </div>
                   </div>
                 </div>
