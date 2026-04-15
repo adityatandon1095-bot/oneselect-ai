@@ -94,35 +94,53 @@ export default function AdminClients() {
 
   async function handleInvite(e) {
     e.preventDefault()
-    setInviting(true)
     setInviteError('')
     setInviteSuccess('')
+    setInviting(true)
+
+    const email       = form.email
+    const companyName = form.company_name
+    const contactName = form.full_name
 
     try {
-      const result = await edgeFn('invite-user', {
-        email:        form.email,
-        company_name: form.company_name,
-        contact_name: form.full_name,
-      })
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/invite-user`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type':  'application/json',
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          },
+          body: JSON.stringify({ email, company_name: companyName, contact_name: contactName }),
+        }
+      )
 
-      setInviteSuccess(`Invitation sent to ${form.email}`)
+      if (!response.ok) {
+        let msg = 'Invitation failed'
+        try { const err = await response.json(); msg = err.error || msg } catch {}
+        throw new Error(msg)
+      }
 
+      const result = await response.json()
+      if (result.error) throw new Error(result.error)
+
+      setInviteSuccess(`Invitation sent to ${email}`)
       setClients(prev => [{
-        id:             result.user.id,
-        email:          form.email,
-        full_name:      form.full_name,
-        company_name:   form.company_name,
+        id:             result.user?.id ?? crypto.randomUUID(),
+        email,
+        full_name:      contactName,
+        company_name:   companyName,
         user_role:      'recruiter',
         created_at:     new Date().toISOString(),
         jobCount:       0,
         candidateCount: 0,
       }, ...prev])
-
       setTimeout(closeInvite, 2400)
     } catch (err) {
-      setInviteError(err.message)
+      setInviteError(err?.message ?? 'An unexpected error occurred')
+    } finally {
+      setInviting(false)
     }
-    setInviting(false)
   }
 
   async function handleResendInvite(client) {
@@ -136,7 +154,7 @@ export default function AdminClients() {
       setActionMsg({ text: `Invitation resent to ${client.email}`, ok: true })
       setTimeout(() => setActionMsg({ text: '', ok: true }), 4000)
     } catch (err) {
-      setActionMsg({ text: `Error: ${err.message}`, ok: false })
+      setActionMsg({ text: `Error: ${err?.message ?? 'Failed to resend'}`, ok: false })
     }
   }
 
@@ -150,7 +168,7 @@ export default function AdminClients() {
       setActionMsg({ text: `${label} removed.`, ok: true })
       setTimeout(() => setActionMsg({ text: '', ok: true }), 4000)
     } catch (err) {
-      setActionMsg({ text: `Error: ${err.message}`, ok: false })
+      setActionMsg({ text: `Error: ${err?.message ?? 'Failed to remove'}`, ok: false })
     }
   }
 
