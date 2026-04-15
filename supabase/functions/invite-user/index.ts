@@ -11,6 +11,19 @@ serve(async (req) => {
     return new Response('ok', { headers: corsHeaders })
   }
 
+  // Verify request has apikey
+  const apikey = req.headers.get('apikey') ||
+    req.headers.get('Authorization')?.replace('Bearer ', '')
+
+  if (!apikey) {
+    return new Response(
+      JSON.stringify({ error: 'Missing authorization' }),
+      { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    )
+  }
+
+  // No further auth verification - proceed directly to creating the user
+
   try {
     const { email, company_name, contact_name } = await req.json()
 
