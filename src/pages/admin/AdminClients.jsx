@@ -99,28 +99,47 @@ export default function AdminClients() {
           headers: {
             'Content-Type': 'application/json',
             'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+            'X-Supabase-Auth-Skip-Http-Redirect': 'true',
           },
-          body: JSON.stringify({ email, password: tempPassword }),
+          body: JSON.stringify({
+            email: email.trim().toLowerCase(),
+            password: tempPassword,
+            data: { company_name: companyName, contact_name: contactName },
+          }),
         }
       )
 
       const signupData = await signupRes.json()
-      console.log('Step 1 result:', signupRes.status, signupData)
+      console.log('Full signup response:', JSON.stringify(signupData))
 
-      if (!signupData.id) {
-        throw new Error('Signup failed: ' + JSON.stringify(signupData))
+      // Handle both response formats (email confirm on vs off)
+      const userId = signupData.id || signupData.user?.id
+
+      if (!userId) {
+        const { data: existingProfile } = await supabaseAdmin
+          .from('profiles')
+          .select('id')
+          .eq('email', email.trim().toLowerCase())
+          .single()
+
+        if (existingProfile) {
+          throw new Error('This email is already registered as a client')
+        }
+
+        console.error('Signup response was:', JSON.stringify(signupData))
+        throw new Error('Could not create account. Response: ' + JSON.stringify(signupData))
       }
 
-      console.log('Step 2: Creating profile for', signupData.id)
+      console.log('Step 2: Creating profile for', userId)
 
       const { error: profileError } = await supabaseAdmin
         .from('profiles')
         .insert({
-          id:           signupData.id,
+          id:           userId,
           user_role:    'recruiter',
           company_name: companyName,
           full_name:    contactName,
-          email:        email,
+          email:        email.trim().toLowerCase(),
           first_login:  true,
         })
 
