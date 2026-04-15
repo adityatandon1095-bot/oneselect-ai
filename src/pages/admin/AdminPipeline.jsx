@@ -83,7 +83,7 @@ export default function AdminPipeline() {
   useEffect(() => { chatRef.current?.scrollTo(0, chatRef.current.scrollHeight) }, [ivStates])
 
   async function loadClients() {
-    const { data } = await supabase.from('profiles').select('id, full_name, company_name, email').eq('user_role', 'recruiter').order('company_name')
+    const { data } = await supabaseAdmin.from('profiles').select('id, full_name, company_name, email').eq('user_role', 'recruiter').order('company_name')
     setClients(data ?? [])
   }
 

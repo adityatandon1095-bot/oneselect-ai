@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { supabaseAdmin } from '../../lib/supabaseAdmin'
 
 const APP_URL = 'https://oneselect-ai-t6uo-phi.vercel.app'
 
@@ -28,7 +29,7 @@ export default function AdminClients() {
   async function loadClients() {
     setPageLoading(true)
 
-    const { data: profiles, error: profileErr } = await supabase
+    const { data: profiles, error: profileErr } = await supabaseAdmin
       .from('profiles')
       .select('*')
       .eq('user_role', 'recruiter')
@@ -112,7 +113,7 @@ export default function AdminClients() {
 
       console.log('Step 2: Creating profile for', signupData.id)
 
-      const { error: profileError } = await supabase
+      const { error: profileError } = await supabaseAdmin
         .from('profiles')
         .insert({
           id:           signupData.id,
