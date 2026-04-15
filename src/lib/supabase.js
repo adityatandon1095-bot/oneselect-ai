@@ -11,3 +11,18 @@ export const supabase = createClient(
     },
   }
 )
+
+// Isolated client used only for creating new user accounts from the admin UI.
+// Uses a separate storageKey so signUp/signOut on this client never touches
+// the admin's session stored under the default key.
+export const supabaseSignup = createClient(
+  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_ANON_KEY,
+  {
+    auth: {
+      storageKey:       'oneselect-signup-client',
+      autoRefreshToken: false,
+      persistSession:   false,
+    },
+  }
+)

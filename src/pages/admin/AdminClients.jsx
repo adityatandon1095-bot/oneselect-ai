@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { supabase } from '../../lib/supabase'
+import { supabase, supabaseSignup } from '../../lib/supabase'
 
 const APP_URL     = 'https://oneselect-ai-t6uo-phi.vercel.app'
 const ADMIN_EMAIL = 'aditya.tandon1095@gmail.com'
@@ -28,10 +28,9 @@ async function sendResendEmail(to, subject, html) {
         html,
       }),
     })
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}))
-      return { ok: false, reason: body?.message ?? String(res.status) }
-    }
+    const body = await res.json().catch(() => ({}))
+    console.log('Resend response:', res.status, body)
+    if (!res.ok) return { ok: false, reason: body?.message ?? String(res.status) }
     return { ok: true }
   } catch (e) {
     return { ok: false, reason: e.message }
@@ -192,11 +191,13 @@ export default function AdminClients() {
     const tempPassword = genTempPassword()
 
     try {
-      // 1. Create auth user
-      const { data: authData, error: signUpError } = await supabase.auth.signUp({
+      // 1. Create auth user via isolated client so the admin session is unaffected
+      const { data: authData, error: signUpError } = await supabaseSignup.auth.signUp({
         email:    cleanEmail,
         password: tempPassword,
       })
+      // Clear the signup client's session immediately — we don't need it
+      await supabaseSignup.auth.signOut()
 
       if (signUpError) { setError(signUpError.message); return }
       if (!authData?.user?.id) { setError('User creation failed — please try again'); return }
