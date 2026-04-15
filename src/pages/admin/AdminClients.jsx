@@ -128,7 +128,8 @@ export default function AdminClients() {
       if (profileError) throw new Error('Profile failed: ' + profileError.message)
 
       console.log('Step 3: Sending email via Resend')
-      console.log('Resend key:', import.meta.env.VITE_RESEND_API_KEY?.slice(0, 8))
+      console.log('Sending email to:', email, 'from: noreply@oneselect.ai')
+      console.log('Using Resend key:', import.meta.env.VITE_RESEND_API_KEY?.slice(0, 10))
 
       const emailRes = await fetch('https://api.resend.com/emails', {
         method: 'POST',
@@ -137,7 +138,7 @@ export default function AdminClients() {
           'Authorization': 'Bearer ' + import.meta.env.VITE_RESEND_API_KEY,
         },
         body: JSON.stringify({
-          from:    'onboarding@resend.dev',
+          from:    'One Select <noreply@oneselect.ai>',
           to:      [email],
           subject: 'Your One Select Portal is Ready',
           html:    '<p>Welcome to One Select!</p><p>Your temporary password is: <strong>' + tempPassword + '</strong></p><p>Login at: ' + APP_URL + '</p>',
