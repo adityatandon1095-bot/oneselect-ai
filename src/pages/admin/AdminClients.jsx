@@ -12,13 +12,14 @@ export default function AdminClients() {
   const [actionMsg,   setActionMsg]   = useState({ text: '', ok: true })
 
   // ── Invite form state ──────────────────────────────────────────────────
-  const [showInvite,  setShowInvite]  = useState(false)
-  const [email,       setEmail]       = useState('')
-  const [companyName, setCompanyName] = useState('')
-  const [contactName, setContactName] = useState('')
-  const [loading,     setLoading]     = useState(false)
-  const [error,       setError]       = useState('')
-  const [success,     setSuccess]     = useState(null) // { email, company, emailSent, tempPassword }
+  const [showInviteModal, setShowInviteModal] = useState(false)
+  const [email,           setEmail]           = useState('')
+  const [companyName,     setCompanyName]     = useState('')
+  const [contactName,     setContactName]     = useState('')
+  const [loading,         setLoading]         = useState(false)
+  const [error,           setError]           = useState('')
+  const [credentials,     setCredentials]     = useState(null)
+  const [showCredentials, setShowCredentials] = useState(false)
 
   useEffect(() => { loadClients() }, [])
 
@@ -73,11 +74,11 @@ export default function AdminClients() {
     setCompanyName('')
     setContactName('')
     setError('')
-    setShowInvite(true)
+    setShowInviteModal(true)
   }
 
   function closeInvite() {
-    setShowInvite(false)
+    setShowInviteModal(false)
     setError('')
   }
 
@@ -90,6 +91,7 @@ export default function AdminClients() {
 
     try {
       const { data: { session } } = await supabase.auth.getSession()
+      if (!session) throw new Error('Not authenticated')
 
       const res = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/invite-user`,
@@ -108,22 +110,24 @@ export default function AdminClients() {
       )
 
       const result = await res.json()
-      console.log('Invite result:', result)
+      console.log('Edge function result:', result)
 
       if (!res.ok || result.error) {
         throw new Error(result.error || 'Invitation failed')
       }
 
-      setShowInvite(false)
-      setSuccess({
-        email:       email.trim().toLowerCase(),
-        company:     companyName.trim(),
-        emailSent:   result.emailSent,
+      setCredentials({
+        email:        email.trim().toLowerCase(),
+        company:      companyName.trim(),
+        emailSent:    result.emailSent,
         tempPassword: result.tempPassword,
       })
+      setShowCredentials(true)
+      setShowInviteModal(false)
       await loadClients()
 
     } catch (err) {
+      console.error('Invite error:', err)
       setError(err.message)
     } finally {
       setLoading(false)
@@ -152,12 +156,12 @@ export default function AdminClients() {
 
   // ── Copy login details ─────────────────────────────────────────────────
   function copyLoginDetails() {
-    if (!success) return
+    if (!credentials) return
     const text =
       `One Select Portal Login\n` +
       `Portal:   https://oneselect-ai-t6uo-phi.vercel.app\n` +
-      `Email:    ${success.email}\n` +
-      `Password: ${success.tempPassword}`
+      `Email:    ${credentials.email}\n` +
+      `Password: ${credentials.tempPassword}`
     navigator.clipboard.writeText(text).catch(() => {})
   }
 
@@ -263,7 +267,7 @@ export default function AdminClients() {
       </div>
 
       {/* ── Invite Modal ── */}
-      {showInvite && (
+      {showInviteModal && (
         <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) closeInvite() }}>
           <div className="modal">
             <div className="modal-head">
@@ -321,12 +325,12 @@ export default function AdminClients() {
         </div>
       )}
 
-      {/* ── Success Modal ── */}
-      {success && (
+      {/* ── Credentials Modal — cannot be dismissed by clicking outside ── */}
+      {showCredentials && credentials && (
         <div className="modal-overlay">
           <div className="modal" style={{ maxWidth: 480 }}>
             <div className="modal-head">
-              <h3>Client Invited Successfully</h3>
+              <h3>Client Invited!</h3>
             </div>
             <div className="modal-body">
               {/* Green checkmark */}
@@ -342,12 +346,12 @@ export default function AdminClients() {
               {/* Email sent status */}
               <div style={{
                 padding: '10px 14px', marginBottom: 20, fontSize: 13,
-                background: success.emailSent ? 'var(--green-d)' : 'var(--amber-d)',
-                borderLeft: `2px solid ${success.emailSent ? 'var(--green)' : 'var(--amber)'}`,
-                color: success.emailSent ? 'var(--green)' : 'var(--amber)',
+                background: credentials.emailSent ? 'var(--green-d)' : 'var(--amber-d)',
+                borderLeft: `2px solid ${credentials.emailSent ? 'var(--green)' : 'var(--amber)'}`,
+                color: credentials.emailSent ? 'var(--green)' : 'var(--amber)',
               }}>
-                {success.emailSent
-                  ? `Welcome email sent to ${success.email}`
+                {credentials.emailSent
+                  ? `Email sent to ${credentials.email}`
                   : 'Email delivery failed — share login details below manually'}
               </div>
 
@@ -362,16 +366,16 @@ export default function AdminClients() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   <div style={{ display: 'flex', gap: 12, alignItems: 'baseline' }}>
                     <span style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--font-mono)', width: 72, flexShrink: 0 }}>Company</span>
-                    <span style={{ fontSize: 13, color: 'var(--text)' }}>{success.company}</span>
+                    <span style={{ fontSize: 13, color: 'var(--text)' }}>{credentials.company}</span>
                   </div>
                   <div style={{ display: 'flex', gap: 12, alignItems: 'baseline' }}>
                     <span style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--font-mono)', width: 72, flexShrink: 0 }}>Email</span>
-                    <span style={{ fontSize: 13, color: 'var(--text)', fontFamily: 'var(--font-mono)' }}>{success.email}</span>
+                    <span style={{ fontSize: 13, color: 'var(--text)', fontFamily: 'var(--font-mono)' }}>{credentials.email}</span>
                   </div>
                   <div style={{ display: 'flex', gap: 12, alignItems: 'baseline' }}>
                     <span style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--font-mono)', width: 72, flexShrink: 0 }}>Password</span>
-                    <span style={{ fontSize: 18, color: 'var(--accent)', fontFamily: 'var(--font-mono)', fontWeight: 700, letterSpacing: '0.1em' }}>
-                      {success.tempPassword}
+                    <span style={{ fontSize: 22, color: 'var(--accent)', fontFamily: 'var(--font-mono)', fontWeight: 700, letterSpacing: '0.15em' }}>
+                      {credentials.tempPassword}
                     </span>
                   </div>
                 </div>
@@ -389,7 +393,7 @@ export default function AdminClients() {
                 <button
                   className="btn btn-primary"
                   style={{ flex: 1, justifyContent: 'center' }}
-                  onClick={() => setSuccess(null)}
+                  onClick={() => { setShowCredentials(false); setCredentials(null) }}
                 >
                   Done
                 </button>

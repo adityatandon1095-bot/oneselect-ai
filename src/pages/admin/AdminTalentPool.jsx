@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import mammoth from 'mammoth'
 import { supabaseAdmin } from '../../lib/supabaseAdmin'
 import { callClaude } from '../../utils/api'
 import { extractContent, isSupported, fileExt, ACCEPT_ATTR } from '../../utils/fileExtract'
@@ -66,12 +67,24 @@ export default function AdminTalentPool() {
       patchFile(entry.id, { status: 'parsing' })
       addLog(`Parsing ${entry.file.name}…`, 'info')
       try {
-        const content = await extractContent(entry.file)
+        // For DOCX, use mammoth directly to guarantee text extraction
+        let content
+        if (entry.ext === 'docx') {
+          const arrayBuffer = await entry.file.arrayBuffer()
+          const result = await mammoth.extractRawText({ arrayBuffer })
+          if (!result.value?.trim()) throw new Error('No text could be extracted from this DOCX file')
+          content = { kind: 'text', text: result.value }
+        } else {
+          content = await extractContent(entry.file)
+        }
+
         const msgs = content.kind === 'image'
           ? [{ role: 'user', content: [{ type: 'image', source: { type: 'base64', media_type: content.mediaType, data: content.base64 } }, { type: 'text', text: 'Parse this CV image.' }] }]
           : [{ role: 'user', content: `Parse this CV:\n\n${content.text}` }]
         const reply = await callClaude(msgs, CV_PARSE_SYSTEM, 1024)
-        const parsed = JSON.parse(reply.trim())
+        // Strip markdown code fences Claude sometimes wraps around JSON
+        const jsonStr = reply.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
+        const parsed = JSON.parse(jsonStr)
 
         const { data: saved, error } = await supabaseAdmin.from('talent_pool').insert({
           full_name:      parsed.name,
