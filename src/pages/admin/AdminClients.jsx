@@ -2,22 +2,10 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 
-const APP_URL     = 'https://oneselect-ai-t6uo-phi.vercel.app'
-const EDGE_URL    = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`
-const EDGE_HEADERS = {
-  'Content-Type':  'application/json',
-  'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-}
+const APP_URL = 'https://oneselect-ai-t6uo-phi.vercel.app'
 
-async function edgeFn(name, body) {
-  const res = await fetch(`${EDGE_URL}/${name}`, {
-    method:  'POST',
-    headers: EDGE_HEADERS,
-    body:    JSON.stringify(body),
-  })
-  const json = await res.json()
-  if (json.error) throw new Error(json.error)
-  return json
+function genTempPassword() {
+  return 'OneSelect' + Math.random().toString(36).slice(2, 8).toUpperCase() + '!'
 }
 
 export default function AdminClients() {
@@ -28,7 +16,8 @@ export default function AdminClients() {
   const [form, setForm]             = useState({ company_name: '', full_name: '', email: '' })
   const [inviting, setInviting]     = useState(false)
   const [inviteError, setInviteError]     = useState('')
-  const [inviteSuccess, setInviteSuccess] = useState('')
+  const [inviteSuccess, setInviteSuccess] = useState(null) // { email, tempPassword }
+  const [copied, setCopied]         = useState(false)
   const [actionMsg, setActionMsg]   = useState({ text: '', ok: true })
 
   useEffect(() => { load() }, [])
@@ -49,19 +38,15 @@ export default function AdminClients() {
     }
 
     const recruiterIds = profiles.map(p => p.id)
-
     const [{ data: jobs }] = await Promise.all([
       supabase.from('jobs').select('id, recruiter_id').in('recruiter_id', recruiterIds),
     ])
 
     const jobIds = (jobs ?? []).map(j => j.id)
-
     const candsByRecruiter = {}
     if (jobIds.length) {
       const { data: cands } = await supabase
-        .from('candidates')
-        .select('job_id')
-        .in('job_id', jobIds)
+        .from('candidates').select('job_id').in('job_id', jobIds)
       ;(cands ?? []).forEach(c => {
         const job = (jobs ?? []).find(j => j.id === c.job_id)
         if (job) candsByRecruiter[job.recruiter_id] = (candsByRecruiter[job.recruiter_id] ?? 0) + 1
@@ -82,46 +67,50 @@ export default function AdminClients() {
   function openInvite() {
     setForm({ company_name: '', full_name: '', email: '' })
     setInviteError('')
-    setInviteSuccess('')
+    setInviteSuccess(null)
+    setCopied(false)
     setShowInvite(true)
   }
 
   function closeInvite() {
     setShowInvite(false)
     setInviteError('')
-    setInviteSuccess('')
+    setInviteSuccess(null)
+    setCopied(false)
   }
 
   async function handleInvite(e) {
     e.preventDefault()
     setInviteError('')
-    setInviteSuccess('')
+    setInviteSuccess(null)
     setInviting(true)
 
     const email       = form.email
     const companyName = form.company_name
-    const contactName = form.full_name
+    const tempPassword = genTempPassword()
 
     try {
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/invite-user`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type':  'application/json',
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-          },
-          body: JSON.stringify({ email, company_name: companyName, contact_name: contactName }),
-        }
-      )
+      // Create the user account with a temporary password
+      const { data: authData, error: signUpError } = await supabase.auth.signUp({
+        email,
+        password: tempPassword,
+        options: { emailRedirectTo: `${APP_URL}/login` },
+      })
+      if (signUpError) throw signUpError
+      if (!authData.user) throw new Error('User creation failed')
 
-      const result = await response.json()
-      if (!response.ok) throw new Error(result.error || 'Invitation failed')
-      if (result.error)  throw new Error(result.error)
+      // Insert their profile
+      const { error: profileError } = await supabase.from('profiles').insert({
+        id:           authData.user.id,
+        user_role:    'recruiter',
+        company_name: companyName,
+        full_name:    form.full_name,
+        email,
+      })
+      if (profileError) throw profileError
 
-      setInviteSuccess(`Invitation sent to ${email}`)
+      setInviteSuccess({ email, companyName, tempPassword })
       await load()
-      setTimeout(closeInvite, 2400)
     } catch (err) {
       setInviteError(err?.message ?? 'An unexpected error occurred')
     } finally {
@@ -129,27 +118,30 @@ export default function AdminClients() {
     }
   }
 
-  async function handleResendInvite(client) {
-    setActionMsg({ text: '', ok: true })
-    try {
-      await edgeFn('invite-user', {
-        email:        client.email,
-        company_name: client.company_name ?? '',
-        contact_name: client.full_name ?? '',
-      })
-      setActionMsg({ text: `Invitation resent to ${client.email}`, ok: true })
-      setTimeout(() => setActionMsg({ text: '', ok: true }), 4000)
-    } catch (err) {
-      setActionMsg({ text: `Error: ${err?.message ?? 'Failed to resend'}`, ok: false })
-    }
+  function copyCredentials(creds) {
+    const text =
+      `OneSelect Login Details\n` +
+      `URL: ${APP_URL}\n` +
+      `Email: ${creds.email}\n` +
+      `Temporary password: ${creds.tempPassword}\n\n` +
+      `Please log in and change your password after first sign-in.`
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2500)
+    })
   }
 
   async function handleRemove(client) {
     const label = client.company_name || client.email
-    if (!window.confirm(`Remove ${label}?\n\nTheir account will be deleted. Jobs and candidates are retained.`)) return
+    if (!window.confirm(
+      `Remove ${label}?\n\nThis removes them from your clients list. ` +
+      `Their jobs and candidates are retained.\n\n` +
+      `Note: delete their auth account from the Supabase dashboard if needed.`
+    )) return
     setActionMsg({ text: '', ok: true })
     try {
-      await edgeFn('delete-user', { user_id: client.id })
+      const { error } = await supabase.from('profiles').delete().eq('id', client.id)
+      if (error) throw error
       setClients(prev => prev.filter(c => c.id !== client.id))
       setActionMsg({ text: `${label} removed.`, ok: true })
       setTimeout(() => setActionMsg({ text: '', ok: true }), 4000)
@@ -202,7 +194,7 @@ export default function AdminClients() {
               <span style={{ textAlign: 'right' }}>Jobs</span>
               <span style={{ textAlign: 'right' }}>Candidates</span>
               <span>Status</span>
-              <span>Invited</span>
+              <span>Joined</span>
               <span>Actions</span>
             </div>
             {clients.map(c => (
@@ -232,17 +224,8 @@ export default function AdminClients() {
                   </button>
                   <button
                     className="btn btn-secondary"
-                    style={{ fontSize: 10, padding: '3px 8px' }}
-                    onClick={() => handleResendInvite(c)}
-                    title="Resend invitation email"
-                  >
-                    Resend
-                  </button>
-                  <button
-                    className="btn btn-secondary"
                     style={{ fontSize: 10, padding: '3px 8px', color: 'var(--red)' }}
                     onClick={() => handleRemove(c)}
-                    title="Delete client account"
                   >
                     Remove
                   </button>
@@ -263,16 +246,46 @@ export default function AdminClients() {
             </div>
             <div className="modal-body">
               {inviteSuccess ? (
-                <div className="invite-success">
-                  <div className="invite-success-icon">✓</div>
-                  <div style={{ fontFamily: 'var(--font-head)', fontSize: 24, fontWeight: 400, marginBottom: 8, color: 'var(--text)' }}>
-                    Invitation sent
+                <div>
+                  <div className="invite-success-icon" style={{ marginBottom: 12 }}>✓</div>
+                  <div style={{ fontFamily: 'var(--font-head)', fontSize: 22, fontWeight: 400, marginBottom: 6, color: 'var(--text)' }}>
+                    Account created
                   </div>
-                  <p style={{ color: 'var(--text-2)', marginBottom: 8 }}>{inviteSuccess}</p>
-                  <p style={{ fontSize: 12, color: 'var(--text-3)', lineHeight: 1.7 }}>
-                    They'll receive an email with a link to set their password and access the portal at{' '}
-                    <span className="mono">{APP_URL}</span>
+                  <p style={{ fontSize: 13, color: 'var(--text-2)', marginBottom: 20 }}>
+                    Share these login details with <strong>{inviteSuccess.companyName}</strong> via email or WhatsApp:
                   </p>
+
+                  {/* Credentials box */}
+                  <div style={{
+                    background: 'var(--surface2)', border: '1px solid var(--border)',
+                    borderRadius: 'var(--r)', padding: '16px 18px', marginBottom: 16,
+                    fontFamily: 'var(--font-mono)', fontSize: 12, lineHeight: 2,
+                    color: 'var(--text-2)',
+                  }}>
+                    <div><span style={{ color: 'var(--text-3)' }}>URL</span>{'  '}<span style={{ color: 'var(--text)' }}>{APP_URL}</span></div>
+                    <div><span style={{ color: 'var(--text-3)' }}>Email</span>{'  '}<span style={{ color: 'var(--text)' }}>{inviteSuccess.email}</span></div>
+                    <div>
+                      <span style={{ color: 'var(--text-3)' }}>Password</span>{'  '}
+                      <span style={{ color: 'var(--accent)', fontWeight: 700 }}>{inviteSuccess.tempPassword}</span>
+                    </div>
+                  </div>
+
+                  <p style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 20, lineHeight: 1.7 }}>
+                    Ask them to change their password after first login.
+                  </p>
+
+                  <div style={{ display: 'flex', gap: 10 }}>
+                    <button
+                      className="btn btn-primary"
+                      style={{ flex: 1, justifyContent: 'center' }}
+                      onClick={() => copyCredentials(inviteSuccess)}
+                    >
+                      {copied ? '✓ Copied!' : 'Copy to clipboard'}
+                    </button>
+                    <button className="btn btn-secondary" onClick={closeInvite}>
+                      Done
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <form onSubmit={handleInvite}>
@@ -289,7 +302,7 @@ export default function AdminClients() {
                     <div className="field">
                       <label>Contact Name</label>
                       <input
-                        type="text" required
+                        type="text"
                         placeholder="Jane Smith"
                         value={form.full_name}
                         onChange={e => setForm(f => ({ ...f, full_name: e.target.value }))}
@@ -311,16 +324,16 @@ export default function AdminClients() {
                   <div className="form-actions" style={{ marginTop: 20 }}>
                     <button type="submit" className="btn btn-primary" disabled={inviting}>
                       {inviting
-                        ? <><span className="spinner" style={{ width: 12, height: 12 }} /> Sending…</>
-                        : 'Send Invitation'}
+                        ? <><span className="spinner" style={{ width: 12, height: 12 }} /> Creating account…</>
+                        : 'Create Account'}
                     </button>
                     <button type="button" className="btn btn-secondary" onClick={closeInvite}>
                       Cancel
                     </button>
                   </div>
                   <p style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 16, lineHeight: 1.7 }}>
-                    An invitation email will be sent with a link to set their password.
-                    Portal URL: <span className="mono">{APP_URL}</span>
+                    A temporary password will be generated. Share it with the client so they can log in at{' '}
+                    <span className="mono">{APP_URL}</span>
                   </p>
                 </form>
               )}
