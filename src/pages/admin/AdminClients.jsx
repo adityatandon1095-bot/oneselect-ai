@@ -18,7 +18,7 @@ export default function AdminClients() {
   const [contactName,     setContactName]     = useState('')
   const [loading,         setLoading]         = useState(false)
   const [error,           setError]           = useState('')
-  const [inviteSuccess,   setInviteSuccess]   = useState(null) // { email, password, emailSent }
+  const [inviteResult,    setInviteResult]    = useState(null) // { email, password, company, emailSent }
 
   useEffect(() => { loadClients() }, [])
 
@@ -82,94 +82,52 @@ export default function AdminClients() {
   }
 
   const handleInvite = async () => {
-    if (!companyName.trim()) { setError('Company name is required'); return }
-    if (!email.trim())       { setError('Email is required'); return }
+    if (!companyName.trim() || !email.trim()) {
+      setError('Please fill in all fields')
+      return
+    }
 
     setLoading(true)
     setError('')
 
     try {
-      const tempPassword = 'OneSelect-' + Math.random().toString(36).slice(2, 8).toUpperCase()
+      const { data: { session } } = await supabase.auth.getSession()
 
-      // Save admin session before signUp clobbers it
-      const { data: { session: adminSession } } = await supabase.auth.getSession()
-      const adminToken   = adminSession?.access_token
-      const adminRefresh = adminSession?.refresh_token
+      console.log('Calling edge function...')
+      console.log('Session token exists:', !!session?.access_token)
 
-      // Create the new user account
-      const { data, error } = await supabase.auth.signUp({
-        email:    email.trim().toLowerCase(),
-        password: tempPassword,
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/invite-user`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type':  'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            email:        email.trim().toLowerCase(),
+            company_name: companyName.trim(),
+            contact_name: contactName.trim(),
+          }),
+        }
+      )
+
+      const result = await res.json()
+      console.log('Edge function response:', res.status, result)
+
+      if (!res.ok) throw new Error(result.error || 'Failed')
+
+      setInviteResult({
+        email:     email.trim().toLowerCase(),
+        password:  result.tempPassword,
+        company:   companyName.trim(),
+        emailSent: result.emailSent,
       })
-      if (error) throw error
-      if (!data.user) throw new Error('No user created')
-      const newUserId = data.user.id
-
-      // Immediately restore admin session
-      const { error: sessionError } = await supabase.auth.setSession({
-        access_token:  adminToken,
-        refresh_token: adminRefresh,
-      })
-      if (sessionError) {
-        window.location.href = '/admin/clients'
-        return
-      }
-
-      // Insert recruiter profile using restored admin session
-      const { error: profileError } = await supabase.from('profiles').insert({
-        id:           newUserId,
-        user_role:    'recruiter',
-        company_name: companyName.trim(),
-        email:        email.trim().toLowerCase(),
-        full_name:    contactName.trim(),
-        first_login:  true,
-      })
-      if (profileError) throw new Error('Profile error: ' + profileError.message)
-
-      // Send welcome email via Resend
-      console.log('Sending to:', email.trim().toLowerCase())
-      console.log('Resend key:', import.meta.env.VITE_RESEND_API_KEY?.slice(0, 10))
-      const emailRes = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          'Content-Type':  'application/json',
-          'Authorization': 'Bearer ' + import.meta.env.VITE_RESEND_API_KEY,
-        },
-        body: JSON.stringify({
-          from:    'One Select <noreply@oneselect.ai>',
-          to:      [email.trim().toLowerCase()],
-          subject: 'Welcome to One Select — Your Portal is Ready',
-          html: `<div style="font-family:Georgia,serif;max-width:600px;margin:0 auto;background:#F8F7F4;padding:40px;">
-            <div style="text-align:center;padding:32px 0;border-bottom:1px solid #E8E4DC;margin-bottom:32px;">
-              <h1 style="color:#B8924A;font-weight:300;letter-spacing:0.15em;font-size:28px;margin:0;">ONE SELECT</h1>
-              <p style="color:#9CA3AF;font-size:11px;letter-spacing:0.2em;text-transform:uppercase;margin:8px 0 0;">Strategic Talent Solutions</p>
-            </div>
-            <div style="background:white;padding:40px;border:1px solid #E8E4DC;">
-              <h2 style="color:#2D3748;font-weight:400;font-size:22px;margin:0 0 16px;">Welcome, ${contactName.trim()}!</h2>
-              <p style="color:#6B7280;line-height:1.8;font-size:15px;margin:0 0 24px;">Your AI-powered hiring portal is ready for <strong>${companyName.trim()}</strong>. Log in to create your first job posting and our team will handle the rest.</p>
-              <div style="background:#F8F7F4;border-left:4px solid #B8924A;padding:24px;margin:24px 0;">
-                <p style="margin:0 0 12px;color:#6B7280;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;">Your Login Details</p>
-                <p style="margin:0 0 8px;color:#2D3748;"><strong>Portal:</strong> <a href="https://oneselect-ai-t6uo-phi.vercel.app" style="color:#B8924A;">oneselect-ai-t6uo-phi.vercel.app</a></p>
-                <p style="margin:0 0 8px;color:#2D3748;"><strong>Email:</strong> ${email.trim().toLowerCase()}</p>
-                <p style="margin:0;color:#2D3748;"><strong>Password:</strong> <span style="font-family:monospace;font-size:20px;color:#B8924A;font-weight:bold;">${tempPassword}</span></p>
-              </div>
-              <div style="text-align:center;margin:32px 0;">
-                <a href="https://oneselect-ai-t6uo-phi.vercel.app" style="background:#B8924A;color:white;padding:14px 40px;text-decoration:none;font-size:12px;letter-spacing:0.1em;text-transform:uppercase;">ACCESS YOUR PORTAL →</a>
-              </div>
-            </div>
-          </div>`,
-        }),
-      })
-      const emailJson = await emailRes.json()
-      console.log('Resend status:', emailRes.status)
-      console.log('Resend response:', JSON.stringify(emailJson))
-
-      setInviteSuccess({ email: email.trim().toLowerCase(), password: tempPassword, emailSent: emailRes.ok })
       setShowInviteModal(false)
       await loadClients()
 
     } catch (err) {
-      console.error('Invite error:', err)
+      console.error('Invite failed:', err)
       setError(err.message)
     } finally {
       setLoading(false)
@@ -198,12 +156,12 @@ export default function AdminClients() {
 
   // ── Copy login details ─────────────────────────────────────────────────
   function copyLoginDetails() {
-    if (!inviteSuccess) return
+    if (!inviteResult) return
     const text =
       `One Select Portal Login\n` +
       `Portal:   https://oneselect-ai-t6uo-phi.vercel.app\n` +
-      `Email:    ${inviteSuccess.email}\n` +
-      `Password: ${inviteSuccess.password}`
+      `Email:    ${inviteResult.email}\n` +
+      `Password: ${inviteResult.password}`
     navigator.clipboard.writeText(text).catch(() => {})
   }
 
@@ -367,32 +325,28 @@ export default function AdminClients() {
         </div>
       )}
 
-      {/* ── Success Modal — no outside-click dismiss ── */}
-      {inviteSuccess && (
+      {/* ── Result Modal — no outside-click dismiss ── */}
+      {inviteResult && (
         <div className="modal-overlay">
           <div className="modal" style={{ maxWidth: 480 }}>
-            <div className="modal-head"><h3>Client account created!</h3></div>
+            <div className="modal-head">
+              <h3 style={{ color: 'var(--green)' }}>Client Invited Successfully!</h3>
+            </div>
             <div className="modal-body">
-              <div style={{ textAlign: 'center', marginBottom: 24 }}>
-                <div style={{
-                  width: 56, height: 56, borderRadius: '50%',
-                  background: 'var(--green-d)', border: '1px solid var(--green)',
-                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 26, color: 'var(--green)',
-                }}>✓</div>
-              </div>
 
+              {/* Email status banner */}
               <div style={{
                 padding: '10px 14px', marginBottom: 20, fontSize: 13,
-                background: inviteSuccess.emailSent ? 'var(--green-d)' : 'var(--amber-d)',
-                borderLeft: `2px solid ${inviteSuccess.emailSent ? 'var(--green)' : 'var(--amber)'}`,
-                color: inviteSuccess.emailSent ? 'var(--green)' : 'var(--amber)',
+                background: inviteResult.emailSent ? 'var(--green-d)' : 'var(--amber-d)',
+                borderLeft: `2px solid ${inviteResult.emailSent ? 'var(--green)' : 'var(--amber)'}`,
+                color: inviteResult.emailSent ? 'var(--green)' : 'var(--amber)',
               }}>
-                {inviteSuccess.emailSent
-                  ? `Email sent to ${inviteSuccess.email}`
-                  : 'Email delivery failed — share login details below manually'}
+                {inviteResult.emailSent
+                  ? `✓ Welcome email sent to ${inviteResult.email}`
+                  : '⚠ Email failed — copy and share manually'}
               </div>
 
+              {/* Credentials box */}
               <div style={{
                 background: 'var(--surface2)', border: '1px solid var(--border)',
                 borderRadius: 'var(--r)', padding: '16px 20px', marginBottom: 20,
@@ -400,15 +354,19 @@ export default function AdminClients() {
                 <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--text-3)', marginBottom: 14 }}>
                   Login Details
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div style={{ display: 'flex', gap: 12, alignItems: 'baseline' }}>
+                    <span style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--font-mono)', width: 72, flexShrink: 0 }}>Portal</span>
+                    <span style={{ fontSize: 12, color: 'var(--text-2)', fontFamily: 'var(--font-mono)' }}>oneselect-ai-t6uo-phi.vercel.app</span>
+                  </div>
                   <div style={{ display: 'flex', gap: 12, alignItems: 'baseline' }}>
                     <span style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--font-mono)', width: 72, flexShrink: 0 }}>Email</span>
-                    <span style={{ fontSize: 13, color: 'var(--text)', fontFamily: 'var(--font-mono)' }}>{inviteSuccess.email}</span>
+                    <span style={{ fontSize: 13, color: 'var(--text)', fontFamily: 'var(--font-mono)' }}>{inviteResult.email}</span>
                   </div>
                   <div style={{ display: 'flex', gap: 12, alignItems: 'baseline' }}>
                     <span style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--font-mono)', width: 72, flexShrink: 0 }}>Password</span>
-                    <span style={{ fontSize: 22, color: 'var(--accent)', fontFamily: 'var(--font-mono)', fontWeight: 700, letterSpacing: '0.15em' }}>
-                      {inviteSuccess.password}
+                    <span style={{ fontSize: 24, color: 'var(--accent)', fontFamily: 'var(--font-mono)', fontWeight: 700, letterSpacing: '0.15em' }}>
+                      {inviteResult.password}
                     </span>
                   </div>
                 </div>
@@ -418,7 +376,7 @@ export default function AdminClients() {
                 <button className="btn btn-secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={copyLoginDetails}>
                   Copy Login Details
                 </button>
-                <button className="btn btn-primary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setInviteSuccess(null)}>
+                <button className="btn btn-primary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setInviteResult(null)}>
                   Done
                 </button>
               </div>
