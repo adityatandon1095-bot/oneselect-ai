@@ -40,8 +40,8 @@ export default function RecruiterJobs() {
       required_skills: form.required_skills,
       preferred_skills: form.preferred_skills,
       description: form.description,
-      technical_weight: form.technical_weight,
-      communication_weight: form.communication_weight,
+      tech_weight: form.technical_weight,
+      comm_weight: form.communication_weight,
       status: 'active',
     }).select().single()
     setSaving(false)

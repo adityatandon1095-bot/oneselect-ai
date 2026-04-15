@@ -22,7 +22,7 @@ const interviewSystem = (job, c) =>
 Required skills: ${(job.required_skills ?? []).join(', ')}
 Candidate: ${c.full_name}, ${c.candidate_role}, ${c.total_years}y exp, skills: ${(c.skills ?? []).join(', ')}
 Highlights: ${(c.highlights ?? []).join('; ')}
-Rules: Ask personalised questions from their CV. Cover ${job.technical_weight ?? 60}% technical, ${job.communication_weight ?? 40}% behavioural. After 4-5 answers end with exactly: INTERVIEW_COMPLETE`
+Rules: Ask personalised questions from their CV. Cover ${job.tech_weight ?? 60}% technical, ${job.comm_weight ?? 40}% behavioural. After 4-5 answers end with exactly: INTERVIEW_COMPLETE`
 
 const SCORING_SYSTEM = `You are an interview evaluator. Return ONLY valid JSON:
 {"technicalAbility":number,"communication":number,"roleFit":number,"problemSolving":number,"experienceRelevance":number,"overallScore":number,"recommendation":"Strong Hire|Hire|Borderline|Reject","confidence":number,"insight":"string","strengths":["..."],"flags":["..."],"bestAnswer":"string"}`
@@ -156,8 +156,8 @@ export default function AdminPipeline() {
       required_skills: jobForm.required_skills,
       preferred_skills: jobForm.preferred_skills,
       description: jobForm.description,
-      technical_weight: jobForm.technical_weight,
-      communication_weight: jobForm.communication_weight,
+      tech_weight: jobForm.technical_weight,
+      comm_weight: jobForm.communication_weight,
       status: 'active',
     }).select().single()
     if (error) { addLog(`Error: ${error.message}`, 'err'); return }
