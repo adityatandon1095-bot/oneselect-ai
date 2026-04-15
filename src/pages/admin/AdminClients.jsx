@@ -2,112 +2,8 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 
-const APP_URL     = 'https://oneselect-ai-t6uo-phi.vercel.app'
-const ADMIN_EMAIL = 'aditya.tandon1095@gmail.com'
+const APP_URL = 'https://oneselect-ai-t6uo-phi.vercel.app'
 
-function genTempPassword() {
-  return (
-    'OS-' +
-    Math.random().toString(36).slice(2, 6).toUpperCase() +
-    '-' +
-    Math.floor(1000 + Math.random() * 9000)
-  )
-}
-
-// Raw REST call — no Supabase JS client involved, so the admin session is 100% unaffected.
-async function createAuthUser(email, password) {
-  const response = await fetch(
-    `${import.meta.env.VITE_SUPABASE_URL}/auth/v1/signup`,
-    {
-      method:  'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey':        import.meta.env.VITE_SUPABASE_ANON_KEY,
-        'X-Client-Info': 'admin-invite',
-      },
-      body: JSON.stringify({
-        email,
-        password,
-        gotrue_meta_security: {},
-      }),
-    }
-  )
-  const data = await response.json()
-  if (!response.ok) throw new Error(data.msg || data.error_description || 'Signup failed')
-  return data // { id, email, ... }
-}
-
-async function sendResendEmail(to, subject, html) {
-  const key = import.meta.env.VITE_RESEND_API_KEY
-  if (!key) return { ok: false, reason: 'VITE_RESEND_API_KEY not set' }
-  try {
-    const res = await fetch('https://api.resend.com/emails', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
-      body:    JSON.stringify({ from: 'onboarding@resend.dev', to: [to], subject, html }),
-    })
-    const body = await res.json().catch(() => ({}))
-    console.log('Resend result:', res.status, body)
-    if (!res.ok) return { ok: false, reason: body?.message ?? String(res.status) }
-    return { ok: true }
-  } catch (e) {
-    console.error('Resend fetch error:', e)
-    return { ok: false, reason: e.message }
-  }
-}
-
-function buildWelcomeHtml(contactName, companyName, email, tempPassword) {
-  return `
-<div style="font-family:Georgia,serif;max-width:600px;margin:0 auto;background:#F8F7F4;padding:40px;">
-  <div style="text-align:center;padding:32px 0;border-bottom:1px solid #E8E4DC;margin-bottom:32px;">
-    <h1 style="font-family:Georgia,serif;color:#B8924A;font-weight:300;letter-spacing:0.15em;font-size:28px;margin:0;">ONE SELECT</h1>
-    <p style="color:#9CA3AF;font-size:11px;letter-spacing:0.2em;text-transform:uppercase;margin:8px 0 0;">Strategic Talent Solutions</p>
-  </div>
-  <div style="background:white;padding:40px;border:1px solid #E8E4DC;">
-    <h2 style="font-family:Georgia,serif;color:#2D3748;font-weight:400;font-size:22px;margin:0 0 16px;">Welcome, ${contactName || companyName}</h2>
-    <p style="color:#6B7280;line-height:1.8;font-size:15px;margin:0 0 24px;">
-      Your AI-powered hiring portal has been set up for <strong style="color:#2D3748;">${companyName}</strong>.
-      Log in to define your open roles, and our team will handle the rest —
-      screening CVs and conducting first-round interviews using AI.
-    </p>
-    <div style="background:#F8F7F4;border:1px solid #E8E4DC;border-left:4px solid #B8924A;padding:24px;margin:24px 0;">
-      <p style="margin:0 0 16px;color:#6B7280;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;font-family:monospace;">Your Login Details</p>
-      <table style="width:100%;border-collapse:collapse;">
-        <tr><td style="padding:6px 0;color:#6B7280;font-size:14px;width:120px;">Portal</td>
-            <td style="padding:6px 0;"><a href="${APP_URL}" style="color:#B8924A;font-size:14px;">${APP_URL}</a></td></tr>
-        <tr><td style="padding:6px 0;color:#6B7280;font-size:14px;">Email</td>
-            <td style="padding:6px 0;color:#2D3748;font-size:14px;">${email}</td></tr>
-        <tr><td style="padding:6px 0;color:#6B7280;font-size:14px;">Password</td>
-            <td style="padding:6px 0;"><span style="font-family:monospace;font-size:20px;color:#B8924A;font-weight:bold;letter-spacing:0.1em;">${tempPassword}</span></td></tr>
-      </table>
-    </div>
-    <div style="text-align:center;margin:32px 0;">
-      <a href="${APP_URL}" style="background:#B8924A;color:white;padding:14px 40px;text-decoration:none;font-family:monospace;font-size:12px;letter-spacing:0.1em;text-transform:uppercase;display:inline-block;">ACCESS YOUR PORTAL →</a>
-    </div>
-    <p style="color:#9CA3AF;font-size:13px;line-height:1.6;margin:24px 0 0;padding-top:24px;border-top:1px solid #E8E4DC;">
-      For security, please change your password after your first login.
-      If you need any help, contact your One Select account manager.
-    </p>
-  </div>
-  <p style="text-align:center;color:#9CA3AF;font-size:11px;margin-top:24px;letter-spacing:0.08em;">ONE SELECT — STRATEGIC TALENT SOLUTIONS</p>
-</div>`
-}
-
-function buildAdminNotifHtml(contactName, companyName, email) {
-  return `
-<div style="font-family:sans-serif;max-width:540px;margin:0 auto;padding:32px;">
-  <h2 style="color:#B8924A;margin:0 0 20px;">New Client Invited</h2>
-  <p style="color:#374151;line-height:1.8;font-size:15px;margin:0 0 16px;">
-    <strong>${contactName || 'A new contact'}</strong> from <strong>${companyName}</strong>
-    has been invited to One Select.
-  </p>
-  <p style="color:#374151;line-height:1.8;font-size:15px;">
-    Their account has been created and login credentials sent to <strong>${email}</strong>.
-    They can access their portal at <a href="${APP_URL}" style="color:#B8924A;">${APP_URL}</a>.
-  </p>
-  <p style="color:#9CA3AF;font-size:12px;margin-top:32px;">One Select Admin System</p>
-</div>`
-}
 
 export default function AdminClients() {
   const navigate = useNavigate()
@@ -122,14 +18,9 @@ export default function AdminClients() {
   const [email,       setEmail]       = useState('')
   const [companyName, setCompanyName] = useState('')
   const [contactName, setContactName] = useState('')
-  const [inviting,    setInviting]    = useState(false)
-  const [error,       setError]       = useState('')
-
-  // ── Credentials modal (always shown after invite) ──────────────────────
-  const [result,     setResult]     = useState(null)
-  // result = { email, company, contact, tempPassword, emailSent, emailErr }
-  const [showResult, setShowResult] = useState(false)
-  const [copied,     setCopied]     = useState(false)
+  const [loading,  setLoading]  = useState(false)
+  const [error,    setError]    = useState('')
+  const [success,  setSuccess]  = useState('')  // non-empty → show credentials modal
 
   useEffect(() => { loadClients() }, [])
 
@@ -191,93 +82,83 @@ export default function AdminClients() {
     setError('')
   }
 
-  async function handleInvite() {
-    if (!companyName.trim() || !email.trim()) {
-      setError('Company name and email are required')
-      return
-    }
-
-    // Debug: confirm env vars are present
-    console.log('Resend key exists:', !!import.meta.env.VITE_RESEND_API_KEY)
-    console.log('Resend key starts with:', import.meta.env.VITE_RESEND_API_KEY?.slice(0, 5))
-
-    setInviting(true)
+  const handleInvite = async () => {
+    setLoading(true)
     setError('')
 
-    const cleanEmail   = email.trim().toLowerCase()
-    const cleanCompany = companyName.trim()
-    const cleanContact = contactName.trim()
-    const tempPassword = genTempPassword()
-
     try {
-      // 1. Create auth user via raw REST — zero interaction with the Supabase
-      //    JS client, so the admin's session is completely unaffected.
-      const userData = await createAuthUser(cleanEmail, tempPassword)
-      if (!userData?.id) throw new Error('No user ID returned from signup')
+      const tempPassword = 'OS-' + Math.random().toString(36).slice(2, 6).toUpperCase() + '-2025'
 
-      // 2. Insert profile row (admin's supabase client — admin session intact)
+      console.log('Step 1: Creating user', email)
+
+      const signupRes = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/auth/v1/signup`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+          },
+          body: JSON.stringify({ email, password: tempPassword }),
+        }
+      )
+
+      const signupData = await signupRes.json()
+      console.log('Step 1 result:', signupRes.status, signupData)
+
+      if (!signupData.id) {
+        throw new Error('Signup failed: ' + JSON.stringify(signupData))
+      }
+
+      console.log('Step 2: Creating profile for', signupData.id)
+
       const { error: profileError } = await supabase
         .from('profiles')
         .insert({
-          id:           userData.id,
+          id:           signupData.id,
           user_role:    'recruiter',
-          company_name: cleanCompany,
-          full_name:    cleanContact,
-          email:        cleanEmail,
+          company_name: companyName,
+          full_name:    contactName,
+          email:        email,
           first_login:  true,
         })
 
-      if (profileError) {
-        setError('Account created but profile setup failed: ' + profileError.message)
-        return
-      }
+      console.log('Step 2 result:', profileError)
 
-      // 3. Send welcome email to client (non-fatal if it fails)
-      const clientEmail = await sendResendEmail(
-        cleanEmail,
-        'Welcome to One Select — Your Portal is Ready',
-        buildWelcomeHtml(cleanContact, cleanCompany, cleanEmail, tempPassword)
-      )
+      if (profileError) throw new Error('Profile failed: ' + profileError.message)
 
-      // 4. Send admin notification (non-fatal)
-      await sendResendEmail(
-        ADMIN_EMAIL,
-        `New client invited — ${cleanCompany}`,
-        buildAdminNotifHtml(cleanContact, cleanCompany, cleanEmail)
-      )
+      console.log('Step 3: Sending email via Resend')
+      console.log('Resend key:', import.meta.env.VITE_RESEND_API_KEY?.slice(0, 8))
 
-      // 5. Always show credentials — admin must see the password regardless
-      setResult({
-        email:     cleanEmail,
-        company:   cleanCompany,
-        contact:   cleanContact,
-        tempPassword,
-        emailSent: clientEmail.ok,
-        emailErr:  clientEmail.reason,
+      const emailRes = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + import.meta.env.VITE_RESEND_API_KEY,
+        },
+        body: JSON.stringify({
+          from:    'onboarding@resend.dev',
+          to:      [email],
+          subject: 'Your One Select Portal is Ready',
+          html:    '<p>Welcome to One Select!</p><p>Your temporary password is: <strong>' + tempPassword + '</strong></p><p>Login at: ' + APP_URL + '</p>',
+        }),
       })
-      setCopied(false)
+
+      const emailData = await emailRes.json()
+      console.log('Step 3 result:', emailRes.status, emailData)
+
+      setSuccess(
+        `Account created!\nEmail: ${email}\nTemporary Password: ${tempPassword}\n` +
+        (emailRes.ok ? 'Welcome email sent!' : 'Email failed — share password manually')
+      )
       setShowInvite(false)
-      setShowResult(true)
       await loadClients()
     } catch (err) {
-      console.error('Invite error:', err)
+      console.error('Invite failed:', err)
       setError(err.message)
     } finally {
-      setInviting(false)
+      setLoading(false)
     }
-  }
-
-  function copyAll() {
-    if (!result) return
-    navigator.clipboard.writeText(
-      `One Select Portal Login\n` +
-      `URL:      ${APP_URL}\n` +
-      `Email:    ${result.email}\n` +
-      `Password: ${result.tempPassword}`
-    ).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2500)
-    })
   }
 
   // ── Remove ─────────────────────────────────────────────────────────────
@@ -445,8 +326,8 @@ export default function AdminClients() {
               {error && <div className="error-banner" style={{ marginTop: 14 }}>{error}</div>}
 
               <div className="form-actions" style={{ marginTop: 20 }}>
-                <button className="btn btn-primary" disabled={inviting} onClick={handleInvite}>
-                  {inviting
+                <button className="btn btn-primary" disabled={loading} onClick={handleInvite}>
+                  {loading
                     ? <><span className="spinner" style={{ width: 12, height: 12 }} /> Creating account…</>
                     : 'Send Invitation'}
                 </button>
@@ -460,91 +341,27 @@ export default function AdminClients() {
         </div>
       )}
 
-      {/* ── Credentials Modal — always shown, not closeable by clicking outside ── */}
-      {showResult && result && (
+      {/* ── Success Modal — stays open until admin clicks Done ── */}
+      {success && (
         <div className="modal-overlay">
-          <div className="modal" style={{ maxWidth: 480 }}>
-            <div className="modal-head">
-              <h3>
-                {result.emailSent
-                  ? 'Account Created & Email Sent'
-                  : 'Account Created — Share Manually'}
-              </h3>
-            </div>
+          <div className="modal" style={{ maxWidth: 460 }}>
+            <div className="modal-head"><h3>Account Created</h3></div>
             <div className="modal-body">
-
-              {/* Email status banner */}
-              {result.emailSent ? (
-                <div style={{
-                  display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20,
-                  padding: '10px 14px', background: 'var(--green-d)',
-                  border: '1px solid var(--green)', borderRadius: 'var(--r)',
-                  fontSize: 13, color: 'var(--green)',
-                }}>
-                  <span style={{ fontSize: 15 }}>✓</span>
-                  Welcome email sent to <strong>{result.email}</strong>
-                </div>
-              ) : (
-                <div style={{
-                  display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 20,
-                  padding: '10px 14px', background: 'var(--amber-d)',
-                  border: '1px solid var(--amber)', borderRadius: 'var(--r)',
-                  fontSize: 13, color: 'var(--amber)', lineHeight: 1.5,
-                }}>
-                  <span style={{ fontSize: 15, flexShrink: 0 }}>⚠</span>
-                  <span>
-                    Email delivery failed{result.emailErr ? ` — ${result.emailErr}` : ''}.
-                    Share the credentials below with your client.
-                  </span>
-                </div>
-              )}
-
-              <p style={{ fontSize: 13, color: 'var(--text-3)', marginBottom: 16 }}>
-                Save these login details — the password will not be shown again.
-              </p>
-
-              {/* Credentials box */}
-              <div style={{
+              <pre style={{
+                fontFamily: 'var(--font-mono)', fontSize: 13, lineHeight: 1.9,
                 background: 'var(--surface2)', border: '1px solid var(--border)',
-                borderRadius: 'var(--r)', padding: '18px 20px', marginBottom: 20,
+                borderRadius: 'var(--r)', padding: '16px 20px', marginBottom: 20,
+                whiteSpace: 'pre-wrap', wordBreak: 'break-all', color: 'var(--text)',
               }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  <div style={{ display: 'flex', gap: 12, alignItems: 'baseline' }}>
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.08em', minWidth: 72 }}>Portal</span>
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-2)' }}>{APP_URL}</span>
-                  </div>
-                  <div style={{ display: 'flex', gap: 12, alignItems: 'baseline' }}>
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.08em', minWidth: 72 }}>Email</span>
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text)' }}>{result.email}</span>
-                  </div>
-                  <div style={{ display: 'flex', gap: 12, alignItems: 'baseline' }}>
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.08em', minWidth: 72 }}>Password</span>
-                    <span style={{
-                      fontFamily: 'var(--font-mono)', fontSize: 22, fontWeight: 700,
-                      color: 'var(--accent)', letterSpacing: '0.08em',
-                    }}>
-                      {result.tempPassword}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Actions */}
-              <div style={{ display: 'flex', gap: 10 }}>
-                <button
-                  className="btn btn-primary"
-                  style={{ flex: 1, justifyContent: 'center' }}
-                  onClick={copyAll}
-                >
-                  {copied ? '✓ Copied!' : 'Copy All'}
-                </button>
-                <button
-                  className="btn btn-secondary"
-                  onClick={() => { setShowResult(false); setResult(null) }}
-                >
-                  Done
-                </button>
-              </div>
+                {success}
+              </pre>
+              <button
+                className="btn btn-primary"
+                style={{ width: '100%', justifyContent: 'center' }}
+                onClick={() => setSuccess('')}
+              >
+                Done
+              </button>
             </div>
           </div>
         </div>
