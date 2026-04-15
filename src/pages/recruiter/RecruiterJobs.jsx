@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../lib/AuthContext'
+import { triggerTalentPoolMatch } from '../../utils/talentPool'
 import TagInput from '../../components/TagInput'
 
 const DEFAULT = { title: '', years_experience: 3, required_skills: [], preferred_skills: [], description: '', technical_weight: 60, communication_weight: 40 }
@@ -15,6 +16,7 @@ export default function RecruiterJobs() {
   const [form, setForm] = useState(DEFAULT)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [poolStatus, setPoolStatus] = useState({}) // jobId → 'scanning' | 'done:N' | 'error'
 
   useEffect(() => { if (user) load() }, [user])
 
@@ -47,6 +49,12 @@ export default function RecruiterJobs() {
     setJobs(p => [data, ...p])
     setShowForm(false)
     setForm(DEFAULT)
+
+    // Fire pool match in background
+    setPoolStatus(p => ({ ...p, [data.id]: 'scanning' }))
+    triggerTalentPoolMatch(data.id)
+      .then(passed => setPoolStatus(p => ({ ...p, [data.id]: `done:${passed}` })))
+      .catch(() => setPoolStatus(p => ({ ...p, [data.id]: 'error' })))
   }
 
   async function toggleStatus(job, e) {
@@ -153,6 +161,16 @@ export default function RecruiterJobs() {
                     <span className="mono" style={{ fontSize: 11, color: 'var(--text-3)' }}>
                       {j.candidates?.[0]?.count ?? 0} candidate{j.candidates?.[0]?.count !== 1 ? 's' : ''}
                     </span>
+                    {poolStatus[j.id] === 'scanning' && (
+                      <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <span className="spinner" style={{ width: 9, height: 9 }} /> scanning pool…
+                      </span>
+                    )}
+                    {poolStatus[j.id]?.startsWith('done:') && (
+                      <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--green)' }}>
+                        ✓ {poolStatus[j.id].split(':')[1]} pool match{poolStatus[j.id].split(':')[1] !== '1' ? 'es' : ''}
+                      </span>
+                    )}
                     <span className="mono" style={{ fontSize: 11, color: 'var(--text-3)' }}>
                       {new Date(j.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
                     </span>

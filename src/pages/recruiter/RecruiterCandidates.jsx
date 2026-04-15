@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react'
+import { useLocation } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { supabaseAdmin } from '../../lib/supabaseAdmin'
 import { useAuth } from '../../lib/AuthContext'
+import { mapMatchToCandidate } from '../../utils/talentPool'
 
 const REC_COLOR = { 'Strong Hire': 'var(--green)', 'Hire': 'var(--accent)', 'Borderline': 'var(--amber)', 'Reject': 'var(--red)' }
 const DIMS = [
@@ -161,22 +164,37 @@ function CandidateProfile({ candidate, onBack }) {
 
 export default function RecruiterCandidates() {
   const { user } = useAuth()
+  const location = useLocation()
   const [jobs, setJobs] = useState([])
   const [candidates, setCandidates] = useState([])
+  const [poolCandidates, setPoolCandidates] = useState([])
   const [loading, setLoading] = useState(true)
+  const [source, setSource] = useState('uploaded') // 'uploaded' | 'pool'
   const [jobFilter, setJobFilter] = useState('all')
   const [tab, setTab] = useState('All')
   const [selectedId, setSelectedId] = useState(null)
 
   useEffect(() => { if (user) load() }, [user])
 
+  // Support ?tab= nav from dashboard
+  useEffect(() => {
+    const params = new URLSearchParams(location.search)
+    const t = params.get('tab')
+    if (t && TABS.includes(t)) setTab(t)
+  }, [location.search])
+
   async function load() {
     const { data: jobData } = await supabase.from('jobs').select('id, title').eq('recruiter_id', user.id)
     const ids = (jobData ?? []).map(j => j.id)
     setJobs(jobData ?? [])
     if (!ids.length) { setLoading(false); return }
-    const { data: cData } = await supabase.from('candidates').select('*').in('job_id', ids).order('match_score', { ascending: false, nullsFirst: false })
+
+    const [{ data: cData }, { data: mData }] = await Promise.all([
+      supabase.from('candidates').select('*').in('job_id', ids).order('match_score', { ascending: false, nullsFirst: false }),
+      supabaseAdmin.from('job_matches').select('*, talent_pool(*)').in('job_id', ids).order('match_score', { ascending: false, nullsFirst: false }),
+    ])
     setCandidates(cData ?? [])
+    setPoolCandidates((mData ?? []).map(mapMatchToCandidate))
     setLoading(false)
   }
 
@@ -187,7 +205,8 @@ export default function RecruiterCandidates() {
     return 'Pending'
   }
 
-  const byJob = jobFilter === 'all' ? candidates : candidates.filter(c => c.job_id === jobFilter)
+  const activeList = source === 'pool' ? poolCandidates : candidates
+  const byJob = jobFilter === 'all' ? activeList : activeList.filter(c => c.job_id === jobFilter)
 
   const tabFiltered = byJob.filter(c => {
     if (tab === 'All') return true
@@ -202,7 +221,8 @@ export default function RecruiterCandidates() {
     'Screened Out': byJob.filter(c => getStatus(c) === 'Screened Out').length,
   }
 
-  const selected = candidates.find(c => c.id === selectedId)
+  const allCandidates = [...candidates, ...poolCandidates]
+  const selected = allCandidates.find(c => c.id === selectedId)
 
   if (loading) return <div className="page"><span className="spinner" /></div>
 
@@ -227,8 +247,31 @@ export default function RecruiterCandidates() {
         </select>
       </div>
 
+      {/* Source tabs */}
+      <div style={{ display: 'flex', gap: 2, marginBottom: 0, borderBottom: '1px solid var(--border)' }}>
+        {[
+          { key: 'uploaded', label: 'Uploaded CVs', count: (jobFilter === 'all' ? candidates : candidates.filter(c => c.job_id === jobFilter)).length },
+          { key: 'pool',     label: 'Talent Pool',  count: (jobFilter === 'all' ? poolCandidates : poolCandidates.filter(c => c.job_id === jobFilter)).length },
+        ].map(s => (
+          <button
+            key={s.key}
+            onClick={() => { setSource(s.key); setSelectedId(null) }}
+            style={{
+              padding: '10px 18px', border: 'none', background: 'none', cursor: 'pointer',
+              fontFamily: 'var(--font-mono)', fontSize: 11, textTransform: 'uppercase',
+              letterSpacing: '0.08em', color: source === s.key ? 'var(--text)' : 'var(--text-3)',
+              borderBottom: source === s.key ? '2px solid var(--text)' : '2px solid transparent',
+              marginBottom: -1, transition: 'color 0.12s',
+            }}
+          >
+            {s.label}
+            <span style={{ marginLeft: 6, color: source === s.key ? 'var(--accent)' : 'var(--text-3)' }}>{s.count}</span>
+          </button>
+        ))}
+      </div>
+
       {/* Status tabs */}
-      <div style={{ display: 'flex', gap: 2, marginBottom: 20, borderBottom: '1px solid var(--border)' }}>
+      <div style={{ display: 'flex', gap: 2, marginBottom: 20, borderBottom: '1px solid var(--border)', marginTop: 0 }}>
         {TABS.map(t => (
           <button
             key={t}
@@ -291,6 +334,7 @@ export default function RecruiterCandidates() {
                   {status === 'Screened Out'       && !s && <span className="badge badge-red">Screened Out</span>}
                   {status === 'Awaiting Interview' && <span className="badge badge-amber">Awaiting Interview</span>}
                   {status === 'Pending'            && <span className="badge" style={{ color: 'var(--text-3)', background: 'var(--surface2)' }}>Pending</span>}
+                  {c._fromPool && <span className="badge badge-green" style={{ fontSize: 9 }}>Pool</span>}
                 </div>
               </div>
             )

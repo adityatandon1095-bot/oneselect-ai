@@ -6,6 +6,7 @@ import AdminDashboard from './pages/admin/AdminDashboard'
 import AdminClients from './pages/admin/AdminClients'
 import AdminJobs from './pages/admin/AdminJobs'
 import AdminPipeline from './pages/admin/AdminPipeline'
+import AdminTalentPool from './pages/admin/AdminTalentPool'
 import AdminSettings from './pages/admin/AdminSettings'
 import RecruiterLayout from './pages/recruiter/RecruiterLayout'
 import RecruiterDashboard from './pages/recruiter/RecruiterDashboard'
@@ -54,6 +55,7 @@ export default function App() {
             <Route path="clients" element={<AdminClients />} />
             <Route path="jobs" element={<AdminJobs />} />
             <Route path="pipeline" element={<AdminPipeline />} />
+            <Route path="talent-pool" element={<AdminTalentPool />} />
             <Route path="settings" element={<AdminSettings />} />
           </Route>
 

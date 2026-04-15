@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
+import { supabaseAdmin } from '../../lib/supabaseAdmin'
 import { callClaude } from '../../utils/api'
 import { extractContent, isSupported, fileExt, ACCEPT_ATTR } from '../../utils/fileExtract'
+import { triggerTalentPoolMatch, mapMatchToCandidate } from '../../utils/talentPool'
 import TagInput from '../../components/TagInput'
 
 // ── Prompts ──────────────────────────────────────────────────────────────────
@@ -67,7 +69,10 @@ export default function AdminPipeline() {
   const [ivStates, setIvStates] = useState({})
   const [selectedIvId, setSelectedIvId] = useState(null)
   const [log, setLog] = useState([])
-  const running = parsing || screening
+  const [useTalentPool, setUseTalentPool] = useState(false)
+  const [poolMatchLoading, setPoolMatchLoading] = useState(false)
+  const [poolMatchProgress, setPoolMatchProgress] = useState({ current: 0, total: 0 })
+  const running = parsing || screening || poolMatchLoading
   const fileInputRef = useRef()
   const logRef = useRef()
   const chatRef = useRef()
@@ -89,13 +94,25 @@ export default function AdminPipeline() {
     setClientJobs(data ?? [])
   }
 
-  async function selectJob(id) {
+  async function selectJob(id, poolMode = useTalentPool) {
     setJobId(id)
     if (id === 'new') { setActiveJob(null); setCandidates([]); return }
     const job = clientJobs.find(j => j.id === id)
     setActiveJob(job)
-    const { data } = await supabase.from('candidates').select('*').eq('job_id', id).order('match_score', { ascending: false })
-    const loaded = (data ?? []).map(c => ({ ...c, _status: c.match_score != null ? 'screened' : 'parsed' }))
+
+    let loaded
+    if (poolMode) {
+      const { data } = await supabaseAdmin
+        .from('job_matches')
+        .select('*, talent_pool(*)')
+        .eq('job_id', id)
+        .order('match_score', { ascending: false, nullsFirst: false })
+      loaded = (data ?? []).map(mapMatchToCandidate)
+    } else {
+      const { data } = await supabase.from('candidates').select('*').eq('job_id', id).order('match_score', { ascending: false })
+      loaded = (data ?? []).map(c => ({ ...c, _status: c.match_score != null ? 'screened' : 'parsed' }))
+    }
+
     setCandidates(loaded)
     setScreeningDone(loaded.some(c => c.match_score != null))
     setIvStates(Object.fromEntries(loaded.filter(c => c.match_pass).map(c => [c.id, {
@@ -104,6 +121,24 @@ export default function AdminPipeline() {
       scores: c.interview_scores ?? null,
     }])))
     if (loaded.filter(c => c.match_pass).length > 0) setSelectedIvId(loaded.find(c => c.match_pass)?.id ?? null)
+  }
+
+  async function runPoolMatch() {
+    if (!activeJob) return
+    setPoolMatchLoading(true)
+    setPoolMatchProgress({ current: 0, total: 0 })
+    addLog('Matching talent pool against job…', 'info')
+    try {
+      const passed = await triggerTalentPoolMatch(activeJob.id, {
+        onProgress: (cur, total) => setPoolMatchProgress({ current: cur, total }),
+        onLog: addLog,
+      })
+      addLog(`Match complete — ${passed} candidate${passed !== 1 ? 's' : ''} passed.`, 'ok')
+      await selectJob(activeJob.id, true)
+    } catch (err) {
+      addLog(`✗ Match error: ${err.message}`, 'err')
+    }
+    setPoolMatchLoading(false)
   }
 
   const addLog = (msg, type = '') => setLog(p => [...p, { id: Date.now() + Math.random(), msg, type }])
@@ -259,7 +294,11 @@ export default function AdminPipeline() {
     try {
       const reply = await callClaude([{ role: 'user', content: `Score this interview:\n\n${transcript}` }], SCORING_SYSTEM, 2048)
       const scores = JSON.parse(reply.trim())
-      await supabase.from('candidates').update({ interview_transcript: messages, interview_scores: scores }).eq('id', candidate.id)
+      if (candidate._fromPool) {
+        await supabaseAdmin.from('job_matches').update({ interview_transcript: messages, scores }).eq('id', candidate._matchId)
+      } else {
+        await supabase.from('candidates').update({ interview_transcript: messages, interview_scores: scores }).eq('id', candidate.id)
+      }
       patchIv(candidate.id, { scoring: false, scores })
       addLog(`✓ ${candidate.full_name} scored: ${scores.overallScore}/100 — ${scores.recommendation}`, 'ok')
     } catch (err) {
@@ -362,58 +401,104 @@ export default function AdminPipeline() {
         </div>
       </div>
 
-      {/* ── 2 Upload ── */}
+      {/* ── 2 Candidates ── */}
       {activeJob && (
         <div className="section-card">
           <div className="section-card-head">
-            <h3>2 · CV Upload</h3>
-            <span className="mono text-muted" style={{ fontSize: 11 }}>{candidates.length} candidates</span>
+            <h3>{useTalentPool ? '2 · Talent Pool' : '2 · CV Upload'}</h3>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <span className="mono text-muted" style={{ fontSize: 11 }}>{candidates.length} candidates</span>
+              <button
+                className={`btn ${useTalentPool ? 'btn-primary' : 'btn-secondary'}`}
+                style={{ fontSize: 11, padding: '4px 10px' }}
+                onClick={() => {
+                  const next = !useTalentPool
+                  setUseTalentPool(next)
+                  if (jobId && jobId !== 'new') selectJob(jobId, next)
+                }}
+              >
+                {useTalentPool ? '◎ Pool mode' : '◎ Use Talent Pool'}
+              </button>
+            </div>
           </div>
           <div className="section-card-body">
-            <div
-              className={`drop-zone${dragging ? ' drag-over' : ''}`}
-              onDrop={onDrop}
-              onDragOver={e => { e.preventDefault(); setDragging(true) }}
-              onDragLeave={() => setDragging(false)}
-              onClick={() => fileInputRef.current.click()}
-            >
-              <div className="drop-icon">⬆</div>
-              <p>Drop CVs or <span className="link">browse</span></p>
-              <div className="format-pills">{['PDF','DOCX','TXT','JPG','PNG'].map(f => <span key={f} className="format-pill">{f}</span>)}</div>
-              <input ref={fileInputRef} type="file" accept={ACCEPT_ATTR} multiple style={{ display: 'none' }} onChange={e => { addFiles(e.target.files); e.target.value = '' }} />
-            </div>
-
-            {files.length > 0 && (
-              <div className="file-list">
-                <div className="file-list-header">
-                  <span>{files.length} file{files.length !== 1 ? 's' : ''}</span>
-                  {parsing && <div style={{ flex: 1 }}><div className="progress-track"><div className="progress-fill" style={{ width: `${parseProgress}%` }} /></div></div>}
-                  <button className="btn btn-primary" style={{ padding: '5px 12px', fontSize: 12 }} disabled={!pendingCount || parsing || !activeJob} onClick={parseAll}>
-                    {parsing ? <><span className="spinner" style={{ width: 11, height: 11 }} /> Parsing…</> : 'Parse with AI'}
+            {useTalentPool ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <p style={{ fontSize: 13, color: 'var(--text-2)', margin: 0 }}>
+                  Match all available talent pool candidates against this job using AI screening.
+                </p>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                  <button
+                    className="btn btn-primary"
+                    disabled={poolMatchLoading}
+                    onClick={runPoolMatch}
+                  >
+                    {poolMatchLoading ? (
+                      <>
+                        <span className="spinner" style={{ width: 12, height: 12 }} />
+                        {poolMatchProgress.total > 0
+                          ? ` ${poolMatchProgress.current}/${poolMatchProgress.total}`
+                          : ' Matching…'}
+                      </>
+                    ) : 'Run Pool Match'}
                   </button>
-                </div>
-                {files.map(f => (
-                  <div key={f.id} className="file-row">
-                    <div className="file-info">
-                      <span className="file-icon">{FORMAT_ICON[f.ext] ?? '📄'}</span>
-                      <div style={{ minWidth: 0 }}>
-                        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                          <span className="file-name">{f.file.name}</span>
-                          <span className={`badge ${f.ext === 'pdf' ? 'badge-red' : f.ext === 'docx' ? 'badge-blue' : 'badge-amber'}`} style={{ fontSize: 9 }}>{f.ext?.toUpperCase()}</span>
-                        </div>
-                        {f.parsed && <div className="file-parsed"><strong>{f.parsed.name}</strong> · {f.parsed.currentRole}</div>}
-                        {f.status === 'error' && <div className="error-text">⚠ {f.error}</div>}
+                  {poolMatchLoading && poolMatchProgress.total > 0 && (
+                    <div style={{ flex: 1 }}>
+                      <div className="progress-track">
+                        <div className="progress-fill" style={{ width: `${(poolMatchProgress.current / poolMatchProgress.total) * 100}%` }} />
                       </div>
                     </div>
-                    <div className="file-status">
-                      {f.status === 'pending'  && <span className="badge badge-amber">Pending</span>}
-                      {f.status === 'parsing'  && <span className="spinner" />}
-                      {f.status === 'done'     && <span className="badge badge-green">Parsed</span>}
-                      {f.status === 'error'    && <span className="badge badge-red">Error</span>}
-                    </div>
-                  </div>
-                ))}
+                  )}
+                </div>
               </div>
+            ) : (
+              <>
+                <div
+                  className={`drop-zone${dragging ? ' drag-over' : ''}`}
+                  onDrop={onDrop}
+                  onDragOver={e => { e.preventDefault(); setDragging(true) }}
+                  onDragLeave={() => setDragging(false)}
+                  onClick={() => fileInputRef.current.click()}
+                >
+                  <div className="drop-icon">⬆</div>
+                  <p>Drop CVs or <span className="link">browse</span></p>
+                  <div className="format-pills">{['PDF','DOCX','TXT','JPG','PNG'].map(f => <span key={f} className="format-pill">{f}</span>)}</div>
+                  <input ref={fileInputRef} type="file" accept={ACCEPT_ATTR} multiple style={{ display: 'none' }} onChange={e => { addFiles(e.target.files); e.target.value = '' }} />
+                </div>
+
+                {files.length > 0 && (
+                  <div className="file-list">
+                    <div className="file-list-header">
+                      <span>{files.length} file{files.length !== 1 ? 's' : ''}</span>
+                      {parsing && <div style={{ flex: 1 }}><div className="progress-track"><div className="progress-fill" style={{ width: `${parseProgress}%` }} /></div></div>}
+                      <button className="btn btn-primary" style={{ padding: '5px 12px', fontSize: 12 }} disabled={!pendingCount || parsing || !activeJob} onClick={parseAll}>
+                        {parsing ? <><span className="spinner" style={{ width: 11, height: 11 }} /> Parsing…</> : 'Parse with AI'}
+                      </button>
+                    </div>
+                    {files.map(f => (
+                      <div key={f.id} className="file-row">
+                        <div className="file-info">
+                          <span className="file-icon">{FORMAT_ICON[f.ext] ?? '📄'}</span>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                              <span className="file-name">{f.file.name}</span>
+                              <span className={`badge ${f.ext === 'pdf' ? 'badge-red' : f.ext === 'docx' ? 'badge-blue' : 'badge-amber'}`} style={{ fontSize: 9 }}>{f.ext?.toUpperCase()}</span>
+                            </div>
+                            {f.parsed && <div className="file-parsed"><strong>{f.parsed.name}</strong> · {f.parsed.currentRole}</div>}
+                            {f.status === 'error' && <div className="error-text">⚠ {f.error}</div>}
+                          </div>
+                        </div>
+                        <div className="file-status">
+                          {f.status === 'pending'  && <span className="badge badge-amber">Pending</span>}
+                          {f.status === 'parsing'  && <span className="spinner" />}
+                          {f.status === 'done'     && <span className="badge badge-green">Parsed</span>}
+                          {f.status === 'error'    && <span className="badge badge-red">Error</span>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>
