@@ -61,14 +61,25 @@ export default function RecruiterJobs() {
 
   async function handleWizardSave(jobData) {
     setShowWizard(false)
-    const { assigned_to, ...fields } = jobData
+    setError('')
+    // Only send columns that exist in the base jobs schema.
+    // New columns (industry, location, work_mode, comp_min, comp_max) require
+    // running the SQL migration first — safe to omit until then.
     const { data, error: err } = await supabase.from('jobs').insert({
       recruiter_id: user.id,
       status: 'active',
-      ...fields,
+      title:            jobData.title,
+      description:      jobData.description,
+      required_skills:  jobData.required_skills,
+      preferred_skills: jobData.preferred_skills,
+      experience_years: jobData.experience_years,
+      tech_weight:      jobData.tech_weight,
+      comm_weight:      jobData.comm_weight,
     }).select().single()
     if (err) { setError(err.message); return }
-    setJobs(p => [data, ...p])
+
+    // Re-fetch so the list gets the candidates(count) join correctly
+    await load()
 
     setPoolStatus(p => ({ ...p, [data.id]: 'scanning' }))
     triggerTalentPoolMatch(data.id)
@@ -105,11 +116,13 @@ export default function RecruiterJobs() {
         </div>
       </div>
 
+      {error && <div className="error-banner" style={{ marginBottom: 16 }}>{error}</div>}
+
       {showForm && (
         <div className="section-card" style={{ marginBottom: 20 }}>
           <div className="section-card-head"><h3>New Job Posting</h3></div>
           <div className="section-card-body">
-            {error && <div className="error-banner">{error}</div>}
+            {/* error shown above, outside this block */}
             <form onSubmit={handleCreate}>
               <div className="form-grid">
                 <div className="field">
