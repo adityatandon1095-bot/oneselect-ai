@@ -29,7 +29,9 @@ export async function triggerTalentPoolMatch(jobId, { onProgress, onLog } = {}) 
     try {
       const msg = `Name: ${c.full_name}\nRole: ${c.candidate_role}\nYears: ${c.total_years}\nSkills: ${(c.skills ?? []).join(', ')}\nSummary: ${c.summary ?? ''}`
       const reply = await callClaude([{ role: 'user', content: msg }], system, 512)
-      const s = JSON.parse(reply.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, ''))
+      console.log(`[talentPool] raw reply for ${c.full_name}:`, JSON.stringify(reply))
+      const clean = reply.trim().replace(/^```(?:json)?\s*/i, '').replace(/```[\s]*$/m, '').trim()
+      const s = JSON.parse(clean)
       await supabase.from('job_matches').upsert({
         talent_id: c.id,
         job_id: jobId,
