@@ -96,7 +96,6 @@ export default function AdminTalentPool() {
           summary:        parsed.summary ?? '',
           highlights:     parsed.highlights ?? [],
           raw_text:       content.kind === 'text' ? content.text : '',
-          file_name:      entry.file.name,
           availability:   'available',
         }).select().single()
 

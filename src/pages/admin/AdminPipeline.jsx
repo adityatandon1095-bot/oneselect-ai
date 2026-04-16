@@ -220,7 +220,6 @@ export default function AdminPipeline() {
           summary: parsed.summary ?? '',
           highlights: parsed.highlights ?? [],
           raw_text: content.kind === 'text' ? content.text : '',
-          file_name: entry.file.name,
         }).select().single()
 
         if (error) throw new Error(error.message)
