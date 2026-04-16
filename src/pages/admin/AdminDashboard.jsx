@@ -20,7 +20,7 @@ export default function AdminDashboard() {
       { count: poolTotal },
       { count: poolAvailable },
     ] = await Promise.all([
-      supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('user_role', 'recruiter'),
+      supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('user_role', 'client'),
       supabase.from('jobs').select('*', { count: 'exact', head: true }).eq('status', 'active'),
       supabase.from('candidates').select('*', { count: 'exact', head: true }),
       supabase.from('candidates').select('*', { count: 'exact', head: true }).not('interview_scores', 'is', null),

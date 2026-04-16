@@ -2,17 +2,15 @@ import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../lib/AuthContext'
 
 const NAV = [
-  { to: '/admin/dashboard',   label: 'Dashboard',   icon: '◈' },
-  { to: '/admin/clients',     label: 'Clients',     icon: '◉' },
-  { to: '/admin/recruiters',  label: 'Recruiters',  icon: '◎' },
-  { to: '/admin/jobs',        label: 'Jobs',        icon: '◫' },
-  { to: '/admin/talent-pool', label: 'Talent Pool', icon: '◌' },
-  { to: '/admin/pipeline',    label: 'Pipeline',    icon: '◐' },
-  { to: '/admin/settings',    label: 'Settings',    icon: '◷' },
+  { to: '/client/dashboard',   label: 'Dashboard',  icon: '◈' },
+  { to: '/client/jobs',        label: 'My Jobs',    icon: '◫' },
+  { to: '/client/candidates',  label: 'Candidates', icon: '◉' },
+  { to: '/client/reports',     label: 'Reports',    icon: '◧' },
+  { to: '/client/settings',    label: 'Settings',   icon: '◷' },
 ]
 
-export default function AdminLayout() {
-  const { user, signOut } = useAuth()
+export default function ClientLayout() {
+  const { user, profile, signOut } = useAuth()
   const navigate = useNavigate()
 
   const handleSignOut = async () => {
@@ -26,14 +24,16 @@ export default function AdminLayout() {
         <div className="sidebar-brand">
           <img src="/oneselect-logo.png" alt="One Select" style={{ width: '100%', maxWidth: 160, height: 'auto', objectFit: 'contain', display: 'block' }} />
         </div>
+        {profile?.company_name && (
+          <div className="sidebar-company">{profile.company_name}</div>
+        )}
 
         <nav className="sidebar-nav">
-          <div className="nav-section">Admin</div>
+          <div className="nav-section">Client Portal</div>
           {NAV.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
-              end={item.end}
               className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}
             >
               <span className="nav-icon">{item.icon}</span>

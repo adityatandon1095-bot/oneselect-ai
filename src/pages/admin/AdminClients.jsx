@@ -43,7 +43,7 @@ export default function AdminClients() {
       { data: jobData },
       { data: candData },
     ] = await Promise.all([
-      supabase.from('profiles').select('*').eq('user_role', 'recruiter').order('created_at', { ascending: false }),
+      supabase.from('profiles').select('*').eq('user_role', 'client').order('created_at', { ascending: false }),
       supabase.from('jobs').select('id, recruiter_id, status, created_at'),
       supabase.from('candidates').select('job_id'),
     ])

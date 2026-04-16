@@ -56,7 +56,7 @@ function ScoreRing({ score, size = 48 }) {
 
 const DEFAULT_JOB_FORM = { title:'', experience_years:3, required_skills:[], preferred_skills:[], description:'', tech_weight:60, comm_weight:40 }
 
-export default function AdminPipeline() {
+export default function AdminPipeline({ allowedClientIds } = {}) {
   const location = useLocation()
   const [clients, setClients] = useState([])
   const [clientId, setClientId] = useState('')
@@ -96,7 +96,9 @@ export default function AdminPipeline() {
   useEffect(() => { chatRef.current?.scrollTo(0, chatRef.current.scrollHeight) }, [ivStates])
 
   async function loadClients() {
-    const { data } = await supabase.from('profiles').select('id, full_name, company_name, email').eq('user_role', 'recruiter').order('company_name')
+    let q = supabase.from('profiles').select('id, full_name, company_name, email').eq('user_role', 'client').order('company_name')
+    if (allowedClientIds?.length) q = q.in('id', allowedClientIds)
+    const { data } = await q
     setClients(data ?? [])
   }
 

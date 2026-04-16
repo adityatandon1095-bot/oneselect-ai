@@ -9,12 +9,17 @@ import AdminJobs from './pages/admin/AdminJobs'
 import AdminPipeline from './pages/admin/AdminPipeline'
 import AdminTalentPool from './pages/admin/AdminTalentPool'
 import AdminSettings from './pages/admin/AdminSettings'
+import AdminRecruiters from './pages/admin/AdminRecruiters'
 import RecruiterLayout from './pages/recruiter/RecruiterLayout'
 import RecruiterDashboard from './pages/recruiter/RecruiterDashboard'
-import RecruiterJobs from './pages/recruiter/RecruiterJobs'
-import RecruiterCandidates from './pages/recruiter/RecruiterCandidates'
-import RecruiterReports from './pages/recruiter/RecruiterReports'
+import RecruiterPipeline from './pages/recruiter/RecruiterPipeline'
 import RecruiterSettings from './pages/recruiter/RecruiterSettings'
+import ClientLayout from './pages/client/ClientLayout'
+import ClientDashboard from './pages/client/ClientDashboard'
+import ClientJobs from './pages/client/ClientJobs'
+import ClientCandidates from './pages/client/ClientCandidates'
+import ClientReports from './pages/client/ClientReports'
+import ClientSettings from './pages/client/ClientSettings'
 import CandidateLayout from './pages/candidate/CandidateLayout'
 import CandidateDashboard from './pages/candidate/CandidateDashboard'
 import CandidateInterview from './pages/candidate/CandidateInterview'
@@ -62,6 +67,7 @@ function Loader() {
 function roleHome(role) {
   if (role === 'admin') return '/admin/dashboard'
   if (role === 'candidate') return '/candidate/dashboard'
+  if (role === 'client') return '/client/dashboard'
   return '/recruiter/dashboard'
 }
 
@@ -95,6 +101,7 @@ export default function App() {
             <Route index element={<AdminDashboard />} />
             <Route path="dashboard" element={<AdminDashboard />} />
             <Route path="clients" element={<AdminClients />} />
+            <Route path="recruiters" element={<AdminRecruiters />} />
             <Route path="jobs" element={<AdminJobs />} />
             <Route path="pipeline" element={<AdminPipeline />} />
             <Route path="talent-pool" element={<AdminTalentPool />} />
@@ -104,10 +111,17 @@ export default function App() {
           <Route path="/recruiter" element={<ProtectedRoute role="recruiter"><RecruiterLayout /></ProtectedRoute>}>
             <Route index element={<RecruiterDashboard />} />
             <Route path="dashboard" element={<RecruiterDashboard />} />
-            <Route path="jobs" element={<RecruiterJobs />} />
-            <Route path="candidates" element={<RecruiterCandidates />} />
-            <Route path="reports" element={<RecruiterReports />} />
+            <Route path="pipeline" element={<RecruiterPipeline />} />
             <Route path="settings" element={<RecruiterSettings />} />
+          </Route>
+
+          <Route path="/client" element={<ProtectedRoute role="client"><ClientLayout /></ProtectedRoute>}>
+            <Route index element={<ClientDashboard />} />
+            <Route path="dashboard" element={<ClientDashboard />} />
+            <Route path="jobs" element={<ClientJobs />} />
+            <Route path="candidates" element={<ClientCandidates />} />
+            <Route path="reports" element={<ClientReports />} />
+            <Route path="settings" element={<ClientSettings />} />
           </Route>
 
           <Route path="/candidate" element={<ProtectedRoute role="candidate"><CandidateLayout /></ProtectedRoute>}>

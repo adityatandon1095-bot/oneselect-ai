@@ -2,15 +2,13 @@ import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../lib/AuthContext'
 
 const NAV = [
-  { to: '/recruiter/dashboard',   label: 'Dashboard',  icon: '◈' },
-  { to: '/recruiter/jobs',        label: 'My Jobs',    icon: '◫' },
-  { to: '/recruiter/candidates',  label: 'Candidates', icon: '◉' },
-  { to: '/recruiter/reports',     label: 'Reports',    icon: '◧' },
-  { to: '/recruiter/settings',    label: 'Settings',   icon: '◷' },
+  { to: '/recruiter/dashboard', label: 'Dashboard', icon: '◈' },
+  { to: '/recruiter/pipeline',  label: 'Pipeline',  icon: '◐' },
+  { to: '/recruiter/settings',  label: 'Settings',  icon: '◷' },
 ]
 
 export default function RecruiterLayout() {
-  const { user, profile, signOut } = useAuth()
+  const { user, signOut } = useAuth()
   const navigate = useNavigate()
 
   const handleSignOut = async () => {
@@ -24,9 +22,6 @@ export default function RecruiterLayout() {
         <div className="sidebar-brand">
           <img src="/oneselect-logo.png" alt="One Select" style={{ width: '100%', maxWidth: 160, height: 'auto', objectFit: 'contain', display: 'block' }} />
         </div>
-        {profile?.company_name && (
-          <div className="sidebar-company">{profile.company_name}</div>
-        )}
 
         <nav className="sidebar-nav">
           <div className="nav-section">Recruiter</div>
@@ -34,7 +29,6 @@ export default function RecruiterLayout() {
             <NavLink
               key={item.to}
               to={item.to}
-              end={item.end}
               className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}
             >
               <span className="nav-icon">{item.icon}</span>
