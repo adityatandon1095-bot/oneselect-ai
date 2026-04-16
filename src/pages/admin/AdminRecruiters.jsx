@@ -20,6 +20,14 @@ export default function AdminRecruiters() {
   const [assignClientId, setAssignClientId] = useState('')
   const [assigning, setAssigning] = useState(false)
 
+  // Remove confirmation modal
+  const [removeModal, setRemoveModal] = useState(null) // recruiter profile to remove
+  const [removing, setRemoving] = useState(false)
+  // After removal: orphaned clients waiting for reassignment
+  const [orphanedClients, setOrphanedClients] = useState([]) // client profiles
+  const [orphanAssignments, setOrphanAssignments] = useState({}) // client_id → recruiter_id being assigned
+  const [orphanSaving, setOrphanSaving] = useState({}) // client_id → bool
+
   useEffect(() => { load() }, [])
 
   async function load() {
@@ -90,11 +98,37 @@ export default function AdminRecruiters() {
     await load()
   }
 
-  async function handleRemove(r) {
-    const label = r.full_name || r.email
-    if (!window.confirm(`Remove recruiter ${label}?\n\nThis removes their account. Their client assignments will be deleted.`)) return
-    await supabase.from('profiles').delete().eq('id', r.id)
-    setRecruiters(p => p.filter(x => x.id !== r.id))
+  function openRemoveModal(r) {
+    setRemoveModal(r)
+    setRemoving(false)
+  }
+
+  async function confirmRemove() {
+    if (!removeModal) return
+    setRemoving(true)
+    // Capture which clients this recruiter was managing before we delete
+    const affected = assignedClients(removeModal.id)
+    await supabase.from('profiles').delete().eq('id', removeModal.id)
+    setRecruiters(p => p.filter(x => x.id !== removeModal.id))
+    setRemoveModal(null)
+    setRemoving(false)
+    // Show orphaned clients for reassignment if any
+    if (affected.length > 0) {
+      setOrphanedClients(affected)
+      setOrphanAssignments({})
+      setOrphanSaving({})
+    }
+    await load()
+  }
+
+  async function assignOrphan(clientId) {
+    const recruiterId = orphanAssignments[clientId]
+    if (!recruiterId) return
+    setOrphanSaving(p => ({ ...p, [clientId]: true }))
+    await supabase.from('recruiter_clients').insert({ recruiter_id: recruiterId, client_id: clientId })
+    setOrphanedClients(p => p.filter(c => c.id !== clientId))
+    setOrphanSaving(p => ({ ...p, [clientId]: false }))
+    await load()
   }
 
   if (loading) return <div className="page"><span className="spinner" /></div>
@@ -165,7 +199,7 @@ export default function AdminRecruiters() {
                   <button
                     className="btn btn-secondary"
                     style={{ fontSize: 10, padding: '3px 8px', color: 'var(--red)', flexShrink: 0 }}
-                    onClick={() => handleRemove(r)}
+                    onClick={() => openRemoveModal(r)}
                   >Remove</button>
                 </div>
               </div>
@@ -234,6 +268,82 @@ export default function AdminRecruiters() {
                 </div>
               </div>
               <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }} onClick={() => setInvResult(null)}>Done</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Orphaned clients banner (shown after recruiter removal) ── */}
+      {orphanedClients.length > 0 && (
+        <div style={{ margin: '0 0 20px', padding: '16px 20px', background: 'var(--amber-d)', border: '1px solid var(--amber)', borderRadius: 'var(--r)' }}>
+          <div style={{ fontSize: 12, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--amber)', marginBottom: 12 }}>
+            {orphanedClients.length} client{orphanedClients.length !== 1 ? 's' : ''} now unassigned — assign a new recruiter
+          </div>
+          {orphanedClients.map(c => (
+            <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)', minWidth: 160 }}>{c.company_name || c.email}</span>
+              <select
+                value={orphanAssignments[c.id] ?? ''}
+                onChange={e => setOrphanAssignments(p => ({ ...p, [c.id]: e.target.value }))}
+                style={{ fontSize: 12 }}
+              >
+                <option value="">— pick recruiter —</option>
+                {recruiters.map(r => (
+                  <option key={r.id} value={r.id}>{r.full_name || r.email}</option>
+                ))}
+              </select>
+              <button
+                className="btn btn-primary"
+                style={{ fontSize: 11, padding: '5px 12px' }}
+                disabled={!orphanAssignments[c.id] || orphanSaving[c.id]}
+                onClick={() => assignOrphan(c.id)}
+              >
+                {orphanSaving[c.id] ? <><span className="spinner" style={{ width: 11, height: 11 }} /> Assigning…</> : 'Assign'}
+              </button>
+              <button
+                className="btn btn-secondary"
+                style={{ fontSize: 11, padding: '5px 12px' }}
+                onClick={() => setOrphanedClients(p => p.filter(x => x.id !== c.id))}
+              >Skip</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── Remove confirmation modal ── */}
+      {removeModal && (
+        <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget && !removing) setRemoveModal(null) }}>
+          <div className="modal" style={{ maxWidth: 440 }}>
+            <div className="modal-head">
+              <h3>Remove Recruiter</h3>
+              <button className="modal-close" disabled={removing} onClick={() => setRemoveModal(null)}>×</button>
+            </div>
+            <div className="modal-body">
+              <p style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.7, marginBottom: 16 }}>
+                Are you sure you want to remove <strong>{removeModal.full_name || removeModal.email}</strong>?
+              </p>
+              {(() => {
+                const affected = assignedClients(removeModal.id)
+                return affected.length > 0 ? (
+                  <div style={{ padding: '12px 14px', background: 'var(--amber-d)', border: '1px solid var(--amber)', borderRadius: 'var(--r)', marginBottom: 16 }}>
+                    <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--amber)', marginBottom: 8 }}>
+                      {affected.length} client{affected.length !== 1 ? 's' : ''} will become unassigned:
+                    </div>
+                    {affected.map(c => (
+                      <div key={c.id} style={{ fontSize: 13, color: 'var(--text)', marginBottom: 2 }}>· {c.company_name || c.email}</div>
+                    ))}
+                    <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 8 }}>
+                      Their jobs and candidates are kept. You'll be able to assign a new recruiter immediately after.
+                    </div>
+                  </div>
+                ) : null
+              })()}
+              <div className="form-actions">
+                <button className="btn btn-primary" style={{ background: 'var(--red)', borderColor: 'var(--red)' }} disabled={removing} onClick={confirmRemove}>
+                  {removing ? <><span className="spinner" style={{ width: 12, height: 12 }} /> Removing…</> : 'Yes, Remove'}
+                </button>
+                <button className="btn btn-secondary" disabled={removing} onClick={() => setRemoveModal(null)}>Cancel</button>
+              </div>
             </div>
           </div>
         </div>

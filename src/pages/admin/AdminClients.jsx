@@ -42,6 +42,10 @@ export default function AdminClients() {
   const [assigning,    setAssigning]    = useState(false)
   const [assignError,  setAssignError]  = useState('')
 
+  // ── Remove confirmation modal ─────────────────────────────────────────────────
+  const [removeModal,  setRemoveModal]  = useState(null) // client profile
+  const [removing,     setRemoving]     = useState(false)
+
   useEffect(() => { load() }, [])
   useEffect(() => { setPage(1) }, [search, statusFilter, sortBy])
 
@@ -160,11 +164,13 @@ export default function AdminClients() {
     ).catch(() => {})
   }
 
-  async function handleRemove(c) {
-    const label = c.company_name || c.email
-    if (!window.confirm(`Remove ${label}?\n\nThis removes them from your clients list. Their jobs and candidates are retained.`)) return
-    const { error } = await supabase.from('profiles').delete().eq('id', c.id)
-    if (!error) setProfiles(p => p.filter(x => x.id !== c.id))
+  async function confirmRemove() {
+    if (!removeModal) return
+    setRemoving(true)
+    const { error } = await supabase.from('profiles').delete().eq('id', removeModal.id)
+    if (!error) setProfiles(p => p.filter(x => x.id !== removeModal.id))
+    setRemoving(false)
+    setRemoveModal(null)
   }
 
   // ── Assign recruiter handlers ─────────────────────────────────────────────────
@@ -350,7 +356,7 @@ export default function AdminClients() {
                     <button
                       className="btn btn-secondary"
                       style={{ fontSize: 10, padding: '3px 8px', color: 'var(--red)' }}
-                      onClick={() => handleRemove(c)}
+                      onClick={() => setRemoveModal(c)}
                     >Remove</button>
                   </div>
                 </div>
@@ -368,6 +374,39 @@ export default function AdminClients() {
           </div>
         )}
       </div>
+
+      {/* ── Remove Client Confirmation Modal ── */}
+      {removeModal && (
+        <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget && !removing) setRemoveModal(null) }}>
+          <div className="modal" style={{ maxWidth: 420 }}>
+            <div className="modal-head">
+              <h3>Remove Client</h3>
+              <button className="modal-close" disabled={removing} onClick={() => setRemoveModal(null)}>×</button>
+            </div>
+            <div className="modal-body">
+              <p style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.7, marginBottom: 16 }}>
+                Are you sure you want to remove <strong>{removeModal.company_name || removeModal.email}</strong>?
+              </p>
+              <div style={{ padding: '12px 14px', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 'var(--r)', marginBottom: 20, fontSize: 12, color: 'var(--text-3)', lineHeight: 1.7 }}>
+                · Their jobs and candidates are <strong style={{ color: 'var(--text-2)' }}>kept</strong> in the database<br />
+                · Their recruiter assignments will be removed<br />
+                · You can re-invite them later with the same email
+              </div>
+              <div className="form-actions">
+                <button
+                  className="btn btn-primary"
+                  style={{ background: 'var(--red)', borderColor: 'var(--red)' }}
+                  disabled={removing}
+                  onClick={confirmRemove}
+                >
+                  {removing ? <><span className="spinner" style={{ width: 12, height: 12 }} /> Removing…</> : 'Yes, Remove'}
+                </button>
+                <button className="btn btn-secondary" disabled={removing} onClick={() => setRemoveModal(null)}>Cancel</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Assign Recruiter Modal ── */}
       {assignModal && (

@@ -24,7 +24,6 @@ serve(async (req) => {
   }
 
   try {
-    // role: 'client' (default) | 'recruiter'
     const { email, company_name, contact_name, role = 'client' } = await req.json()
 
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -40,6 +39,8 @@ serve(async (req) => {
     tempPassword += '-'
     for (let i = 0; i < 4; i++) tempPassword += chars[Math.floor(Math.random() * chars.length)]
 
+    // Try to create the auth user
+    let userId: string
     const { data: userData, error: createError } = await admin.auth.admin.createUser({
       email,
       password: tempPassword,
@@ -47,20 +48,58 @@ serve(async (req) => {
       user_metadata: { company_name, contact_name }
     })
 
-    if (createError) throw new Error('Create user failed: ' + createError.message)
+    if (createError) {
+      // If user already exists in auth (re-invite), find them and reset their password + profile
+      const isAlreadyExists =
+        createError.message.toLowerCase().includes('already been registered') ||
+        createError.message.toLowerCase().includes('already exists') ||
+        createError.message.toLowerCase().includes('user already registered')
 
-    const userId = userData.user.id
+      if (!isAlreadyExists) {
+        throw new Error('Create user failed: ' + createError.message)
+      }
 
-    const { error: profileError } = await admin.from('profiles').insert({
-      id: userId,
-      user_role: role,
-      company_name,
-      email,
-      full_name: contact_name,
-      first_login: true
-    })
+      // Find the existing auth user by email
+      const { data: list } = await admin.auth.admin.listUsers({ perPage: 1000 })
+      const existing = list?.users?.find((u: { email?: string }) =>
+        u.email?.toLowerCase() === email.toLowerCase()
+      )
+      if (!existing) throw new Error('User already exists but could not be found: ' + createError.message)
 
-    if (profileError) throw new Error('Profile failed: ' + profileError.message)
+      // Reset their password to the new temp password
+      await admin.auth.admin.updateUserById(existing.id, {
+        password: tempPassword,
+        email_confirm: true,
+        user_metadata: { company_name, contact_name }
+      })
+
+      // Upsert their profile (re-activates them with fresh first_login flag)
+      const { error: upsertError } = await admin.from('profiles').upsert({
+        id: existing.id,
+        user_role: role,
+        company_name,
+        email,
+        full_name: contact_name,
+        first_login: true
+      }, { onConflict: 'id' })
+
+      if (upsertError) throw new Error('Profile upsert failed: ' + upsertError.message)
+      userId = existing.id
+
+    } else {
+      userId = userData.user.id
+
+      const { error: profileError } = await admin.from('profiles').insert({
+        id: userId,
+        user_role: role,
+        company_name,
+        email,
+        full_name: contact_name,
+        first_login: true
+      })
+
+      if (profileError) throw new Error('Profile failed: ' + profileError.message)
+    }
 
     // ── Email body differs by role ──────────────────────────────────────────
     const isRecruiter = role === 'recruiter'

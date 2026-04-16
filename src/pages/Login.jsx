@@ -1,17 +1,41 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 
+function roleHome(role) {
+  if (role === 'admin')     return '/admin/dashboard'
+  if (role === 'candidate') return '/candidate/dashboard'
+  if (role === 'client')    return '/client/dashboard'
+  return '/recruiter/dashboard'
+}
+
 export default function Login() {
-  const [email, setEmail]       = useState('')
-  const [password, setPassword] = useState('')
-  const [error, setError]       = useState('')
-  const [loading, setLoading]   = useState(false)
+  const [mode, setMode]           = useState('login') // 'login' | 'forgot' | 'reset'
+  const [email, setEmail]         = useState('')
+  const [password, setPassword]   = useState('')
+  const [newPassword, setNewPw]   = useState('')
+  const [confirmPw, setConfirmPw] = useState('')
+  const [error, setError]         = useState('')
+  const [info, setInfo]           = useState('')
+  const [loading, setLoading]     = useState(false)
   const navigate = useNavigate()
 
-  const handleSubmit = async (e) => {
+  // Detect when Supabase redirects back with a PASSWORD_RECOVERY token
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setMode('reset')
+        setError('')
+        setInfo('')
+      }
+    })
+    return () => subscription.unsubscribe()
+  }, [])
+
+  // ── Sign in ────────────────────────────────────────────────────────────────
+  const handleSignIn = async (e) => {
     e.preventDefault()
-    setError('')
+    setError(''); setInfo('')
     setLoading(true)
 
     const { data, error: authError } = await supabase.auth.signInWithPassword({ email, password })
@@ -30,12 +54,40 @@ export default function Login() {
       return
     }
 
-    if (profile.user_role === 'admin') {
-      navigate('/admin/dashboard', { replace: true })
-    } else {
-      navigate('/recruiter/dashboard', { replace: true })
-    }
+    navigate(roleHome(profile.user_role), { replace: true })
     setLoading(false)
+  }
+
+  // ── Forgot password — send reset email ────────────────────────────────────
+  const handleForgot = async (e) => {
+    e.preventDefault()
+    if (!email.trim()) { setError('Please enter your email address'); return }
+    setError(''); setLoading(true)
+
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: window.location.origin + '/login',
+    })
+
+    setLoading(false)
+    if (resetError) { setError(resetError.message); return }
+    setInfo(`Password reset link sent to ${email.trim()}. Check your inbox.`)
+  }
+
+  // ── Reset password — set new password after clicking email link ───────────
+  const handleReset = async (e) => {
+    e.preventDefault()
+    setError('')
+    if (newPassword.length < 8) { setError('Password must be at least 8 characters'); return }
+    if (newPassword !== confirmPw) { setError('Passwords do not match'); return }
+
+    setLoading(true)
+    const { error: updateError } = await supabase.auth.updateUser({ password: newPassword })
+    setLoading(false)
+
+    if (updateError) { setError(updateError.message); return }
+
+    // Navigate to dashboard — auth state will route correctly
+    navigate('/', { replace: true })
   }
 
   return (
@@ -49,32 +101,92 @@ export default function Login() {
       <div className="login-panel-right">
         <div className="login-form-wrap">
           <img src="/oneselect-logo.png" alt="One Select" style={{ width: 200, height: 'auto', objectFit: 'contain', marginBottom: 36, display: 'block' }} />
-          <h2 className="login-welcome">Welcome back</h2>
-          <p className="login-sub">Sign in to your account</p>
 
-          {error && <div className="error-banner">{error}</div>}
+          {/* ── Sign in ── */}
+          {mode === 'login' && (
+            <>
+              <h2 className="login-welcome">Welcome back</h2>
+              <p className="login-sub">Sign in to your account</p>
 
-          <form className="login-form" onSubmit={handleSubmit}>
-            <div className="field">
-              <label>Email</label>
-              <input
-                type="email" required autoComplete="email"
-                value={email} onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@company.com"
-              />
-            </div>
-            <div className="field">
-              <label>Password</label>
-              <input
-                type="password" required autoComplete="current-password"
-                value={password} onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-              />
-            </div>
-            <button type="submit" className="btn btn-primary" disabled={loading}>
-              {loading ? <><span className="spinner" style={{ width: 13, height: 13 }} /> Signing in…</> : 'Sign in'}
-            </button>
-          </form>
+              {error && <div className="error-banner">{error}</div>}
+              {info  && <div className="error-banner" style={{ background: 'var(--green-d)', borderColor: 'var(--green)', color: 'var(--green)' }}>{info}</div>}
+
+              <form className="login-form" onSubmit={handleSignIn}>
+                <div className="field">
+                  <label>Email</label>
+                  <input type="email" required autoComplete="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@company.com" />
+                </div>
+                <div className="field">
+                  <label>Password</label>
+                  <input type="password" required autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" />
+                </div>
+                <button type="submit" className="btn btn-primary" disabled={loading}>
+                  {loading ? <><span className="spinner" style={{ width: 13, height: 13 }} /> Signing in…</> : 'Sign in'}
+                </button>
+              </form>
+
+              <button
+                onClick={() => { setMode('forgot'); setError(''); setInfo('') }}
+                style={{ marginTop: 16, background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: 'var(--text-3)', textDecoration: 'underline', padding: 0 }}
+              >
+                Forgot password?
+              </button>
+            </>
+          )}
+
+          {/* ── Forgot password ── */}
+          {mode === 'forgot' && (
+            <>
+              <h2 className="login-welcome">Reset Password</h2>
+              <p className="login-sub">Enter your email and we'll send you a reset link</p>
+
+              {error && <div className="error-banner">{error}</div>}
+              {info  && <div className="error-banner" style={{ background: 'var(--green-d)', borderColor: 'var(--green)', color: 'var(--green)' }}>{info}</div>}
+
+              {!info && (
+                <form className="login-form" onSubmit={handleForgot}>
+                  <div className="field">
+                    <label>Email</label>
+                    <input type="email" required autoFocus autoComplete="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@company.com" />
+                  </div>
+                  <button type="submit" className="btn btn-primary" disabled={loading}>
+                    {loading ? <><span className="spinner" style={{ width: 13, height: 13 }} /> Sending…</> : 'Send Reset Link'}
+                  </button>
+                </form>
+              )}
+
+              <button
+                onClick={() => { setMode('login'); setError(''); setInfo('') }}
+                style={{ marginTop: 16, background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: 'var(--text-3)', textDecoration: 'underline', padding: 0 }}
+              >
+                ← Back to sign in
+              </button>
+            </>
+          )}
+
+          {/* ── Set new password (after clicking reset link in email) ── */}
+          {mode === 'reset' && (
+            <>
+              <h2 className="login-welcome">Set New Password</h2>
+              <p className="login-sub">Choose a secure password for your account</p>
+
+              {error && <div className="error-banner">{error}</div>}
+
+              <form className="login-form" onSubmit={handleReset}>
+                <div className="field">
+                  <label>New Password</label>
+                  <input type="password" required autoFocus autoComplete="new-password" value={newPassword} onChange={e => setNewPw(e.target.value)} placeholder="At least 8 characters" />
+                </div>
+                <div className="field">
+                  <label>Confirm Password</label>
+                  <input type="password" required autoComplete="new-password" value={confirmPw} onChange={e => setConfirmPw(e.target.value)} placeholder="Repeat your new password" />
+                </div>
+                <button type="submit" className="btn btn-primary" disabled={loading}>
+                  {loading ? <><span className="spinner" style={{ width: 13, height: 13 }} /> Updating…</> : 'Set Password & Continue'}
+                </button>
+              </form>
+            </>
+          )}
         </div>
       </div>
     </div>
