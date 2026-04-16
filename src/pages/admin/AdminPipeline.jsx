@@ -6,6 +6,8 @@ import mammoth from 'mammoth'
 import { extractContent, isSupported, fileExt, ACCEPT_ATTR } from '../../utils/fileExtract'
 import { triggerTalentPoolMatch, mapMatchToCandidate } from '../../utils/talentPool'
 import TagInput from '../../components/TagInput'
+import VideoInterview from '../../components/VideoInterview'
+import VideoPlayer from '../../components/VideoPlayer'
 
 // ── Prompts ──────────────────────────────────────────────────────────────────
 
@@ -74,6 +76,8 @@ export default function AdminPipeline() {
   const [useTalentPool, setUseTalentPool] = useState(false)
   const [poolMatchLoading, setPoolMatchLoading] = useState(false)
   const [poolMatchProgress, setPoolMatchProgress] = useState({ current: 0, total: 0 })
+  const [videoInterviewTarget, setVideoInterviewTarget] = useState(null) // candidate object
+  const [videoPlayerTarget,    setVideoPlayerTarget]    = useState(null) // candidate object
   const running = parsing || screening || poolMatchLoading
   const fileInputRef = useRef()
   const logRef = useRef()
@@ -559,11 +563,33 @@ export default function AdminPipeline() {
                 <div className="iv-sidebar-head">Passed Candidates</div>
                 {passedCandidates.map(c => {
                   const s = ivStates[c.id]
+                  const hasVideo = c.video_urls?.length > 0
                   return (
                     <div key={c.id} className={`candidate-row${c.id === selectedIvId ? ' active' : ''}`} onClick={() => setSelectedIvId(c.id)}>
                       <div className="c-info">
                         <div className="c-name" style={{ fontSize: 12 }}>{c.full_name}</div>
                         <div className="c-meta">{c.candidate_role}</div>
+                        {/* Video interview actions */}
+                        <div style={{ display: 'flex', gap: 4, marginTop: 4 }} onClick={e => e.stopPropagation()}>
+                          {hasVideo ? (
+                            <>
+                              <span className="badge badge-green" style={{ fontSize: 8 }}>
+                                Video · {c.integrity_score ?? 100}%
+                              </span>
+                              <button
+                                className="btn btn-secondary"
+                                style={{ fontSize: 9, padding: '2px 6px' }}
+                                onClick={() => setVideoPlayerTarget(c)}
+                              >▶ Watch</button>
+                            </>
+                          ) : (
+                            <button
+                              className="btn btn-secondary"
+                              style={{ fontSize: 9, padding: '2px 6px', color: 'var(--accent)' }}
+                              onClick={() => setVideoInterviewTarget(c)}
+                            >📹 Video Interview</button>
+                          )}
+                        </div>
                       </div>
                       <div>
                         {!s?.messages?.length && <span className="badge badge-amber" style={{ fontSize: 9 }}>Ready</span>}
@@ -639,6 +665,33 @@ export default function AdminPipeline() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ── Video Interview modal ── */}
+      {videoInterviewTarget && activeJob && (
+        <VideoInterview
+          job={activeJob}
+          candidate={videoInterviewTarget}
+          matchId={videoInterviewTarget.id}
+          isFromPool={videoInterviewTarget._fromPool ?? false}
+          onClose={() => setVideoInterviewTarget(null)}
+          onComplete={(result) => {
+            setCandidates(prev => prev.map(c =>
+              c.id === videoInterviewTarget.id
+                ? { ...c, video_urls: result.video_urls, integrity_score: result.integrity_score, integrity_flags: result.integrity_flags }
+                : c
+            ))
+            setVideoInterviewTarget(null)
+          }}
+        />
+      )}
+
+      {/* ── Video Player modal ── */}
+      {videoPlayerTarget && (
+        <VideoPlayer
+          candidate={videoPlayerTarget}
+          onClose={() => setVideoPlayerTarget(null)}
+        />
       )}
 
       {/* ── Log ── */}
