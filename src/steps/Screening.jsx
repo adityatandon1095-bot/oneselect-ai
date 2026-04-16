@@ -70,7 +70,7 @@ export default function Screening({ jobDefinition, candidates, onNext }) {
       patch(c.id, { _status: 'running' })
       try {
         const text = await callClaude([{ role: 'user', content: candidateMessage(c) }], system, 512)
-        const screening = JSON.parse(text.trim())
+        const screening = JSON.parse(text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, ''))
         patch(c.id, { _status: 'done', screening })
       } catch (err) {
         patch(c.id, {

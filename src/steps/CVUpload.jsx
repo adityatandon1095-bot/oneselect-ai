@@ -97,7 +97,7 @@ export default function CVUpload({ onNext }) {
         const content  = await extractContent(entry.file)
         const messages = buildMessages(content)
         const reply    = await callClaude(messages, PARSE_SYSTEM, 1024)
-        const parsed   = JSON.parse(reply.trim())
+        const parsed   = JSON.parse(reply.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, ''))
         patch(entry.id, {
           status:  'done',
           parsed,

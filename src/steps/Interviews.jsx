@@ -148,7 +148,7 @@ export default function Interviews({ jobDefinition, candidates, onNext }) {
         [{ role: 'user', content: `Score this interview:\n\n${transcript}` }],
         SCORING_SYSTEM, 2048,
       )
-      const scores = JSON.parse(text.trim())
+      const scores = JSON.parse(text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, ''))
       patch(id, { scoring: false, scores })
     } catch {
       patch(id, { scoring: false })
