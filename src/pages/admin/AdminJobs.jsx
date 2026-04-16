@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import JDWizard from '../../components/JDWizard'
 
 // ── Requirements-met logic ────────────────────────────────────────────────────
 // met      = 1+ candidate with match_pass=true AND Strong Hire/Hire recommendation
@@ -33,13 +34,38 @@ export default function AdminJobs() {
   const clientId   = location.state?.clientId   ?? null
   const clientName = location.state?.clientName ?? null
 
-  const [jobs,    setJobs]    = useState([])
-  const [candMap, setCandMap] = useState({})  // job_id → Candidate[]
-  const [loading, setLoading] = useState(true)
-  const [filter,  setFilter]  = useState('all')
-  const [closing, setClosing] = useState(null)
+  const [jobs,       setJobs]       = useState([])
+  const [candMap,    setCandMap]    = useState({})  // job_id → Candidate[]
+  const [loading,    setLoading]    = useState(true)
+  const [filter,     setFilter]     = useState('all')
+  const [closing,    setClosing]    = useState(null)
+  const [showWizard, setShowWizard] = useState(false)
+  const [recruiters, setRecruiters] = useState([])
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load(); loadRecruiters() }, [])
+
+  async function loadRecruiters() {
+    const { data } = await supabase
+      .from('profiles')
+      .select('id, email, contact_name, company_name')
+      .eq('user_role', 'recruiter')
+      .order('contact_name', { ascending: true })
+    setRecruiters(data ?? [])
+  }
+
+  async function handleWizardSave(jobData) {
+    setShowWizard(false)
+    const { assigned_to, work_mode, ...rest } = jobData
+    const recruiterId = assigned_to ?? null
+    if (!recruiterId) return   // require assignment in admin flow
+    await supabase.from('jobs').insert({
+      recruiter_id: recruiterId,
+      status: 'active',
+      work_mode,
+      ...rest,
+    })
+    load()
+  }
 
   async function load() {
     let q = supabase
@@ -117,7 +143,7 @@ export default function AdminJobs() {
             {clientName ? ' for this client' : ' across all clients'}
           </p>
         </div>
-        <div style={{ display: 'flex', gap: 6 }}>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           {['all', 'active', 'closed'].map(s => (
             <button
               key={s}
@@ -126,6 +152,11 @@ export default function AdminJobs() {
               onClick={() => setFilter(s)}
             >{s}</button>
           ))}
+          <button
+            className="btn btn-primary"
+            style={{ marginLeft: 6 }}
+            onClick={() => setShowWizard(true)}
+          >✨ Create with AI</button>
         </div>
       </div>
 
@@ -267,6 +298,15 @@ export default function AdminJobs() {
           </>
         )}
       </div>
+
+      {showWizard && (
+        <JDWizard
+          onClose={() => setShowWizard(false)}
+          onSave={handleWizardSave}
+          showAssign
+          recruiters={recruiters}
+        />
+      )}
     </div>
   )
 }

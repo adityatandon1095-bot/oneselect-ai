@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../lib/AuthContext'
 import { triggerTalentPoolMatch } from '../../utils/talentPool'
 import TagInput from '../../components/TagInput'
+import JDWizard from '../../components/JDWizard'
 
 const DEFAULT = { title: '', experience_years: 3, required_skills: [], preferred_skills: [], description: '', tech_weight: 60, comm_weight: 40 }
 
@@ -13,6 +14,7 @@ export default function RecruiterJobs() {
   const [jobs, setJobs] = useState([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
+  const [showWizard, setShowWizard] = useState(false)
   const [form, setForm] = useState(DEFAULT)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -57,6 +59,23 @@ export default function RecruiterJobs() {
       .catch(() => setPoolStatus(p => ({ ...p, [data.id]: 'error' })))
   }
 
+  async function handleWizardSave(jobData) {
+    setShowWizard(false)
+    const { assigned_to, ...fields } = jobData
+    const { data, error: err } = await supabase.from('jobs').insert({
+      recruiter_id: user.id,
+      status: 'active',
+      ...fields,
+    }).select().single()
+    if (err) { setError(err.message); return }
+    setJobs(p => [data, ...p])
+
+    setPoolStatus(p => ({ ...p, [data.id]: 'scanning' }))
+    triggerTalentPoolMatch(data.id)
+      .then(passed => setPoolStatus(p => ({ ...p, [data.id]: `done:${passed}` })))
+      .catch(() => setPoolStatus(p => ({ ...p, [data.id]: 'error' })))
+  }
+
   async function toggleStatus(job, e) {
     e.stopPropagation()
     const newStatus = job.status === 'active' ? 'closed' : 'active'
@@ -76,9 +95,14 @@ export default function RecruiterJobs() {
           <h2>My Jobs</h2>
           <p>{activeJobs.length} active · {closedJobs.length} closed</p>
         </div>
-        <button className="btn btn-primary" onClick={() => { setShowForm(!showForm); setError('') }}>
-          {showForm ? 'Cancel' : '+ New Job'}
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-secondary" onClick={() => { setShowForm(!showForm); setError('') }}>
+            {showForm ? 'Cancel' : '+ Quick Add'}
+          </button>
+          <button className="btn btn-primary" onClick={() => { setShowWizard(true); setShowForm(false) }}>
+            ✨ Create with AI
+          </button>
+        </div>
       </div>
 
       {showForm && (
@@ -140,7 +164,10 @@ export default function RecruiterJobs() {
             <div style={{ fontSize: 32, marginBottom: 12, opacity: 0.25 }}>◫</div>
             <div style={{ fontSize: 16, fontFamily: 'var(--font-head)', fontWeight: 400, color: 'var(--text-2)', marginBottom: 8 }}>No job postings yet</div>
             <div style={{ fontSize: 13, marginBottom: 20 }}>Create your first job to start the hiring pipeline.</div>
-            <button className="btn btn-primary" onClick={() => setShowForm(true)}>+ Create First Job</button>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+              <button className="btn btn-secondary" onClick={() => setShowForm(true)}>+ Quick Add</button>
+              <button className="btn btn-primary" onClick={() => setShowWizard(true)}>✨ Create with AI</button>
+            </div>
           </div>
         </div>
       ) : (
@@ -211,6 +238,14 @@ export default function RecruiterJobs() {
             </div>
           )}
         </>
+      )}
+
+      {showWizard && (
+        <JDWizard
+          onClose={() => setShowWizard(false)}
+          onSave={handleWizardSave}
+          showAssign={false}
+        />
       )}
     </div>
   )
