@@ -76,13 +76,14 @@ function stripFences(text) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function JDWizard({ onClose, onSave, showAssign = false, recruiters = [] }) {
+export default function JDWizard({ onClose, onSave, showAssign = false, recruiters = [], prefill = null }) {
   // ── Navigation state ──────────────────────────────────────────────────────
-  const [step, setStep]     = useState('mode')   // mode|paste|brief|clarify|industry|location|experience|compensation|review|assign
-  const [jdMode, setJdMode] = useState(null)      // 'ai' | 'paste'  — remembered for back-nav
+  // If prefill is provided (from InstantPost "Edit & Customize"), land straight on review
+  const [step, setStep]     = useState(prefill ? 'review' : 'mode')
+  const [jdMode, setJdMode] = useState(prefill ? 'ai' : null)
 
   // ── Form values ───────────────────────────────────────────────────────────
-  const [brief,         setBrief]         = useState('')
+  const [brief,         setBrief]         = useState(prefill?.title ?? '')
   const [pastedJD,      setPastedJD]      = useState('')
   const [clarifyQ,      setClarifyQ]      = useState('')  // AI's follow-up question
   const [clarifyA,      setClarifyA]      = useState('')  // user's answer
@@ -96,11 +97,11 @@ export default function JDWizard({ onClose, onSave, showAssign = false, recruite
   const [compRec,       setCompRec]       = useState('')
   const [compRecLoaded, setCompRecLoaded] = useState(false)
 
-  // ── Generated output ──────────────────────────────────────────────────────
-  const [title,          setTitle]          = useState('')
-  const [description,    setDescription]    = useState('')
-  const [requiredSkills, setRequiredSkills] = useState([])
-  const [preferredSkills,setPreferredSkills]= useState([])
+  // ── Generated output (pre-populated when coming from InstantPost) ─────────
+  const [title,          setTitle]          = useState(prefill?.title          ?? '')
+  const [description,    setDescription]    = useState(prefill?.description    ?? '')
+  const [requiredSkills, setRequiredSkills] = useState(prefill?.required_skills  ?? [])
+  const [preferredSkills,setPreferredSkills]= useState(prefill?.preferred_skills ?? [])
 
   // ── Assignment ────────────────────────────────────────────────────────────
   const [assignedTo, setAssignedTo] = useState('')
