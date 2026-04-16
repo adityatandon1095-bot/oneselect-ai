@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { useLocation } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { callClaude } from '../../utils/api'
 import mammoth from 'mammoth'
@@ -54,6 +55,7 @@ function ScoreRing({ score, size = 48 }) {
 const DEFAULT_JOB_FORM = { title:'', experience_years:3, required_skills:[], preferred_skills:[], description:'', tech_weight:60, comm_weight:40 }
 
 export default function AdminPipeline() {
+  const location = useLocation()
   const [clients, setClients] = useState([])
   const [clientId, setClientId] = useState('')
   const [clientJobs, setClientJobs] = useState([])
@@ -79,6 +81,12 @@ export default function AdminPipeline() {
 
   useEffect(() => { loadClients() }, [])
   useEffect(() => { if (clientId) loadClientJobs(clientId) }, [clientId])
+  // Auto-select client from ?client=uuid URL param (set by Clients/Jobs pages)
+  useEffect(() => {
+    if (!clients.length || clientId) return
+    const urlClient = new URLSearchParams(location.search).get('client')
+    if (urlClient && clients.some(c => c.id === urlClient)) setClientId(urlClient)
+  }, [clients, location.search])
   useEffect(() => { logRef.current?.scrollTo(0, logRef.current.scrollHeight) }, [log])
   useEffect(() => { chatRef.current?.scrollTo(0, chatRef.current.scrollHeight) }, [ivStates])
 
