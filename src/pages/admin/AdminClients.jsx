@@ -167,8 +167,14 @@ export default function AdminClients() {
   async function confirmRemove() {
     if (!removeModal) return
     setRemoving(true)
-    const { error } = await supabase.from('profiles').delete().eq('id', removeModal.id)
-    if (!error) setProfiles(p => p.filter(x => x.id !== removeModal.id))
+    // Call delete-user to remove both profile AND auth account (frees email for re-invite)
+    const { data: { session } } = await supabase.auth.getSession()
+    const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-user`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+      body: JSON.stringify({ userId: removeModal.id }),
+    })
+    if (res.ok) setProfiles(p => p.filter(x => x.id !== removeModal.id))
     setRemoving(false)
     setRemoveModal(null)
   }

@@ -108,7 +108,13 @@ export default function AdminRecruiters() {
     setRemoving(true)
     // Capture which clients this recruiter was managing before we delete
     const affected = assignedClients(removeModal.id)
-    await supabase.from('profiles').delete().eq('id', removeModal.id)
+    // Call delete-user to remove both profile AND auth account (frees email for re-invite)
+    const { data: { session } } = await supabase.auth.getSession()
+    await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-user`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+      body: JSON.stringify({ userId: removeModal.id }),
+    })
     setRecruiters(p => p.filter(x => x.id !== removeModal.id))
     setRemoveModal(null)
     setRemoving(false)
