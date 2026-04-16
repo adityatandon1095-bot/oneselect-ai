@@ -78,6 +78,7 @@ export default function AdminPipeline() {
   const [poolMatchProgress, setPoolMatchProgress] = useState({ current: 0, total: 0 })
   const [videoInterviewTarget, setVideoInterviewTarget] = useState(null) // candidate object
   const [videoPlayerTarget,    setVideoPlayerTarget]    = useState(null) // candidate object
+  const [inviteModal, setInviteModal] = useState(null) // { candidate, email, sending, sent, error }
   const running = parsing || screening || poolMatchLoading
   const fileInputRef = useRef()
   const logRef = useRef()
@@ -154,6 +155,22 @@ export default function AdminPipeline() {
   }
 
   const addLog = (msg, type = '') => setLog(p => [...p, { id: Date.now() + Math.random(), msg, type }])
+
+  async function sendInvite() {
+    const { candidate, email } = inviteModal
+    if (!email.trim()) return
+    setInviteModal(m => ({ ...m, sending: true, error: null }))
+    const companyName = clients.find(c => c.id === clientId)?.company_name ?? ''
+    const { error } = await supabase.functions.invoke('invite-candidate', {
+      body: { email: email.trim(), name: candidate.full_name, job_title: activeJob?.title ?? '', company_name: companyName },
+    })
+    if (error) {
+      setInviteModal(m => ({ ...m, sending: false, error: error.message }))
+    } else {
+      setInviteModal(m => ({ ...m, sending: false, sent: true }))
+      addLog(`✉ Invite sent to ${email.trim()}`, 'ok')
+    }
+  }
 
   const setForm = (k, v) => setJobForm(f => ({ ...f, [k]: v }))
   const setTech = (v) => { setForm('tech_weight', v); setForm('comm_weight', 100 - v) }
@@ -557,6 +574,11 @@ export default function AdminPipeline() {
                   {c.match_score != null && <ScoreRing score={c.match_score} size={42} />}
                   {c.match_rank && <span className={`badge ${c.match_rank === 'top10' ? 'badge-blue' : c.match_rank === 'strong' ? 'badge-green' : c.match_rank === 'moderate' ? 'badge-amber' : 'badge-red'}`}>{c.match_rank}</span>}
                   {c.match_pass != null && <span className={`badge ${c.match_pass ? 'badge-green' : 'badge-red'}`}>{c.match_pass ? 'Pass' : 'Fail'}</span>}
+                  <button
+                    className="btn btn-secondary"
+                    style={{ fontSize: 10, padding: '2px 8px' }}
+                    onClick={e => { e.stopPropagation(); setInviteModal({ candidate: c, email: c.email ?? '', sending: false, sent: false, error: null }) }}
+                  >✉ Invite</button>
                 </div>
               </div>
             ))}
@@ -704,6 +726,46 @@ export default function AdminPipeline() {
           candidate={videoPlayerTarget}
           onClose={() => setVideoPlayerTarget(null)}
         />
+      )}
+
+      {/* ── Invite modal ── */}
+      {inviteModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000 }}>
+          <div style={{ background: 'var(--surface)', borderRadius: 12, padding: 28, width: 400, display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text)', marginBottom: 4 }}>Invite to Candidate Portal</div>
+              <div style={{ fontSize: 13, color: 'var(--text-3)' }}>{inviteModal.candidate.full_name}</div>
+            </div>
+            <div>
+              <label style={{ fontSize: 11, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-3)', display: 'block', marginBottom: 6 }}>Email</label>
+              <input
+                autoFocus
+                style={{ width: '100%', padding: '9px 12px', borderRadius: 7, border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)', fontSize: 13, boxSizing: 'border-box' }}
+                value={inviteModal.email}
+                onChange={e => setInviteModal(m => ({ ...m, email: e.target.value, sent: false, error: null }))}
+                onKeyDown={e => { if (e.key === 'Enter' && !inviteModal.sending && !inviteModal.sent) sendInvite() }}
+                placeholder="candidate@email.com"
+                disabled={inviteModal.sending || inviteModal.sent}
+              />
+            </div>
+            {inviteModal.error && (
+              <div style={{ fontSize: 12, color: 'var(--red)' }}>⚠ {inviteModal.error}</div>
+            )}
+            {inviteModal.sent && (
+              <div style={{ fontSize: 12, color: 'var(--green)' }}>✓ Invite sent to {inviteModal.email}</div>
+            )}
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button className="btn btn-secondary" onClick={() => setInviteModal(null)}>
+                {inviteModal.sent ? 'Close' : 'Cancel'}
+              </button>
+              {!inviteModal.sent && (
+                <button className="btn btn-primary" disabled={inviteModal.sending || !inviteModal.email.trim()} onClick={sendInvite}>
+                  {inviteModal.sending ? <><span className="spinner" style={{ width: 11, height: 11 }} /> Sending…</> : 'Send Invite'}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ── Log ── */}
