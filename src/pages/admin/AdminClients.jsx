@@ -13,19 +13,21 @@ function reqLabel(st) {
 export default function AdminClients() {
   const navigate = useNavigate()
 
-  // ── Data ────────────────────────────────────────────────────────────────────
-  const [profiles, setProfiles] = useState([])
-  const [jobMap,   setJobMap]   = useState({})  // recruiter_id → Job[]
-  const [candMap,  setCandMap]  = useState({})  // job_id → count
-  const [loading,  setLoading]  = useState(true)
+  // ── Data ─────────────────────────────────────────────────────────────────────
+  const [profiles,      setProfiles]      = useState([])
+  const [jobMap,        setJobMap]        = useState({})   // client_id → Job[]
+  const [candMap,       setCandMap]       = useState({})   // job_id → count
+  const [allRecruiters, setAllRecruiters] = useState([])   // all recruiter profiles
+  const [rcMap,         setRcMap]         = useState({})   // client_id → recruiter profile[]
+  const [loading,       setLoading]       = useState(true)
 
-  // ── UI state ─────────────────────────────────────────────────────────────────
+  // ── UI state ──────────────────────────────────────────────────────────────────
   const [search,       setSearch]       = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [sortBy,       setSortBy]       = useState('newest')
   const [page,         setPage]         = useState(1)
 
-  // ── Invite ───────────────────────────────────────────────────────────────────
+  // ── Invite client ─────────────────────────────────────────────────────────────
   const [showInvite, setShowInvite] = useState(false)
   const [invEmail,   setInvEmail]   = useState('')
   const [invCompany, setInvCompany] = useState('')
@@ -33,6 +35,12 @@ export default function AdminClients() {
   const [inviting,   setInviting]   = useState(false)
   const [invError,   setInvError]   = useState('')
   const [invResult,  setInvResult]  = useState(null)
+
+  // ── Assign recruiter modal ────────────────────────────────────────────────────
+  const [assignModal,  setAssignModal]  = useState(null) // client profile
+  const [assignRecId,  setAssignRecId]  = useState('')
+  const [assigning,    setAssigning]    = useState(false)
+  const [assignError,  setAssignError]  = useState('')
 
   useEffect(() => { load() }, [])
   useEffect(() => { setPage(1) }, [search, statusFilter, sortBy])
@@ -42,10 +50,14 @@ export default function AdminClients() {
       { data: profileData },
       { data: jobData },
       { data: candData },
+      { data: recData },
+      { data: rcData },
     ] = await Promise.all([
       supabase.from('profiles').select('*').eq('user_role', 'client').order('created_at', { ascending: false }),
       supabase.from('jobs').select('id, recruiter_id, status, created_at'),
       supabase.from('candidates').select('job_id'),
+      supabase.from('profiles').select('id, full_name, email').eq('user_role', 'recruiter').order('full_name'),
+      supabase.from('recruiter_clients').select('recruiter_id, client_id, profiles!recruiter_clients_recruiter_id_fkey(id, full_name, email)'),
     ])
 
     const jm = {}
@@ -56,13 +68,22 @@ export default function AdminClients() {
     const cm = {}
     ;(candData ?? []).forEach(c => { cm[c.job_id] = (cm[c.job_id] ?? 0) + 1 })
 
+    // client_id → recruiter profiles[]
+    const rm = {}
+    ;(rcData ?? []).forEach(r => {
+      if (!rm[r.client_id]) rm[r.client_id] = []
+      if (r.profiles) rm[r.client_id].push(r.profiles)
+    })
+
     setProfiles(profileData ?? [])
     setJobMap(jm)
     setCandMap(cm)
+    setAllRecruiters(recData ?? [])
+    setRcMap(rm)
     setLoading(false)
   }
 
-  // ── Per-client helpers ───────────────────────────────────────────────────────
+  // ── Per-client helpers ────────────────────────────────────────────────────────
   function clientStats(p) {
     const jobs   = jobMap[p.id] ?? []
     const active = jobs.filter(j => j.status === 'active')
@@ -77,7 +98,7 @@ export default function AdminClients() {
     return 'inactive'
   }
 
-  // ── Global stats ─────────────────────────────────────────────────────────────
+  // ── Global stats ──────────────────────────────────────────────────────────────
   const totalClients   = profiles.length
   const activeClients  = profiles.filter(p => clientStatus(p) === 'active').length
   const totalOpenRoles = Object.values(jobMap).flat().filter(j => j.status === 'active').length
@@ -94,13 +115,13 @@ export default function AdminClients() {
     .sort((a, b) => {
       if (sortBy === 'company') return (a.company_name ?? '').localeCompare(b.company_name ?? '')
       if (sortBy === 'jobs')    return (jobMap[b.id]?.length ?? 0) - (jobMap[a.id]?.length ?? 0)
-      return 0 // newest — DB already orders desc
+      return 0
     })
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const pageItems  = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
-  // ── Invite handlers ──────────────────────────────────────────────────────────
+  // ── Invite handlers ───────────────────────────────────────────────────────────
   function openInvite() {
     setInvEmail(''); setInvCompany(''); setInvContact(''); setInvError('')
     setShowInvite(true)
@@ -121,7 +142,6 @@ export default function AdminClients() {
         }),
       })
       const result = await res.json()
-      console.log('Edge function response:', res.status, result)
       if (!res.ok) throw new Error(result.error || 'Invite failed')
       setInvResult({ email: invEmail.trim().toLowerCase(), password: result.tempPassword, emailSent: result.emailSent })
       setShowInvite(false)
@@ -147,6 +167,39 @@ export default function AdminClients() {
     if (!error) setProfiles(p => p.filter(x => x.id !== c.id))
   }
 
+  // ── Assign recruiter handlers ─────────────────────────────────────────────────
+  function openAssign(client) {
+    setAssignModal(client)
+    setAssignRecId('')
+    setAssignError('')
+  }
+
+  async function handleAssign() {
+    if (!assignRecId || !assignModal) return
+    setAssigning(true); setAssignError('')
+    const { error } = await supabase.from('recruiter_clients').insert({
+      recruiter_id: assignRecId,
+      client_id: assignModal.id,
+    })
+    setAssigning(false)
+    if (error) { setAssignError(error.message); return }
+    setAssignModal(null)
+    await load()
+  }
+
+  async function handleUnassign(clientId, recruiterId) {
+    await supabase.from('recruiter_clients').delete()
+      .eq('recruiter_id', recruiterId)
+      .eq('client_id', clientId)
+    await load()
+  }
+
+  // Recruiters not yet assigned to this client
+  function unassignedRecruiters(clientId) {
+    const already = (rcMap[clientId] ?? []).map(r => r.id)
+    return allRecruiters.filter(r => !already.includes(r.id))
+  }
+
   if (loading) return <div className="page"><span className="spinner" /></div>
 
   return (
@@ -154,7 +207,7 @@ export default function AdminClients() {
       <div className="page-head">
         <div>
           <h2>Clients</h2>
-          <p>{totalClients} recruiter account{totalClients !== 1 ? 's' : ''}</p>
+          <p>{totalClients} client account{totalClients !== 1 ? 's' : ''}</p>
         </div>
         <button className="btn btn-primary" onClick={openInvite}>+ Invite Client</button>
       </div>
@@ -222,61 +275,73 @@ export default function AdminClients() {
               : 'No clients match this filter.'}
           </div>
         ) : (
-          <>
-            <div className="client-table-head">
-              <span>Company</span>
-              <span>Email</span>
-              <span style={{ textAlign: 'right' }}>Active Jobs</span>
-              <span style={{ textAlign: 'right' }}>Candidates</span>
-              <span>Status</span>
-              <span>Last Active</span>
-              <span>Actions</span>
-            </div>
+          pageItems.map(c => {
+            const { active, jobs, cands } = clientStats(c)
+            const st   = clientStatus(c)
+            const scfg = reqLabel(st)
+            const lastActive = c.last_seen_at ?? c.first_login_at ?? c.created_at
+            const assignedRecs = rcMap[c.id] ?? []
+            return (
+              <div key={c.id} style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)' }}>
+                {/* Top row */}
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+                  <div className="profile-avatar" style={{ width: 36, height: 36, fontSize: 15, borderRadius: 'var(--r)', flexShrink: 0 }}>
+                    {(c.company_name ?? c.email ?? '?')[0].toUpperCase()}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <span style={{ fontWeight: 500, fontSize: 13, color: 'var(--text)' }}>{c.company_name ?? '—'}</span>
+                      {c.full_name && <span style={{ fontSize: 11, color: 'var(--text-3)' }}>{c.full_name}</span>}
+                      <span className={`badge ${scfg.cls}`} style={{ fontSize: 10, ...(st === 'inactive' ? { color: 'var(--text-3)', background: 'var(--surface2)' } : {}) }}>{scfg.label}</span>
+                    </div>
+                    <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-3)', marginTop: 2 }}>{c.email}</div>
 
-            {pageItems.map(c => {
-              const { active, jobs, cands } = clientStats(c)
-              const st   = clientStatus(c)
-              const scfg = reqLabel(st)
-              const lastActive = c.last_seen_at ?? c.first_login_at ?? c.created_at
-              return (
-                <div key={c.id} className="client-table-row">
-                  <div>
-                    <div style={{ fontWeight: 500, fontSize: 13, color: 'var(--text)' }}>{c.company_name ?? '—'}</div>
-                    {c.full_name && <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 1 }}>{c.full_name}</div>}
+                    {/* Stats row */}
+                    <div style={{ display: 'flex', gap: 16, marginTop: 6, flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 11, color: 'var(--text-3)' }}>
+                        <span style={{ fontFamily: 'var(--font-mono)', color: active.length > 0 ? 'var(--green)' : 'var(--text-3)', fontWeight: 600 }}>{active.length}</span> active job{active.length !== 1 ? 's' : ''}
+                        {jobs.length > active.length ? ` / ${jobs.length} total` : ''}
+                      </span>
+                      <span style={{ fontSize: 11, color: 'var(--text-3)' }}>
+                        <span style={{ fontFamily: 'var(--font-mono)', color: cands > 0 ? 'var(--text)' : 'var(--text-3)', fontWeight: 600 }}>{cands}</span> candidate{cands !== 1 ? 's' : ''}
+                      </span>
+                      <span style={{ fontSize: 11, color: 'var(--text-3)' }}>
+                        last active {new Date(lastActive).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: '2-digit' })}
+                      </span>
+                    </div>
+
+                    {/* Recruiter assignment row */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-3)', marginRight: 2 }}>Recruiter:</span>
+                      {assignedRecs.length === 0 ? (
+                        <span style={{ fontSize: 11, color: 'var(--text-3)', fontStyle: 'italic' }}>None assigned</span>
+                      ) : (
+                        assignedRecs.map(r => (
+                          <span key={r.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, background: 'var(--accent-d)', border: '1px solid var(--border)', borderRadius: 'var(--r)', padding: '2px 8px', color: 'var(--accent)' }}>
+                            {r.full_name || r.email}
+                            <button
+                              onClick={() => handleUnassign(c.id, r.id)}
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)', fontSize: 13, lineHeight: 1, padding: '0 0 0 2px' }}
+                              title="Remove assignment"
+                            >×</button>
+                          </span>
+                        ))
+                      )}
+                      <button
+                        className="btn btn-secondary"
+                        style={{ fontSize: 10, padding: '2px 8px' }}
+                        onClick={() => openAssign(c)}
+                      >+ Assign Recruiter</button>
+                    </div>
                   </div>
 
-                  <div style={{ fontSize: 12, color: 'var(--text-2)', fontFamily: 'var(--font-mono)', wordBreak: 'break-all' }}>
-                    {c.email}
-                  </div>
-
-                  <div style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', fontSize: 13, color: active.length > 0 ? 'var(--green)' : 'var(--text-3)' }}>
-                    {active.length}
-                    {jobs.length > active.length && (
-                      <span style={{ fontSize: 10, color: 'var(--text-3)', marginLeft: 4 }}>/ {jobs.length}</span>
-                    )}
-                  </div>
-
-                  <div style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', fontSize: 13, color: cands > 0 ? 'var(--text)' : 'var(--text-3)' }}>
-                    {cands}
-                  </div>
-
-                  <div>
-                    <span
-                      className={`badge ${scfg.cls}`}
-                      style={{ fontSize: 10, ...(st === 'inactive' ? { color: 'var(--text-3)', background: 'var(--surface2)', borderColor: 'var(--border)' } : {}) }}
-                    >{scfg.label}</span>
-                  </div>
-
-                  <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-3)' }}>
-                    {new Date(lastActive).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: '2-digit' })}
-                  </div>
-
-                  <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                  {/* Actions */}
+                  <div style={{ display: 'flex', gap: 5, flexShrink: 0, flexWrap: 'wrap' }}>
                     <button
                       className="btn btn-secondary"
                       style={{ fontSize: 10, padding: '3px 8px' }}
                       onClick={() => navigate('/admin/jobs', { state: { clientId: c.id, clientName: c.company_name || c.email } })}
-                    >View Jobs</button>
+                    >Jobs</button>
                     <button
                       className="btn btn-secondary"
                       style={{ fontSize: 10, padding: '3px 8px', color: 'var(--accent)' }}
@@ -289,34 +354,62 @@ export default function AdminClients() {
                     >Remove</button>
                   </div>
                 </div>
-              )
-            })}
-          </>
+              </div>
+            )
+          })
         )}
 
         {/* ── Pagination ── */}
         {totalPages > 1 && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, padding: '16px 0', borderTop: '1px solid var(--border)', marginTop: 8 }}>
-            <button
-              className="btn btn-secondary"
-              style={{ fontSize: 12, padding: '5px 14px' }}
-              disabled={page <= 1}
-              onClick={() => setPage(p => p - 1)}
-            >← Previous</button>
-            <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--text-3)' }}>
-              Page {page} of {totalPages}
-            </span>
-            <button
-              className="btn btn-secondary"
-              style={{ fontSize: 12, padding: '5px 14px' }}
-              disabled={page >= totalPages}
-              onClick={() => setPage(p => p + 1)}
-            >Next →</button>
+            <button className="btn btn-secondary" style={{ fontSize: 12, padding: '5px 14px' }} disabled={page <= 1} onClick={() => setPage(p => p - 1)}>← Previous</button>
+            <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--text-3)' }}>Page {page} of {totalPages}</span>
+            <button className="btn btn-secondary" style={{ fontSize: 12, padding: '5px 14px' }} disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>Next →</button>
           </div>
         )}
       </div>
 
-      {/* ── Invite Modal ── */}
+      {/* ── Assign Recruiter Modal ── */}
+      {assignModal && (
+        <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) setAssignModal(null) }}>
+          <div className="modal" style={{ maxWidth: 420 }}>
+            <div className="modal-head">
+              <h3>Assign Recruiter to {assignModal.company_name || assignModal.email}</h3>
+              <button className="modal-close" onClick={() => setAssignModal(null)}>×</button>
+            </div>
+            <div className="modal-body">
+              {unassignedRecruiters(assignModal.id).length === 0 ? (
+                <p style={{ fontSize: 13, color: 'var(--text-2)' }}>
+                  {allRecruiters.length === 0
+                    ? 'No recruiters exist yet. Invite one from the Recruiters page first.'
+                    : 'All recruiters are already assigned to this client.'}
+                </p>
+              ) : (
+                <>
+                  <div className="field">
+                    <label>Select Recruiter</label>
+                    <select value={assignRecId} onChange={e => setAssignRecId(e.target.value)}>
+                      <option value="">— choose recruiter —</option>
+                      {unassignedRecruiters(assignModal.id).map(r => (
+                        <option key={r.id} value={r.id}>{r.full_name || r.email}</option>
+                      ))}
+                    </select>
+                  </div>
+                  {assignError && <div className="error-banner" style={{ marginTop: 12 }}>{assignError}</div>}
+                  <div className="form-actions" style={{ marginTop: 20 }}>
+                    <button className="btn btn-primary" disabled={!assignRecId || assigning} onClick={handleAssign}>
+                      {assigning ? <><span className="spinner" style={{ width: 12, height: 12 }} /> Assigning…</> : 'Assign'}
+                    </button>
+                    <button className="btn btn-secondary" onClick={() => setAssignModal(null)}>Cancel</button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Invite Client Modal ── */}
       {showInvite && (
         <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) setShowInvite(false) }}>
           <div className="modal">
@@ -328,7 +421,7 @@ export default function AdminClients() {
               <div className="form-grid">
                 <div className="field">
                   <label>Company Name *</label>
-                  <input type="text" placeholder="Acme Recruiting" value={invCompany} onChange={e => setInvCompany(e.target.value)} autoFocus />
+                  <input type="text" placeholder="Acme Corp" value={invCompany} onChange={e => setInvCompany(e.target.value)} autoFocus />
                 </div>
                 <div className="field">
                   <label>Contact Name</label>
@@ -355,7 +448,7 @@ export default function AdminClients() {
         </div>
       )}
 
-      {/* ── Result Modal ── */}
+      {/* ── Invite Result Modal ── */}
       {invResult && (
         <div className="modal-overlay">
           <div className="modal" style={{ maxWidth: 480 }}>
@@ -363,20 +456,11 @@ export default function AdminClients() {
               <h3 style={{ color: 'var(--green)' }}>Client Invited Successfully!</h3>
             </div>
             <div className="modal-body">
-              <div style={{
-                padding: '10px 14px', marginBottom: 20, fontSize: 13,
-                background: invResult.emailSent ? 'var(--green-d)' : 'var(--amber-d)',
-                borderLeft: `2px solid ${invResult.emailSent ? 'var(--green)' : 'var(--amber)'}`,
-                color: invResult.emailSent ? 'var(--green)' : 'var(--amber)',
-              }}>
-                {invResult.emailSent
-                  ? `✓ Welcome email sent to ${invResult.email}`
-                  : '⚠ Email failed — copy and share manually'}
+              <div style={{ padding: '10px 14px', marginBottom: 20, fontSize: 13, background: invResult.emailSent ? 'var(--green-d)' : 'var(--amber-d)', borderLeft: `2px solid ${invResult.emailSent ? 'var(--green)' : 'var(--amber)'}`, color: invResult.emailSent ? 'var(--green)' : 'var(--amber)' }}>
+                {invResult.emailSent ? `✓ Welcome email sent to ${invResult.email}` : '⚠ Email failed — copy and share manually'}
               </div>
               <div style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 'var(--r)', padding: '16px 20px', marginBottom: 20 }}>
-                <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--text-3)', marginBottom: 14 }}>
-                  Login Details
-                </div>
+                <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--text-3)', marginBottom: 14 }}>Login Details</div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                   <div style={{ display: 'flex', gap: 12, alignItems: 'baseline' }}>
                     <span style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--font-mono)', width: 72, flexShrink: 0 }}>Portal</span>
@@ -388,19 +472,13 @@ export default function AdminClients() {
                   </div>
                   <div style={{ display: 'flex', gap: 12, alignItems: 'baseline' }}>
                     <span style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--font-mono)', width: 72, flexShrink: 0 }}>Password</span>
-                    <span style={{ fontSize: 24, color: 'var(--accent)', fontFamily: 'var(--font-mono)', fontWeight: 700, letterSpacing: '0.15em' }}>
-                      {invResult.password}
-                    </span>
+                    <span style={{ fontSize: 24, color: 'var(--accent)', fontFamily: 'var(--font-mono)', fontWeight: 700, letterSpacing: '0.15em' }}>{invResult.password}</span>
                   </div>
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 10 }}>
-                <button className="btn btn-secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={copyDetails}>
-                  Copy Login Details
-                </button>
-                <button className="btn btn-primary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setInvResult(null)}>
-                  Done
-                </button>
+                <button className="btn btn-secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={copyDetails}>Copy Login Details</button>
+                <button className="btn btn-primary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setInvResult(null)}>Done</button>
               </div>
             </div>
           </div>
