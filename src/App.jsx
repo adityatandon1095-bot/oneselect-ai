@@ -15,6 +15,10 @@ import RecruiterJobs from './pages/recruiter/RecruiterJobs'
 import RecruiterCandidates from './pages/recruiter/RecruiterCandidates'
 import RecruiterReports from './pages/recruiter/RecruiterReports'
 import RecruiterSettings from './pages/recruiter/RecruiterSettings'
+import CandidateLayout from './pages/candidate/CandidateLayout'
+import CandidateDashboard from './pages/candidate/CandidateDashboard'
+import CandidateInterview from './pages/candidate/CandidateInterview'
+import CandidateProfile from './pages/candidate/CandidateProfile'
 import './App.css'
 
 class ErrorBoundary extends Component {
@@ -55,12 +59,18 @@ function Loader() {
   )
 }
 
+function roleHome(role) {
+  if (role === 'admin') return '/admin/dashboard'
+  if (role === 'candidate') return '/candidate/dashboard'
+  return '/recruiter/dashboard'
+}
+
 function ProtectedRoute({ children, role }) {
   const { user, profile, profileLoading, loading } = useAuth()
   if (loading || profileLoading) return <Loader />
   if (!user) return <Navigate to="/login" replace />
   if (role && profile && profile.user_role !== role) {
-    return <Navigate to={profile.user_role === 'admin' ? '/admin/dashboard' : '/recruiter/dashboard'} replace />
+    return <Navigate to={roleHome(profile.user_role)} replace />
   }
   return children
 }
@@ -69,7 +79,7 @@ function RootRedirect() {
   const { user, profile, profileLoading, loading } = useAuth()
   if (loading || profileLoading) return <Loader />
   if (!user) return <Navigate to="/login" replace />
-  return <Navigate to={profile?.user_role === 'admin' ? '/admin/dashboard' : '/recruiter/dashboard'} replace />
+  return <Navigate to={roleHome(profile?.user_role)} replace />
 }
 
 export default function App() {
@@ -98,6 +108,13 @@ export default function App() {
             <Route path="candidates" element={<RecruiterCandidates />} />
             <Route path="reports" element={<RecruiterReports />} />
             <Route path="settings" element={<RecruiterSettings />} />
+          </Route>
+
+          <Route path="/candidate" element={<ProtectedRoute role="candidate"><CandidateLayout /></ProtectedRoute>}>
+            <Route index element={<CandidateDashboard />} />
+            <Route path="dashboard" element={<CandidateDashboard />} />
+            <Route path="interview/:source/:matchId" element={<CandidateInterview />} />
+            <Route path="profile" element={<CandidateProfile />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />

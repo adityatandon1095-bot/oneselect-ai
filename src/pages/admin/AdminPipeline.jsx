@@ -228,6 +228,18 @@ export default function AdminPipeline() {
 
         if (error) throw new Error(error.message)
         addLog(`✓ Saved ${parsed.name}`, 'ok')
+
+        // Auto-invite candidate to the portal
+        if (parsed.email) {
+          const companyName = clients.find(c => c.id === clientId)?.company_name ?? ''
+          supabase.functions.invoke('invite-candidate', {
+            body: { email: parsed.email, name: parsed.name, job_title: activeJob.title, company_name: companyName },
+          }).then(({ error: inviteErr }) => {
+            if (inviteErr) addLog(`⚠ Invite email failed for ${parsed.name}: ${inviteErr.message}`, 'err')
+            else addLog(`✉ Invite sent to ${parsed.email}`, 'ok')
+          })
+        }
+
         patchFile(entry.id, { status: 'done', parsed })
         setCandidates(p => [...p, { ...saved, _status: 'parsed' }])
       } catch (err) {
