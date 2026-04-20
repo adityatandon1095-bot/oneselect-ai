@@ -139,7 +139,7 @@ export default function CandidateDashboard() {
       // 2. Talent pool job_matches
       const { data: poolRecord, error: poolErr } = await supabase
         .from('talent_pool')
-        .select('id, job_matches(id, job_id, match_pass, match_score, video_urls, integrity_score, integrity_flags, scores, recommendation, jobs(id, title))')
+        .select('id, job_matches(id, job_id, match_pass, match_score, video_urls, integrity_score, integrity_flags, scores, jobs(id, title))')
         .eq('email', email)
         .maybeSingle()
 
@@ -180,7 +180,7 @@ export default function CandidateDashboard() {
           integrity_score: m.integrity_score,
           integrity_flags: m.integrity_flags,
           scores: m.scores,
-          recommendation: m.recommendation ?? m.scores?.recommendation ?? null,
+          recommendation: m.scores?.recommendation ?? null,
           job_id: m.job_id,
         })
       }
