@@ -23,7 +23,7 @@ export default function CandidateInterview() {
       if (source === 'cv') {
         const { data: candidate, error: err } = await supabase
           .from('candidates')
-          .select('id, full_name, email, job_id, video_urls, jobs(id, title, description, required_skills, experience_years)')
+          .select('id, full_name, email, candidate_role, job_id, video_urls, jobs(id, title, description, required_skills, experience_years)')
           .eq('id', matchId)
           .single()
 
@@ -33,7 +33,7 @@ export default function CandidateInterview() {
 
         setData({
           job: candidate.jobs,
-          candidate: { id: candidate.id, full_name: candidate.full_name, email: candidate.email },
+          candidate: { id: candidate.id, full_name: candidate.full_name, email: candidate.email, candidate_role: candidate.candidate_role ?? '' },
           matchId: candidate.id,
           isFromPool: false,
         })
@@ -41,7 +41,7 @@ export default function CandidateInterview() {
         // pool match
         const { data: match, error: matchErr } = await supabase
           .from('job_matches')
-          .select('id, job_id, video_urls, jobs(id, title, description, required_skills, experience_years), talent_pool(id, full_name, email)')
+          .select('id, job_id, video_urls, jobs(id, title, description, required_skills, experience_years), talent_pool(id, full_name, email, candidate_role)')
           .eq('id', matchId)
           .single()
 
@@ -50,7 +50,7 @@ export default function CandidateInterview() {
 
         setData({
           job: match.jobs,
-          candidate: { id: match.talent_pool.id, full_name: match.talent_pool.full_name, email: match.talent_pool.email },
+          candidate: { id: match.talent_pool.id, full_name: match.talent_pool.full_name, email: match.talent_pool.email, candidate_role: match.talent_pool.candidate_role ?? '' },
           matchId: match.id,
           isFromPool: true,
         })

@@ -45,6 +45,7 @@ export default function AdminClients() {
   // ── Remove confirmation modal ─────────────────────────────────────────────────
   const [removeModal,  setRemoveModal]  = useState(null) // client profile
   const [removing,     setRemoving]     = useState(false)
+  const [removeError,  setRemoveError]  = useState('')
 
   useEffect(() => { load() }, [])
   useEffect(() => { setPage(1) }, [search, statusFilter, sortBy])
@@ -138,15 +139,29 @@ export default function AdminClients() {
       const { data: { session } } = await supabase.auth.getSession()
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/invite-user`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+        },
         body: JSON.stringify({
           email:        invEmail.trim().toLowerCase(),
           company_name: invCompany.trim(),
           contact_name: invContact.trim(),
+          role:         'client',
         }),
       })
       const result = await res.json()
-      if (!res.ok) throw new Error(result.error || 'Invite failed')
+      if (!res.ok) throw new Error(result.error || result.message || 'Invite failed')
+      // Force-correct the role — deployed edge function may be stale and use wrong default
+      if (result.userId) {
+        await supabase.from('profiles').update({
+          user_role:    'client',
+          company_name: invCompany.trim() || null,
+          full_name:    invContact.trim() || null,
+          first_login:  true,
+        }).eq('id', result.userId)
+      }
       setInvResult({ email: invEmail.trim().toLowerCase(), password: result.tempPassword, emailSent: result.emailSent })
       setShowInvite(false)
       await load()
@@ -167,16 +182,32 @@ export default function AdminClients() {
   async function confirmRemove() {
     if (!removeModal) return
     setRemoving(true)
-    // Call delete-user to remove both profile AND auth account (frees email for re-invite)
-    const { data: { session } } = await supabase.auth.getSession()
-    const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-user`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-      body: JSON.stringify({ userId: removeModal.id }),
-    })
-    if (res.ok) setProfiles(p => p.filter(x => x.id !== removeModal.id))
-    setRemoving(false)
-    setRemoveModal(null)
+    setRemoveError('')
+    try {
+      // 1. Remove recruiter_clients assignments (in case FK has no CASCADE)
+      await supabase.from('recruiter_clients').delete().eq('client_id', removeModal.id)
+      // 2. Delete the profile row directly — admin RLS policy allows this
+      const { error: profileErr } = await supabase.from('profiles').delete().eq('id', removeModal.id)
+      if (profileErr) throw new Error(profileErr.message)
+      // 3. Best-effort: delete auth account so the email can be freed.
+      //    Fire-and-forget — never await this so a slow/undeployed function
+      //    cannot block the UI from resolving.
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (!session) return
+        fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-user`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+          body: JSON.stringify({ userId: removeModal.id }),
+        }).catch(() => {})
+      }).catch(() => {})
+
+      setProfiles(p => p.filter(x => x.id !== removeModal.id))
+      setRemoveModal(null)
+    } catch (err) {
+      setRemoveError(err.message)
+    } finally {
+      setRemoving(false)
+    }
   }
 
   // ── Assign recruiter handlers ─────────────────────────────────────────────────
@@ -362,7 +393,7 @@ export default function AdminClients() {
                     <button
                       className="btn btn-secondary"
                       style={{ fontSize: 10, padding: '3px 8px', color: 'var(--red)' }}
-                      onClick={() => setRemoveModal(c)}
+                      onClick={() => { setRemoveModal(c); setRemoveError('') }}
                     >Remove</button>
                   </div>
                 </div>
@@ -393,6 +424,7 @@ export default function AdminClients() {
               <p style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.7, marginBottom: 16 }}>
                 Are you sure you want to remove <strong>{removeModal.company_name || removeModal.email}</strong>?
               </p>
+              {removeError && <div className="error-banner" style={{ marginBottom: 14 }}>{removeError}</div>}
               <div style={{ padding: '12px 14px', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 'var(--r)', marginBottom: 20, fontSize: 12, color: 'var(--text-3)', lineHeight: 1.7 }}>
                 · Their jobs and candidates are <strong style={{ color: 'var(--text-2)' }}>kept</strong> in the database<br />
                 · Their recruiter assignments will be removed<br />

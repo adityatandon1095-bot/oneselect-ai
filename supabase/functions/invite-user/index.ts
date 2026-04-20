@@ -40,12 +40,14 @@ serve(async (req) => {
     for (let i = 0; i < 4; i++) tempPassword += chars[Math.floor(Math.random() * chars.length)]
 
     // Try to create the auth user
+    // role is embedded in user_metadata so Login.jsx can self-correct the profile
+    // even if a future DB write fails or the profile has a stale role.
     let userId: string
     const { data: userData, error: createError } = await admin.auth.admin.createUser({
       email,
       password: tempPassword,
       email_confirm: true,
-      user_metadata: { company_name, contact_name }
+      user_metadata: { company_name, contact_name, role },
     })
 
     if (createError) {
@@ -70,7 +72,7 @@ serve(async (req) => {
       await admin.auth.admin.updateUserById(existing.id, {
         password: tempPassword,
         email_confirm: true,
-        user_metadata: { company_name, contact_name }
+        user_metadata: { company_name, contact_name, role },
       })
 
       // Upsert their profile (re-activates them with fresh first_login flag)

@@ -11,10 +11,10 @@ import JDWizard from '../../components/JDWizard'
 function reqStatus(cands) {
   if (!cands.length) return 'awaiting'
   const hasStrong = cands.some(c =>
-    c.match_pass && ['Strong Hire', 'Hire'].includes(c.interview_scores?.recommendation)
+    c.match_pass && ['Strong Hire', 'Hire'].includes(c.scores?.recommendation)
   )
   if (hasStrong) return 'met'
-  const pendingInterview = cands.some(c => c.match_pass && !c.interview_scores)
+  const pendingInterview = cands.some(c => c.match_pass && !c.scores)
   if (pendingInterview) return 'progress'
   return 'attention'
 }
@@ -81,7 +81,7 @@ export default function AdminJobs() {
     if (ids.length) {
       const { data } = await supabase
         .from('candidates')
-        .select('job_id, match_pass, match_score, interview_scores')
+        .select('job_id, match_pass, match_score, scores')
         .in('job_id', ids)
       candData = data ?? []
     }
@@ -217,7 +217,7 @@ export default function AdminJobs() {
               const rq         = reqStatus(cands)
               const rqCfg      = REQ_CFG[rq]
               const screened   = cands.filter(c => c.match_score != null).length
-              const interviewed = cands.filter(c => c.interview_scores != null).length
+              const interviewed = cands.filter(c => c.scores != null).length
               const qualified  = cands.filter(c => c.match_pass).length
               const topScore   = cands.reduce((mx, c) => Math.max(mx, c.match_score ?? 0), 0)
 

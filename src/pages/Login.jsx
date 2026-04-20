@@ -20,8 +20,17 @@ export default function Login() {
   const [loading, setLoading]     = useState(false)
   const navigate = useNavigate()
 
-  // Detect when Supabase redirects back with a PASSWORD_RECOVERY token
+  // Detect when Supabase redirects back with a PASSWORD_RECOVERY token.
+  // The Supabase client processes the URL hash immediately on load — before useEffect
+  // runs — so the PASSWORD_RECOVERY event can fire before the listener is attached.
+  // We guard against that by also checking the URL hash/params directly on mount.
   useEffect(() => {
+    const hashParams   = new URLSearchParams(window.location.hash.slice(1))
+    const searchParams = new URLSearchParams(window.location.search)
+    if (hashParams.get('type') === 'recovery' || searchParams.get('type') === 'recovery') {
+      setMode('reset')
+    }
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'PASSWORD_RECOVERY') {
         setMode('reset')
@@ -41,15 +50,46 @@ export default function Login() {
     const { data, error: authError } = await supabase.auth.signInWithPassword({ email, password })
     if (authError) { setError(authError.message); setLoading(false); return }
 
+    const userId   = data.user.id
+    const metaRole = data.user.user_metadata?.role  // set by invite-user edge function
+
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('user_role')
-      .eq('id', data.user.id)
+      .eq('id', userId)
       .single()
 
     if (profileError || !profile) {
-      setError('Could not load your profile. Please try again or contact support.')
-      await supabase.auth.signOut()
+      // Profile row missing — create it from user_metadata so the user isn't locked out.
+      // This covers the edge case where the edge function created the auth user but the
+      // profile insert failed, or where the profile was deleted and the user re-invited.
+      const role = metaRole || 'client'
+      const { error: insertError } = await supabase.from('profiles').insert({
+        id:           userId,
+        user_role:    role,
+        email:        data.user.email,
+        company_name: data.user.user_metadata?.company_name ?? null,
+        full_name:    data.user.user_metadata?.contact_name ?? data.user.user_metadata?.full_name ?? null,
+        first_login:  true,
+      })
+      if (insertError) {
+        setError('Could not load your profile. Please try again or contact support.')
+        await supabase.auth.signOut()
+        setLoading(false)
+        return
+      }
+      navigate(roleHome(role), { replace: true })
+      setLoading(false)
+      return
+    }
+
+    // Self-heal: if user_metadata has a role and it disagrees with the profile,
+    // the profile was probably written by a stale edge function. Correct it now —
+    // users are allowed to update their own profile row (profiles_update_own policy).
+    const validRoles = ['admin', 'recruiter', 'client', 'candidate']
+    if (metaRole && validRoles.includes(metaRole) && profile.user_role !== metaRole) {
+      await supabase.from('profiles').update({ user_role: metaRole }).eq('id', userId)
+      navigate(roleHome(metaRole), { replace: true })
       setLoading(false)
       return
     }

@@ -5,10 +5,12 @@ import { useAuth } from '../../lib/AuthContext'
 
 // Map raw DB state → candidate-friendly label + colour
 function getStage(app) {
-  if (app.recommendation === 'Strong Hire' || app.recommendation === 'Hire') {
+  // recommendation may be a top-level column (job_matches) or nested inside scores JSON (candidates)
+  const rec = app.recommendation ?? app.scores?.recommendation
+  if (rec === 'Strong Hire' || rec === 'Hire') {
     return { label: 'Shortlisted', color: 'var(--green)', dot: '#22c55e' }
   }
-  if (app.interview_scores && Object.keys(app.interview_scores).length > 0) {
+  if (app.scores && Object.keys(app.scores).length > 0) {
     return { label: 'Under Review', color: 'var(--amber)', dot: '#f59e0b' }
   }
   if (app.video_urls && app.video_urls.length > 0) {
@@ -129,7 +131,7 @@ export default function CandidateDashboard() {
       // 1. CV-uploaded candidates matched to jobs
       const { data: cvCandidates, error: cvErr } = await supabase
         .from('candidates')
-        .select('id, full_name, job_id, match_pass, match_score, video_urls, integrity_score, integrity_flags, interview_scores, recommendation, jobs(id, title)')
+        .select('id, full_name, job_id, match_pass, match_score, video_urls, integrity_score, integrity_flags, scores, jobs(id, title)')
         .eq('email', email)
 
       if (cvErr) throw cvErr
@@ -137,7 +139,7 @@ export default function CandidateDashboard() {
       // 2. Talent pool job_matches
       const { data: poolRecord, error: poolErr } = await supabase
         .from('talent_pool')
-        .select('id, job_matches(id, job_id, match_pass, match_score, video_urls, integrity_score, integrity_flags, interview_scores, recommendation, jobs(id, title))')
+        .select('id, job_matches(id, job_id, match_pass, match_score, video_urls, integrity_score, integrity_flags, scores, recommendation, jobs(id, title))')
         .eq('email', email)
         .maybeSingle()
 
@@ -157,8 +159,8 @@ export default function CandidateDashboard() {
           video_urls: c.video_urls,
           integrity_score: c.integrity_score,
           integrity_flags: c.integrity_flags,
-          interview_scores: c.interview_scores,
-          recommendation: c.recommendation,
+          scores: c.scores,
+          recommendation: c.scores?.recommendation ?? null,
           job_id: c.job_id,
         })
       }
@@ -177,8 +179,8 @@ export default function CandidateDashboard() {
           video_urls: m.video_urls,
           integrity_score: m.integrity_score,
           integrity_flags: m.integrity_flags,
-          interview_scores: m.interview_scores,
-          recommendation: m.recommendation,
+          scores: m.scores,
+          recommendation: m.recommendation ?? m.scores?.recommendation ?? null,
           job_id: m.job_id,
         })
       }

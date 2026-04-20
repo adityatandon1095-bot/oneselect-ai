@@ -9,7 +9,7 @@ Return ONLY valid JSON: {"matchScore":number,"pass":boolean,"reason":"string","r
 
 // Fetches all 'available' candidates from talent_pool, scores them against a job,
 // and upserts results into job_matches. Returns the number of candidates that passed.
-export async function triggerTalentPoolMatch(jobId, { onProgress, onLog } = {}) {
+export async function triggerTalentPoolMatch(jobId, { onProgress, onLog, onResult } = {}) {
   const { data: job } = await supabase.from('jobs').select('*').eq('id', jobId).single()
   if (!job) throw new Error('Job not found')
 
@@ -43,6 +43,7 @@ export async function triggerTalentPoolMatch(jobId, { onProgress, onLog } = {}) 
       }, { onConflict: 'talent_id,job_id' })
       if (s.pass) passCount++
       if (onLog) onLog(`✓ ${c.full_name}: ${s.matchScore}/100 → ${s.pass ? 'PASS' : 'FAIL'}`, s.pass ? 'ok' : '')
+      if (onResult) onResult({ name: c.full_name, score: s.matchScore, pass: s.pass, reason: s.reason, rank: s.rank })
     } catch (err) {
       if (onLog) onLog(`✗ ${c.full_name}: ${err.message}`, 'err')
     }
@@ -71,7 +72,7 @@ export function mapMatchToCandidate(m) {
     match_reason: m.match_reason,
     match_rank: m.match_rank,
     interview_transcript: m.interview_transcript,
-    interview_scores: m.scores,
+    scores: m.scores,
     _status: m.match_score != null ? 'screened' : 'parsed',
   }
 }

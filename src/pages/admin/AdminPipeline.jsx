@@ -133,7 +133,7 @@ export default function AdminPipeline({ allowedClientIds } = {}) {
     setIvStates(Object.fromEntries(loaded.filter(c => c.match_pass).map(c => [c.id, {
       messages: c.interview_transcript ?? [], input: '', loading: false,
       complete: (c.interview_transcript ?? []).length > 0, scoring: false,
-      scores: c.interview_scores ?? null,
+      scores: c.scores ?? null,
     }])))
     if (loaded.filter(c => c.match_pass).length > 0) setSelectedIvId(loaded.find(c => c.match_pass)?.id ?? null)
   }
@@ -347,7 +347,7 @@ export default function AdminPipeline({ allowedClientIds } = {}) {
       if (candidate._fromPool) {
         await supabase.from('job_matches').update({ interview_transcript: messages, scores }).eq('id', candidate._matchId)
       } else {
-        await supabase.from('candidates').update({ interview_transcript: messages, interview_scores: scores }).eq('id', candidate.id)
+        await supabase.from('candidates').update({ interview_transcript: messages, scores }).eq('id', candidate.id)
       }
       patchIv(candidate.id, { scoring: false, scores })
       addLog(`✓ ${candidate.full_name} scored: ${scores.overallScore}/100 — ${scores.recommendation}`, 'ok')

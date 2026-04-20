@@ -56,7 +56,7 @@ export default function ClientDashboard() {
 
     const { data: allCandidates } = await supabase
       .from('candidates')
-      .select('id, full_name, candidate_role, match_score, match_pass, interview_scores, created_at, job_id')
+      .select('id, full_name, candidate_role, match_score, match_pass, scores, created_at, job_id')
       .in('job_id', jobIds)
       .order('created_at', { ascending: false })
 
@@ -66,7 +66,7 @@ export default function ClientDashboard() {
       candidates:  all.length,
       screened:    all.filter(c => c.match_score != null).length,
       passed:      all.filter(c => c.match_pass === true).length,
-      interviewed: all.filter(c => c.interview_scores != null).length,
+      interviewed: all.filter(c => c.scores != null).length,
     })
     setRecentCandidates(all.slice(0, 6))
     setLoading(false)
@@ -110,11 +110,11 @@ export default function ClientDashboard() {
   }
 
   function getStatus(c) {
-    if (c.interview_scores) return {
-      label: c.interview_scores.recommendation ?? 'Interviewed',
-      color: c.interview_scores.recommendation === 'Strong Hire' ? 'var(--green)'  :
-             c.interview_scores.recommendation === 'Hire'        ? 'var(--accent)' :
-             c.interview_scores.recommendation === 'Reject'      ? 'var(--red)'    : 'var(--amber)',
+    if (c.scores) return {
+      label: c.scores.recommendation ?? 'Interviewed',
+      color: c.scores.recommendation === 'Strong Hire' ? 'var(--green)'  :
+             c.scores.recommendation === 'Hire'        ? 'var(--accent)' :
+             c.scores.recommendation === 'Reject'      ? 'var(--red)'    : 'var(--amber)',
       bg:    'var(--accent-d)',
     }
     if (c.match_pass === true)  return { label: 'Awaiting Interview', color: 'var(--amber)', bg: 'var(--amber-d)' }
@@ -299,9 +299,9 @@ export default function ClientDashboard() {
                     <div className="col-sub">{c.candidate_role}</div>
                   </div>
                   <div className="col-right">
-                    {c.interview_scores?.overallScore != null && (
-                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 700, color: c.interview_scores.overallScore >= 70 ? 'var(--green)' : c.interview_scores.overallScore >= 50 ? 'var(--accent)' : 'var(--red)' }}>
-                        {c.interview_scores.overallScore}
+                    {c.scores?.overallScore != null && (
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 700, color: c.scores.overallScore >= 70 ? 'var(--green)' : c.scores.overallScore >= 50 ? 'var(--accent)' : 'var(--red)' }}>
+                        {c.scores.overallScore}
                       </span>
                     )}
                     <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: st.color, background: st.bg, padding: '2px 7px', borderRadius: 'var(--r)', textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap' }}>

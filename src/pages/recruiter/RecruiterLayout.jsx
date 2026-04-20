@@ -2,9 +2,12 @@ import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../lib/AuthContext'
 
 const NAV = [
-  { to: '/recruiter/dashboard', label: 'Dashboard', icon: '◈' },
-  { to: '/recruiter/pipeline',  label: 'Pipeline',  icon: '◐' },
-  { to: '/recruiter/settings',  label: 'Settings',  icon: '◷' },
+  { to: '/recruiter/dashboard',   label: 'Dashboard',   icon: '◈' },
+  { to: '/recruiter/clients',     label: 'Clients',     icon: '◉' },
+  { to: '/recruiter/jobs',        label: 'Jobs',        icon: '◫' },
+  { to: '/recruiter/talent-pool', label: 'Talent Pool', icon: '◭' },
+  { to: '/recruiter/pipeline',    label: 'Pipeline',    icon: '◐' },
+  { to: '/recruiter/settings',    label: 'Settings',    icon: '◷' },
 ]
 
 export default function RecruiterLayout() {

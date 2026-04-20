@@ -40,8 +40,8 @@ export default function ClientReports() {
     if (!ids.length) { setLoading(false); return }
 
     const [{ data: interviewed }, { data: awaiting }] = await Promise.all([
-      supabase.from('candidates').select('*').in('job_id', ids).not('interview_scores', 'is', null).order('match_score', { ascending: false }),
-      supabase.from('candidates').select('id, full_name, candidate_role, match_score, match_pass, job_id').in('job_id', ids).eq('match_pass', true).is('interview_scores', null),
+      supabase.from('candidates').select('*').in('job_id', ids).not('scores', 'is', null).order('match_score', { ascending: false }),
+      supabase.from('candidates').select('id, full_name, candidate_role, match_score, match_pass, job_id').in('job_id', ids).eq('match_pass', true).is('scores', null),
     ])
     setCandidates(interviewed ?? [])
     setPending(awaiting ?? [])
@@ -50,9 +50,9 @@ export default function ClientReports() {
 
   const filtered  = selectedJobId === 'all' ? candidates : candidates.filter(c => c.job_id === selectedJobId)
   const filteredPending = selectedJobId === 'all' ? pending : pending.filter(c => c.job_id === selectedJobId)
-  const sorted    = [...filtered].sort((a, b) => (b.interview_scores?.overallScore ?? 0) - (a.interview_scores?.overallScore ?? 0))
-  const hires     = sorted.filter(c => ['Strong Hire','Hire'].includes(c.interview_scores?.recommendation))
-  const others    = sorted.filter(c => !['Strong Hire','Hire'].includes(c.interview_scores?.recommendation))
+  const sorted    = [...filtered].sort((a, b) => (b.scores?.overallScore ?? 0) - (a.scores?.overallScore ?? 0))
+  const hires     = sorted.filter(c => ['Strong Hire','Hire'].includes(c.scores?.recommendation))
+  const others    = sorted.filter(c => !['Strong Hire','Hire'].includes(c.scores?.recommendation))
 
   if (loading) return <div className="page"><span className="spinner" /></div>
 
@@ -78,7 +78,7 @@ export default function ClientReports() {
           <span className="metric-label">Interviewed</span>
         </div>
         <div className="metric-card green">
-          <span className="metric-val">{filtered.filter(c => c.interview_scores?.recommendation === 'Strong Hire').length}</span>
+          <span className="metric-val">{filtered.filter(c => c.scores?.recommendation === 'Strong Hire').length}</span>
           <span className="metric-label">Strong Hire</span>
         </div>
         <div className="metric-card">
@@ -143,7 +143,7 @@ export default function ClientReports() {
                       <div>Verdict</div>
                     </div>
                     {hires.map((c, i) => {
-                      const s = c.interview_scores ?? {}
+                      const s = c.scores ?? {}
                       return (
                         <div key={c.id} style={{ display: 'grid', gridTemplateColumns: '28px 1fr 80px 80px 80px 80px 80px 80px 120px', gap: 8, padding: '12px 20px', borderBottom: '1px solid var(--border)', alignItems: 'center', background: i === 0 ? 'rgba(45,125,78,0.03)' : 'transparent' }}>
                           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: i === 0 ? 'var(--green)' : 'var(--text-3)', fontWeight: i === 0 ? 700 : 400 }}>#{i + 1}</div>
@@ -185,7 +185,7 @@ export default function ClientReports() {
                       <div>Verdict</div>
                     </div>
                     {others.map((c, i) => {
-                      const s = c.interview_scores ?? {}
+                      const s = c.scores ?? {}
                       return (
                         <div key={c.id} style={{ display: 'grid', gridTemplateColumns: '28px 1fr 80px 80px 80px 80px 80px 80px 120px', gap: 8, padding: '12px 20px', borderBottom: '1px solid var(--border)', alignItems: 'center', opacity: 0.7 }}>
                           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-3)' }}>#{hires.length + i + 1}</div>
@@ -218,7 +218,7 @@ export default function ClientReports() {
           {view === 'comparison' && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12 }}>
               {sorted.map((c, i) => {
-                const s = c.interview_scores ?? {}
+                const s = c.scores ?? {}
                 const rec = s.recommendation
                 return (
                   <div key={c.id} style={{ background: 'var(--surface)', border: `1px solid ${i === 0 ? 'var(--accent)' : 'var(--border)'}`, borderTop: `3px solid ${REC_COLOR[rec] ?? 'var(--border)'}`, borderRadius: 'var(--r)', padding: 18, position: 'relative' }}>

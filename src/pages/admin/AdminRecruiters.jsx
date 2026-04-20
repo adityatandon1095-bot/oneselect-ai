@@ -23,6 +23,7 @@ export default function AdminRecruiters() {
   // Remove confirmation modal
   const [removeModal, setRemoveModal] = useState(null) // recruiter profile to remove
   const [removing, setRemoving] = useState(false)
+  const [removeError, setRemoveError] = useState('')
   // After removal: orphaned clients waiting for reassignment
   const [orphanedClients, setOrphanedClients] = useState([]) // client profiles
   const [orphanAssignments, setOrphanAssignments] = useState({}) // client_id → recruiter_id being assigned
@@ -56,7 +57,11 @@ export default function AdminRecruiters() {
       const { data: { session } } = await supabase.auth.getSession()
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/invite-user`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+        },
         body: JSON.stringify({
           email:        invEmail.trim().toLowerCase(),
           contact_name: invName.trim() || invEmail.trim().toLowerCase(),
@@ -65,7 +70,15 @@ export default function AdminRecruiters() {
         }),
       })
       const result = await res.json()
-      if (!res.ok) throw new Error(result.error || 'Invite failed')
+      if (!res.ok) throw new Error(result.error || result.message || 'Invite failed')
+      // Force-correct the role — deployed edge function may be stale and use wrong default
+      if (result.userId) {
+        await supabase.from('profiles').update({
+          user_role:   'recruiter',
+          full_name:   invName.trim() || invEmail.trim().toLowerCase(),
+          first_login: true,
+        }).eq('id', result.userId)
+      }
       setInvResult({ email: invEmail.trim().toLowerCase(), password: result.tempPassword, emailSent: result.emailSent })
       setShowInvite(false)
       await load()
@@ -101,30 +114,45 @@ export default function AdminRecruiters() {
   function openRemoveModal(r) {
     setRemoveModal(r)
     setRemoving(false)
+    setRemoveError('')
   }
 
   async function confirmRemove() {
     if (!removeModal) return
     setRemoving(true)
-    // Capture which clients this recruiter was managing before we delete
+    setRemoveError('')
     const affected = assignedClients(removeModal.id)
-    // Call delete-user to remove both profile AND auth account (frees email for re-invite)
-    const { data: { session } } = await supabase.auth.getSession()
-    await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-user`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-      body: JSON.stringify({ userId: removeModal.id }),
-    })
-    setRecruiters(p => p.filter(x => x.id !== removeModal.id))
-    setRemoveModal(null)
-    setRemoving(false)
-    // Show orphaned clients for reassignment if any
-    if (affected.length > 0) {
-      setOrphanedClients(affected)
-      setOrphanAssignments({})
-      setOrphanSaving({})
+    try {
+      // 1. Remove recruiter_clients rows (in case FK has no CASCADE)
+      await supabase.from('recruiter_clients').delete().eq('recruiter_id', removeModal.id)
+      // 2. Delete the profile row directly — admin RLS policy allows this
+      const { error: profileErr } = await supabase.from('profiles').delete().eq('id', removeModal.id)
+      if (profileErr) throw new Error(profileErr.message)
+      // 3. Best-effort: delete auth account so the email can be freed.
+      //    Fire-and-forget — never await this so a slow/undeployed function
+      //    cannot block the UI from resolving.
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (!session) return
+        fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-user`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+          body: JSON.stringify({ userId: removeModal.id }),
+        }).catch(() => {})
+      }).catch(() => {})
+
+      setRecruiters(p => p.filter(x => x.id !== removeModal.id))
+      setAssignments(p => p.filter(a => a.recruiter_id !== removeModal.id))
+      setRemoveModal(null)
+      if (affected.length > 0) {
+        setOrphanedClients(affected)
+        setOrphanAssignments({})
+        setOrphanSaving({})
+      }
+    } catch (err) {
+      setRemoveError(err.message)
+    } finally {
+      setRemoving(false)
     }
-    await load()
   }
 
   async function assignOrphan(clientId) {
@@ -328,6 +356,7 @@ export default function AdminRecruiters() {
               <p style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.7, marginBottom: 16 }}>
                 Are you sure you want to remove <strong>{removeModal.full_name || removeModal.email}</strong>?
               </p>
+              {removeError && <div className="error-banner" style={{ marginBottom: 14 }}>{removeError}</div>}
               {(() => {
                 const affected = assignedClients(removeModal.id)
                 return affected.length > 0 ? (

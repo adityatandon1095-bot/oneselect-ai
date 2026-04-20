@@ -32,7 +32,7 @@ function ScoreRing({ score, size = 72 }) {
 }
 
 function CandidateProfile({ candidate, onBack }) {
-  const s = candidate.interview_scores ?? {}
+  const s = candidate.scores ?? {}
   const transcript = candidate.interview_transcript ?? []
   const rec = s.recommendation
 
@@ -198,7 +198,7 @@ export default function RecruiterCandidates() {
   }
 
   function getStatus(c) {
-    if (c.interview_scores) return 'Interview Done'
+    if (c.scores) return 'Interview Done'
     if (c.match_pass === true) return 'Awaiting Interview'
     if (c.match_pass === false) return 'Screened Out'
     return 'Pending'
@@ -298,7 +298,7 @@ export default function RecruiterCandidates() {
           <div className="empty-state">No candidates in this category</div>
         ) : (
           tabFiltered.map(c => {
-            const s = c.interview_scores
+            const s = c.scores
             const rec = s?.recommendation
             const status = getStatus(c)
             return (

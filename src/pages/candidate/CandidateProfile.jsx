@@ -12,8 +12,6 @@ export default function CandidateProfile() {
 
   // Editable fields
   const [fullName, setFullName] = useState('')
-  const [phone, setPhone] = useState('')
-  const [location, setLocation] = useState('')
   const [availability, setAvailability] = useState('available')
   const [skills, setSkills] = useState([])
   const [skillInput, setSkillInput] = useState('')
@@ -40,8 +38,6 @@ export default function CandidateProfile() {
       if (data) {
         setPoolRecord(data)
         setFullName(data.full_name ?? '')
-        setPhone(data.phone ?? '')
-        setLocation(data.location ?? '')
         setAvailability(data.availability ?? 'available')
         setSkills(data.skills ?? [])
         setCandidateRole(data.candidate_role ?? '')
@@ -80,8 +76,6 @@ export default function CandidateProfile() {
       const payload = {
         email: user.email,
         full_name: fullName,
-        phone,
-        location,
         availability,
         skills,
         candidate_role: candidateRole,
@@ -145,14 +139,6 @@ export default function CandidateProfile() {
             <div>
               <label style={label}>Email</label>
               <input style={{ ...input, opacity: 0.6, cursor: 'not-allowed' }} value={user?.email ?? ''} readOnly />
-            </div>
-            <div>
-              <label style={label}>Phone</label>
-              <input style={input} value={phone} onChange={e => setPhone(e.target.value)} placeholder="+1 555 000 0000" />
-            </div>
-            <div>
-              <label style={label}>Location</label>
-              <input style={input} value={location} onChange={e => setLocation(e.target.value)} placeholder="City, Country" />
             </div>
           </div>
         </div>

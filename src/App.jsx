@@ -12,11 +12,14 @@ import AdminSettings from './pages/admin/AdminSettings'
 import AdminRecruiters from './pages/admin/AdminRecruiters'
 import RecruiterLayout from './pages/recruiter/RecruiterLayout'
 import RecruiterDashboard from './pages/recruiter/RecruiterDashboard'
+import RecruiterClients from './pages/recruiter/RecruiterClients'
+import RecruiterJobs from './pages/recruiter/RecruiterJobs'
 import RecruiterPipeline from './pages/recruiter/RecruiterPipeline'
 import RecruiterSettings from './pages/recruiter/RecruiterSettings'
 import ClientLayout from './pages/client/ClientLayout'
 import ClientDashboard from './pages/client/ClientDashboard'
 import ClientJobs from './pages/client/ClientJobs'
+import ClientPipeline from './pages/client/ClientPipeline'
 import ClientCandidates from './pages/client/ClientCandidates'
 import ClientReports from './pages/client/ClientReports'
 import ClientSettings from './pages/client/ClientSettings'
@@ -111,6 +114,9 @@ export default function App() {
           <Route path="/recruiter" element={<ProtectedRoute role="recruiter"><RecruiterLayout /></ProtectedRoute>}>
             <Route index element={<RecruiterDashboard />} />
             <Route path="dashboard" element={<RecruiterDashboard />} />
+            <Route path="clients" element={<RecruiterClients />} />
+            <Route path="jobs" element={<RecruiterJobs />} />
+            <Route path="talent-pool" element={<AdminTalentPool />} />
             <Route path="pipeline" element={<RecruiterPipeline />} />
             <Route path="settings" element={<RecruiterSettings />} />
           </Route>
@@ -119,6 +125,7 @@ export default function App() {
             <Route index element={<ClientDashboard />} />
             <Route path="dashboard" element={<ClientDashboard />} />
             <Route path="jobs" element={<ClientJobs />} />
+            <Route path="pipeline" element={<ClientPipeline />} />
             <Route path="candidates" element={<ClientCandidates />} />
             <Route path="reports" element={<ClientReports />} />
             <Route path="settings" element={<ClientSettings />} />

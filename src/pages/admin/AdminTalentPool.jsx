@@ -25,6 +25,11 @@ export default function AdminTalentPool() {
   const [matching, setMatching]     = useState(false)
   const [matchProgress, setMatchProgress] = useState({ current: 0, total: 0 })
   const [log, setLog]               = useState([])
+  const [matchResults, setMatchResults] = useState([])
+  const [matchDone, setMatchDone]   = useState(false)
+  const [resultSort, setResultSort] = useState('score-desc')
+  const [resultFilter, setResultFilter] = useState('all')
+  const [showLog, setShowLog]       = useState(false)
   const [selected, setSelected]     = useState(null)
   const fileInputRef = useRef()
   const logRef       = useRef()
@@ -120,14 +125,20 @@ export default function AdminTalentPool() {
   async function runMatch() {
     if (!matchJobId) return
     setMatching(true)
+    setMatchDone(false)
+    setMatchResults([])
+    setLog([])
+    setShowLog(false)
     setMatchProgress({ current: 0, total: 0 })
     addLog('Starting pool match…', 'info')
     try {
       const passed = await triggerTalentPoolMatch(matchJobId, {
         onProgress: (cur, total) => setMatchProgress({ current: cur, total }),
         onLog: (msg, type) => addLog(msg, type),
+        onResult: (r) => setMatchResults(p => [...p, r]),
       })
       addLog(`Match complete — ${passed} candidate${passed !== 1 ? 's' : ''} passed.`, 'ok')
+      setMatchDone(true)
     } catch (err) {
       addLog(`✗ Match error: ${err.message}`, 'err')
     }
@@ -349,8 +360,8 @@ export default function AdminTalentPool() {
         </div>
       </div>
 
-      {/* ── Log ── */}
-      {log.length > 0 && (
+      {/* ── Progress log (visible during matching) ── */}
+      {log.length > 0 && !matchDone && (
         <div className="pipeline-log-wrap">
           <div className="pipeline-log-head">
             <span className="spinner" style={{ width: 8, height: 8, opacity: running ? 1 : 0 }} />
@@ -361,6 +372,117 @@ export default function AdminTalentPool() {
           </div>
         </div>
       )}
+
+      {/* ── Match results cards (shown after match completes) ── */}
+      {matchDone && matchResults.length > 0 && (() => {
+        const passScores = matchResults.filter(r => r.pass).map(r => r.score)
+        const threshold  = passScores.length ? Math.min(...passScores) : null
+
+        const sorted = [...matchResults]
+          .filter(r => resultFilter === 'all' || (resultFilter === 'pass' ? r.pass : !r.pass))
+          .sort((a, b) =>
+            resultSort === 'score-desc' ? b.score - a.score :
+            resultSort === 'score-asc'  ? a.score - b.score :
+            a.name.localeCompare(b.name)
+          )
+
+        return (
+          <div className="section-card">
+            <div className="section-card-head" style={{ flexWrap: 'wrap', gap: 10 }}>
+              <div>
+                <h3>Match Results</h3>
+                {threshold != null && (
+                  <p style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2, fontFamily: 'var(--font-mono)' }}>
+                    Passing score: ≥{threshold}/100
+                  </p>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <select
+                  value={resultSort}
+                  onChange={e => setResultSort(e.target.value)}
+                  style={{ fontSize: 12, padding: '4px 8px' }}
+                >
+                  <option value="score-desc">Best to Worst</option>
+                  <option value="score-asc">Worst to Best</option>
+                  <option value="name">A–Z by Name</option>
+                </select>
+                <select
+                  value={resultFilter}
+                  onChange={e => setResultFilter(e.target.value)}
+                  style={{ fontSize: 12, padding: '4px 8px' }}
+                >
+                  <option value="all">All Candidates</option>
+                  <option value="pass">Passed Only</option>
+                  <option value="fail">Failed Only</option>
+                </select>
+                <button
+                  style={{ fontSize: 11, padding: '4px 10px', background: 'none', border: '1px solid var(--border)', borderRadius: 'var(--r)', color: 'var(--text-3)', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}
+                  onClick={() => setShowLog(v => !v)}
+                >
+                  {showLog ? 'Hide log' : 'Show log'}
+                </button>
+              </div>
+            </div>
+
+            {showLog && (
+              <div className="pipeline-log" style={{ margin: '0 0 16px', borderRadius: 'var(--r)' }}>
+                {log.map(l => <div key={l.id} className={`log-line${l.type ? ' ' + l.type : ''}`}>{l.msg}</div>)}
+              </div>
+            )}
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12, padding: '0 20px 20px' }}>
+              {sorted.map((r, i) => (
+                <div key={i} style={{
+                  background: 'var(--surface)',
+                  border: `1px solid ${r.pass ? 'var(--gold)' : 'var(--border)'}`,
+                  borderRadius: 'var(--r)',
+                  padding: 16,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 10,
+                }}>
+                  {/* Header: avatar + name + badge */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div className="profile-avatar" style={{ width: 36, height: 36, fontSize: 14, borderRadius: 'var(--r)', flexShrink: 0, background: r.pass ? 'var(--gold-d)' : 'var(--surface2)', color: r.pass ? 'var(--gold)' : 'var(--text-3)', border: `1px solid ${r.pass ? 'var(--gold)' : 'var(--border)'}` }}>
+                      {r.name[0]?.toUpperCase()}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-1)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.name}</div>
+                      <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{r.rank}</div>
+                    </div>
+                    <span style={{
+                      fontSize: 10, fontFamily: 'var(--font-mono)', fontWeight: 700,
+                      padding: '3px 8px', borderRadius: 'var(--r)', whiteSpace: 'nowrap',
+                      background: r.pass ? 'var(--gold-d)' : 'rgba(239,68,68,0.12)',
+                      color: r.pass ? 'var(--gold)' : '#ef4444',
+                      border: `1px solid ${r.pass ? 'var(--gold)' : '#ef4444'}`,
+                    }}>
+                      {r.pass ? 'PASS' : 'FAIL'}
+                    </span>
+                  </div>
+
+                  {/* Score bar */}
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
+                      <span style={{ fontSize: 10, color: 'var(--text-3)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Match Score</span>
+                      <span style={{ fontSize: 18, fontWeight: 700, fontFamily: 'var(--font-mono)', color: r.pass ? 'var(--gold)' : '#ef4444' }}>{r.score}<span style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 400 }}>/100</span></span>
+                    </div>
+                    <div style={{ height: 4, background: 'var(--surface2)', borderRadius: 2, overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${r.score}%`, background: r.pass ? 'var(--gold)' : '#ef4444', borderRadius: 2, transition: 'width 0.4s ease' }} />
+                    </div>
+                  </div>
+
+                  {/* Reason */}
+                  {r.reason && (
+                    <p style={{ fontSize: 12, color: 'var(--text-2)', margin: 0, lineHeight: 1.5 }}>{r.reason}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      })()}
 
       {/* ── Candidate Detail Modal ── */}
       {selected && (
