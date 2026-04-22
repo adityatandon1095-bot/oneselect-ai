@@ -74,7 +74,7 @@ function TimerRing({ seconds, total, size = 64 }) {
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
-export default function VideoInterview({ job, candidate, matchId, isFromPool, onClose, onComplete }) {
+export default function VideoInterview({ job, candidate, matchId, isFromPool, onClose, onComplete, onSave }) {
   const [stage,          setStage]          = useState(S.SETUP)
   const [questions,      setQuestions]      = useState([])
   const [currentQ,       setCurrentQ]       = useState(0)
@@ -261,8 +261,12 @@ export default function VideoInterview({ job, candidate, matchId, isFromPool, on
 
     // Save to DB
     const update = { video_urls: urls, integrity_score: integrityScore, integrity_flags: violationsRef.current }
-    const table = isFromPool ? 'job_matches' : 'candidates'
-    await supabase.from(table).update(update).eq('id', matchId)
+    if (onSave) {
+      await onSave(update)
+    } else {
+      const table = isFromPool ? 'job_matches' : 'candidates'
+      await supabase.from(table).update(update).eq('id', matchId)
+    }
 
     setStage(S.DONE)
     onComplete({ video_urls: urls, integrity_score: integrityScore, integrity_flags: violationsRef.current })

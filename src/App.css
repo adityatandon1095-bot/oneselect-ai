@@ -445,3 +445,98 @@ select option { background: var(--surface); color: var(--text); }
   .page { padding: 0; max-width: none; }
   .section-card, .profile-section, .profile-hero { border: 1px solid #ddd !important; }
 }
+
+/* ── Mobile (≤ 768px) ────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  /* Login: stack panels */
+  .login-screen { flex-direction: column; }
+  .login-panel-left {
+    width: 100%; padding: 40px 24px; min-height: 180px;
+    flex-direction: row; gap: 24px;
+    justify-content: flex-start; align-items: center;
+  }
+  .login-quote { display: none; }
+  .login-divider { display: none; }
+  .login-panel-right { padding: 32px 24px; }
+  .login-form-wrap { max-width: 100%; }
+
+  /* Sidebar: collapse to top bar */
+  .layout { flex-direction: column; height: auto; min-height: 100vh; }
+  .sidebar {
+    width: 100%; height: auto; border-right: none;
+    border-bottom: 1px solid var(--border); flex-direction: row;
+    overflow-x: auto; overflow-y: visible; flex-shrink: 0;
+  }
+  .sidebar-brand { padding: 12px 16px; border-bottom: none; border-right: 1px solid var(--border); flex-shrink: 0; }
+  .sidebar-brand img { max-width: 100px; }
+  .sidebar-company { display: none; }
+  .sidebar-nav {
+    padding: 0; flex: 1; display: flex; flex-direction: row;
+    align-items: center; overflow-x: auto; gap: 0;
+  }
+  .nav-section { display: none; }
+  .nav-item {
+    white-space: nowrap; border-left: none;
+    border-bottom: 2px solid transparent;
+    padding: 16px 14px;
+    margin-bottom: 0;
+    flex-shrink: 0;
+  }
+  .nav-item.active { border-bottom-color: var(--accent); border-left: none; background: transparent; }
+  .nav-icon { display: none; }
+  .sidebar-footer { display: none; }
+  .content { overflow-y: auto; }
+
+  /* Page */
+  .page { padding: 20px 16px 60px; }
+  .page-head { flex-wrap: wrap; gap: 12px; margin-bottom: 20px; }
+  .page-head h2 { font-size: 22px; }
+
+  /* Metrics: 2 columns on mobile */
+  .metrics-row { grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 20px; }
+  .metric-card { padding: 14px 16px; }
+  .metric-val  { font-size: 24px; }
+
+  /* Form grid: single column */
+  .form-grid { grid-template-columns: 1fr; gap: 16px; }
+  .span-2 { grid-column: span 1; }
+
+  /* Client table: hide on mobile, use table-row instead */
+  .client-table-head { display: none; }
+  .client-table-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+    padding: 12px 16px;
+  }
+
+  /* Interview panel: vertical layout */
+  .interview-panel { flex-direction: column; height: auto; }
+  .iv-sidebar { width: 100%; height: auto; border-right: none; border-bottom: 1px solid var(--border); overflow-y: visible; }
+
+  /* Profile grid */
+  .profile-grid { grid-template-columns: 1fr; }
+  .profile-section.full { grid-column: span 1; }
+
+  /* Score dim bars */
+  .score-dim { grid-template-columns: 100px 1fr 30px; }
+
+  /* Modal */
+  .modal { max-width: 100%; border-radius: var(--r); }
+  .modal-overlay { align-items: flex-end; padding: 0; }
+  .modal { border-radius: var(--r-xl) var(--r-xl) 0 0; }
+
+  /* Section cards */
+  .section-card-head { flex-wrap: wrap; gap: 8px; }
+
+  /* Table rows: reduce padding */
+  .table-row { padding: 11px 14px; gap: 8px; }
+}
+
+/* ── Small mobile (≤ 480px) ──────────────────────────────────────── */
+@media (max-width: 480px) {
+  .metrics-row { grid-template-columns: 1fr; }
+  .page { padding: 16px 12px 60px; }
+  .page-head h2 { font-size: 18px; }
+  .metric-val { font-size: 20px; }
+  .col-right { flex-wrap: wrap; gap: 6px; }
+}

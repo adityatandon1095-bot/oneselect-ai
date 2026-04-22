@@ -3,6 +3,15 @@ import { supabase } from './supabase'
 
 const AuthContext = createContext(null)
 
+// Detect Supabase invite/recovery tokens in the URL before any auth init.
+// When present, we must sign out any existing session so the invite is
+// processed as the invited user, not whoever is currently logged in.
+const _urlHash   = new URLSearchParams(window.location.hash.slice(1))
+const _urlSearch = new URLSearchParams(window.location.search)
+const _urlType   = _urlHash.get('type') || _urlSearch.get('type')
+const HAS_INVITE_TOKEN = (_urlType === 'invite' || _urlType === 'recovery') &&
+  !!(_urlHash.get('access_token') || _urlSearch.get('code'))
+
 export function AuthProvider({ children }) {
   const [user, setUser]                     = useState(null)
   const [profile, setProfile]               = useState(null)
@@ -11,12 +20,16 @@ export function AuthProvider({ children }) {
 
   async function fetchProfile(u) {
     try {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', u.id)
         .single()
+      if (error) throw error
       setProfile(data ?? null)
+    } catch {
+      // Profile may be missing on first invite — not fatal
+      setProfile(null)
     } finally {
       setProfileLoading(false)
     }
@@ -25,33 +38,65 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     let cancelled = false
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (cancelled) return
-      if (session?.user) {
-        setUser(session.user)
-        setProfileLoading(true)
-        fetchProfile(session.user).catch(() => { setProfileLoading(false) })
+    async function init() {
+      // If an invite or recovery token is in the URL, sign out any existing
+      // session first so the token is processed as the invited user, not
+      // whoever is already logged in (e.g. a demo/admin account).
+      if (HAS_INVITE_TOKEN) {
+        await supabase.auth.signOut()
+        if (!cancelled) setLoading(false)
+        return  // onAuthStateChange handles the SIGNED_IN from the URL token
       }
-      setLoading(false)
-    }).catch(() => {
-      if (!cancelled) setLoading(false)
-    })
 
-    // Hard fallback — should never be needed but guarantees we exit loading
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (cancelled) return
+        if (session?.user) {
+          setUser(session.user)
+          setProfileLoading(true)
+          fetchProfile(session.user).catch(() => { if (!cancelled) setProfileLoading(false) })
+        }
+      } catch {
+        // ignore
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+
+    init()
+
+    // Hard fallback — prevents infinite loading if getSession hangs
     const timeout = setTimeout(() => {
       if (!cancelled) setLoading(false)
     }, 4000)
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
-        setUser(session.user)
-        setProfileLoading(true)
-        fetchProfile(session.user).catch(() => { setProfileLoading(false) })
-      } else {
+    // Listen for auth state changes.
+    // IMPORTANT: only trigger a profile re-fetch on genuine sign-in events.
+    // TOKEN_REFRESHED fires every ~50 min and on tab focus — we must NOT set
+    // profileLoading=true there, or returning to the tab resets the UI.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (cancelled) return
+
+      if (event === 'SIGNED_OUT') {
         setUser(null)
         setProfile(null)
         setProfileLoading(false)
+        return
       }
+
+      if (!session?.user) return
+
+      if (event === 'SIGNED_IN') {
+        // Genuine login — full re-init including profile fetch
+        setUser(session.user)
+        setProfileLoading(true)
+        fetchProfile(session.user).catch(() => { if (!cancelled) setProfileLoading(false) })
+        return
+      }
+
+      // TOKEN_REFRESHED, USER_UPDATED, INITIAL_SESSION, PASSWORD_RECOVERY, etc.
+      // Just keep the user object current — don't disturb profile or trigger loading
+      setUser(session.user)
     })
 
     return () => {

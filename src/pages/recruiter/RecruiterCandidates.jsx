@@ -13,7 +13,7 @@ const DIMS = [
   ['experienceRelevance','Experience Relevance'],
 ]
 const INTERVIEW_COMPLETE = 'INTERVIEW_COMPLETE'
-const TABS = ['All', 'Awaiting Interview', 'Interview Done', 'Screened Out']
+const TABS = ['All', 'Interview Pending', 'Interview Done', 'Screened Out']
 
 function dimColor(v) { return v >= 70 ? 'var(--green)' : v >= 50 ? 'var(--accent)' : 'var(--red)' }
 
@@ -183,7 +183,16 @@ export default function RecruiterCandidates() {
   }, [location.search])
 
   async function load() {
-    const { data: jobData } = await supabase.from('jobs').select('id, title').eq('recruiter_id', user.id)
+    // Get client IDs assigned to this recruiter, then load their jobs
+    const { data: rcData } = await supabase
+      .from('recruiter_clients')
+      .select('client_id')
+      .eq('recruiter_id', user.id)
+    const clientIds = (rcData ?? []).map(r => r.client_id)
+
+    if (!clientIds.length) { setLoading(false); return }
+
+    const { data: jobData } = await supabase.from('jobs').select('id, title').in('recruiter_id', clientIds)
     const ids = (jobData ?? []).map(j => j.id)
     setJobs(jobData ?? [])
     if (!ids.length) { setLoading(false); return }
@@ -199,7 +208,7 @@ export default function RecruiterCandidates() {
 
   function getStatus(c) {
     if (c.scores) return 'Interview Done'
-    if (c.match_pass === true) return 'Awaiting Interview'
+    if (c.match_pass === true) return 'Interview Pending'
     if (c.match_pass === false) return 'Screened Out'
     return 'Pending'
   }
@@ -215,7 +224,7 @@ export default function RecruiterCandidates() {
   // Counts per tab
   const counts = {
     'All': byJob.length,
-    'Awaiting Interview': byJob.filter(c => getStatus(c) === 'Awaiting Interview').length,
+    'Interview Pending': byJob.filter(c => getStatus(c) === 'Interview Pending').length,
     'Interview Done': byJob.filter(c => getStatus(c) === 'Interview Done').length,
     'Screened Out': byJob.filter(c => getStatus(c) === 'Screened Out').length,
   }
@@ -331,7 +340,7 @@ export default function RecruiterCandidates() {
                     </span>
                   )}
                   {status === 'Screened Out'       && !s && <span className="badge badge-red">Screened Out</span>}
-                  {status === 'Awaiting Interview' && <span className="badge badge-amber">Awaiting Interview</span>}
+                  {status === 'Interview Pending'  && <span className="badge badge-amber">Interview Pending</span>}
                   {status === 'Pending'            && <span className="badge" style={{ color: 'var(--text-3)', background: 'var(--surface2)' }}>Pending</span>}
                   {c._fromPool && <span className="badge badge-green" style={{ fontSize: 9 }}>Pool</span>}
                 </div>

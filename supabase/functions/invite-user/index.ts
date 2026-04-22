@@ -109,8 +109,8 @@ serve(async (req) => {
       ? 'Welcome to One Select — Recruiter Access'
       : 'Welcome to One Select — Your Portal is Ready'
 
-    const portalPath = isRecruiter ? '/recruiter/pipeline' : '/client/dashboard'
-    const portalLabel = isRecruiter ? 'Recruiter Pipeline' : 'Client Portal'
+    const loginUrl = `${APP_URL}/login`
+    const portalLabel = isRecruiter ? 'Recruiter Portal' : 'Client Portal'
     const bodyIntro = isRecruiter
       ? `You've been added as a recruiter on One Select. Log in to manage your assigned clients' hiring pipelines.`
       : `Your AI-powered hiring portal has been set up for <strong style="color:#2D3748;">${company_name}</strong>. Log in to post jobs and track your candidates.`
@@ -129,7 +129,7 @@ serve(async (req) => {
             <table style="width:100%;border-collapse:collapse;">
               <tr>
                 <td style="padding:8px 0;color:#6B7280;font-size:14px;width:120px;">Portal</td>
-                <td style="padding:8px 0;"><a href="${APP_URL}${portalPath}" style="color:#B8924A;">${portalLabel}</a></td>
+                <td style="padding:8px 0;"><a href="${loginUrl}" style="color:#B8924A;">${portalLabel}</a></td>
               </tr>
               <tr>
                 <td style="padding:8px 0;color:#6B7280;font-size:14px;">Email</td>
@@ -144,7 +144,7 @@ serve(async (req) => {
             </table>
           </div>
           <div style="text-align:center;margin:32px 0;">
-            <a href="${APP_URL}${portalPath}" style="background:#B8924A;color:white;padding:14px 40px;text-decoration:none;font-family:monospace;font-size:12px;letter-spacing:0.1em;text-transform:uppercase;display:inline-block;">ACCESS YOUR PORTAL →</a>
+            <a href="${loginUrl}" style="background:#B8924A;color:white;padding:14px 40px;text-decoration:none;font-family:monospace;font-size:12px;letter-spacing:0.1em;text-transform:uppercase;display:inline-block;">ACCESS YOUR PORTAL →</a>
           </div>
           <p style="color:#9CA3AF;font-size:13px;line-height:1.6;margin:24px 0 0;padding-top:24px;border-top:1px solid #E8E4DC;">
             For security, you will be prompted to set a new password on your first login.

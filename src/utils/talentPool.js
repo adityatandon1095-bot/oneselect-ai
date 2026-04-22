@@ -73,6 +73,15 @@ export function mapMatchToCandidate(m) {
     match_rank: m.match_rank,
     interview_transcript: m.interview_transcript,
     scores: m.scores,
+    video_urls: m.video_urls,
+    integrity_score: m.integrity_score,
+    interview_invite_token: m.interview_invite_token,
+    live_interview_token: m.live_interview_token,
+    live_room_url: m.live_room_url,
+    live_interview_status: m.live_interview_status,
+    live_interview_notes: m.live_interview_notes,
+    final_decision: m.final_decision,
+    decision_notes: m.decision_notes,
     _status: m.match_score != null ? 'screened' : 'parsed',
   }
 }

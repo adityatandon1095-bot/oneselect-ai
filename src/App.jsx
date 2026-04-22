@@ -23,10 +23,8 @@ import ClientPipeline from './pages/client/ClientPipeline'
 import ClientCandidates from './pages/client/ClientCandidates'
 import ClientReports from './pages/client/ClientReports'
 import ClientSettings from './pages/client/ClientSettings'
-import CandidateLayout from './pages/candidate/CandidateLayout'
-import CandidateDashboard from './pages/candidate/CandidateDashboard'
-import CandidateInterview from './pages/candidate/CandidateInterview'
-import CandidateProfile from './pages/candidate/CandidateProfile'
+import PublicVideoInterview from './pages/PublicVideoInterview'
+import PublicLiveInterview from './pages/PublicLiveInterview'
 import './App.css'
 
 class ErrorBoundary extends Component {
@@ -69,7 +67,6 @@ function Loader() {
 
 function roleHome(role) {
   if (role === 'admin') return '/admin/dashboard'
-  if (role === 'candidate') return '/candidate/dashboard'
   if (role === 'client') return '/client/dashboard'
   return '/recruiter/dashboard'
 }
@@ -98,6 +95,8 @@ export default function App() {
       <AuthProvider>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/interview/:token" element={<PublicVideoInterview />} />
+          <Route path="/live/:token" element={<PublicLiveInterview />} />
           <Route path="/" element={<RootRedirect />} />
 
           <Route path="/admin" element={<ProtectedRoute role="admin"><AdminLayout /></ProtectedRoute>}>
@@ -129,13 +128,6 @@ export default function App() {
             <Route path="candidates" element={<ClientCandidates />} />
             <Route path="reports" element={<ClientReports />} />
             <Route path="settings" element={<ClientSettings />} />
-          </Route>
-
-          <Route path="/candidate" element={<ProtectedRoute role="candidate"><CandidateLayout /></ProtectedRoute>}>
-            <Route index element={<CandidateDashboard />} />
-            <Route path="dashboard" element={<CandidateDashboard />} />
-            <Route path="interview/:source/:matchId" element={<CandidateInterview />} />
-            <Route path="profile" element={<CandidateProfile />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />

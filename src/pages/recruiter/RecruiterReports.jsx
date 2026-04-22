@@ -34,7 +34,14 @@ export default function RecruiterReports() {
   useEffect(() => { if (user) load() }, [user])
 
   async function load() {
-    const { data: jobData } = await supabase.from('jobs').select('id, title, status').eq('recruiter_id', user.id).order('created_at', { ascending: false })
+    const { data: rcData } = await supabase
+      .from('recruiter_clients')
+      .select('client_id')
+      .eq('recruiter_id', user.id)
+    const clientIds = (rcData ?? []).map(r => r.client_id)
+    if (!clientIds.length) { setLoading(false); return }
+
+    const { data: jobData } = await supabase.from('jobs').select('id, title, status').in('recruiter_id', clientIds).order('created_at', { ascending: false })
     const ids = (jobData ?? []).map(j => j.id)
     setJobs(jobData ?? [])
     if (!ids.length) { setLoading(false); return }

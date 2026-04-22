@@ -27,8 +27,16 @@ export default function Login() {
   useEffect(() => {
     const hashParams   = new URLSearchParams(window.location.hash.slice(1))
     const searchParams = new URLSearchParams(window.location.search)
-    if (hashParams.get('type') === 'recovery' || searchParams.get('type') === 'recovery') {
+    const urlType = hashParams.get('type') || searchParams.get('type')
+
+    if (urlType === 'recovery' || urlType === 'invite') {
+      // Keep the recovery/invite session so the user can set their password
       setMode('reset')
+    } else {
+      // No auth token in the URL — clear any existing session immediately.
+      // This ensures invite email links always land on a fresh login form
+      // even if a different user's session is active in the same browser.
+      supabase.auth.signOut()
     }
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
@@ -204,10 +212,10 @@ export default function Login() {
             </>
           )}
 
-          {/* ── Set new password (after clicking reset link in email) ── */}
+          {/* ── Set new password (after clicking reset/invite link in email) ── */}
           {mode === 'reset' && (
             <>
-              <h2 className="login-welcome">Set New Password</h2>
+              <h2 className="login-welcome">Set Your Password</h2>
               <p className="login-sub">Choose a secure password for your account</p>
 
               {error && <div className="error-banner">{error}</div>}

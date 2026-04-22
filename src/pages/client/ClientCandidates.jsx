@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useLocation } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../lib/AuthContext'
@@ -12,7 +12,7 @@ const DIMS = [
   ['experienceRelevance','Experience Relevance'],
 ]
 const INTERVIEW_COMPLETE = 'INTERVIEW_COMPLETE'
-const TABS = ['All', 'Awaiting Interview', 'Interview Done', 'Screened Out']
+const TABS = ['All', 'Interview Pending', 'Interview Done', 'Screened Out']
 
 function dimColor(v) { return v >= 70 ? 'var(--green)' : v >= 50 ? 'var(--accent)' : 'var(--red)' }
 
@@ -30,16 +30,141 @@ function ScoreRing({ score, size = 72 }) {
   )
 }
 
-function CandidateProfile({ candidate, onBack }) {
+function VideoModal({ candidate, onClose }) {
+  const [activeIdx, setActiveIdx] = useState(0)
+  const videoRef = useRef(null)
+  const { full_name, video_urls = [], scores, interview_transcript = [] } = candidate
+  const s = scores ?? {}
+  const rec = s.recommendation
+  const mono = { fontFamily: 'var(--font-mono)' }
+
+  useEffect(() => {
+    if (videoRef.current && video_urls[activeIdx]?.url) {
+      videoRef.current.load()
+      videoRef.current.play().catch(() => {})
+    }
+  }, [activeIdx])
+
+  return (
+    <div
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000, padding: 20 }}
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div style={{ background: '#F8F7F4', width: '100%', maxWidth: 860, maxHeight: '90vh', overflow: 'auto', display: 'flex', flexDirection: 'column', border: '1px solid #E8E4DC' }}>
+
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 28px', borderBottom: '1px solid #E8E4DC', flexShrink: 0 }}>
+          <div>
+            <div style={{ fontSize: 10, ...mono, textTransform: 'uppercase', letterSpacing: '0.12em', color: '#9CA3AF', marginBottom: 4 }}>Video Interview</div>
+            <div style={{ fontSize: 18, fontFamily: 'Georgia, serif', fontWeight: 400, color: '#2D3748' }}>{full_name}</div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            {s.overallScore != null && (
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: 24, fontWeight: 700, color: REC_COLOR[rec] ?? '#B8924A' }}>{s.overallScore}</div>
+                {rec && <div style={{ fontSize: 11, ...mono, textTransform: 'uppercase', letterSpacing: '0.05em', color: REC_COLOR[rec] ?? '#9CA3AF' }}>{rec}</div>}
+              </div>
+            )}
+            <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: '#9CA3AF', padding: '4px 8px', lineHeight: 1 }}>✕</button>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div style={{ padding: 28, display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+          {/* Video player */}
+          <div>
+            <div style={{ background: '#000', overflow: 'hidden', aspectRatio: '16/9' }}>
+              {video_urls[activeIdx]?.url
+                ? <video ref={videoRef} controls style={{ width: '100%', height: '100%', objectFit: 'contain' }} src={video_urls[activeIdx].url} />
+                : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.3)', fontSize: 13 }}>No recording for this question</div>
+              }
+            </div>
+            {video_urls[activeIdx]?.q && (
+              <div style={{ padding: '10px 14px', background: 'white', border: '1px solid #E8E4DC', borderLeft: '3px solid #B8924A', marginTop: 10 }}>
+                <div style={{ fontSize: 10, ...mono, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#9CA3AF', marginBottom: 4 }}>Question {activeIdx + 1}</div>
+                <div style={{ fontSize: 13, color: '#4A5568', lineHeight: 1.6 }}>{video_urls[activeIdx].q}</div>
+              </div>
+            )}
+            {video_urls.length > 1 && (
+              <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
+                {video_urls.map((v, i) => (
+                  <button key={i} onClick={() => setActiveIdx(i)} style={{
+                    padding: '5px 14px', border: `1px solid ${i === activeIdx ? '#B8924A' : '#E8E4DC'}`,
+                    background: i === activeIdx ? 'rgba(184,146,74,0.08)' : 'white',
+                    color: i === activeIdx ? '#B8924A' : '#9CA3AF',
+                    cursor: 'pointer', fontSize: 12, fontFamily: 'var(--font-mono)',
+                  }}>
+                    Q{i + 1}{!v.url ? ' ⚠' : ''}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* AI score dimensions */}
+          {s.overallScore != null && (
+            <div style={{ background: 'white', border: '1px solid #E8E4DC', padding: '20px 24px' }}>
+              <div style={{ fontSize: 10, ...mono, textTransform: 'uppercase', letterSpacing: '0.12em', color: '#9CA3AF', marginBottom: 16 }}>AI Assessment</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 16, marginBottom: s.insight ? 16 : 0 }}>
+                {DIMS.map(([key, label]) => (
+                  <div key={key}>
+                    <div style={{ fontSize: 11, color: '#9CA3AF', fontFamily: 'var(--font-mono)', marginBottom: 5 }}>{label}</div>
+                    <div style={{ height: 3, background: '#E8E4DC', overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${s[key] ?? 0}%`, background: dimColor(s[key] ?? 0), transition: 'width 0.4s' }} />
+                    </div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: dimColor(s[key] ?? 0), marginTop: 4 }}>{s[key] ?? '—'}</div>
+                  </div>
+                ))}
+              </div>
+              {s.insight && (
+                <p style={{ fontSize: 13, color: '#6B7280', lineHeight: 1.7, margin: 0, paddingTop: 16, borderTop: '1px solid #E8E4DC', fontStyle: 'italic' }}>
+                  {s.insight}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Transcript */}
+          {interview_transcript.length > 0 && (
+            <div style={{ background: 'white', border: '1px solid #E8E4DC', padding: '20px 24px' }}>
+              <div style={{ fontSize: 10, ...mono, textTransform: 'uppercase', letterSpacing: '0.12em', color: '#9CA3AF', marginBottom: 16 }}>Interview Transcript</div>
+              <div className="transcript-wrap">
+                {interview_transcript.map((msg, i) => (
+                  <div key={i} className={`bubble ${msg.role}`}>
+                    <div className="bubble-who">{msg.role === 'assistant' ? 'Interviewer' : 'Candidate'}</div>
+                    <div className="bubble-body">{msg.content?.replace(INTERVIEW_COMPLETE, '').trim()}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function CandidateProfile({ candidate, onBack, onWatch }) {
   const s = candidate.scores ?? {}
   const transcript = candidate.interview_transcript ?? []
   const rec = s.recommendation
+  const hasVideo = candidate.video_urls?.length > 0
 
   return (
     <div>
-      <button className="btn btn-secondary no-print" style={{ marginBottom: 20 }} onClick={onBack}>
-        ← Back to list
-      </button>
+      <div className="no-print" style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+        <button className="btn btn-secondary" onClick={onBack}>← Back to list</button>
+        {hasVideo && (
+          <button
+            className="btn btn-primary"
+            onClick={onWatch}
+            style={{ background: '#B8924A', borderColor: '#B8924A' }}
+          >
+            ▶ Watch Interview
+          </button>
+        )}
+      </div>
 
       <div className="profile-hero">
         <div className="profile-avatar">{(candidate.full_name ?? '?')[0].toUpperCase()}</div>
@@ -76,8 +201,10 @@ function CandidateProfile({ candidate, onBack }) {
       {s.overallScore == null && candidate.match_pass && (
         <div style={{ padding: '32px 24px', textAlign: 'center', background: 'var(--surface)', border: '1px solid var(--border)', marginBottom: 16 }}>
           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--text-3)', marginBottom: 8 }}>Interview Status</div>
-          <div style={{ fontSize: 15, color: 'var(--amber)', fontFamily: 'var(--font-mono)' }}>Awaiting Interview</div>
-          <div style={{ fontSize: 13, color: 'var(--text-3)', marginTop: 6, fontWeight: 300 }}>This candidate passed screening and is scheduled for an AI interview.</div>
+          <div style={{ fontSize: 15, color: 'var(--amber)', fontFamily: 'var(--font-mono)' }}>
+            {hasVideo ? 'Video Submitted — Awaiting Score' : 'Interview Pending'}
+          </div>
+          {!hasVideo && <div style={{ fontSize: 13, color: 'var(--text-3)', marginTop: 6, fontWeight: 300 }}>This candidate passed screening and has been invited to complete their video interview.</div>}
         </div>
       )}
 
@@ -154,6 +281,7 @@ export default function ClientCandidates() {
   const [jobFilter, setJobFilter] = useState('all')
   const [tab, setTab] = useState('All')
   const [selectedId, setSelectedId] = useState(null)
+  const [watchId, setWatchId] = useState(null)
 
   useEffect(() => { if (user) load() }, [user])
 
@@ -181,7 +309,7 @@ export default function ClientCandidates() {
 
   function getStatus(c) {
     if (c.scores) return 'Interview Done'
-    if (c.match_pass === true) return 'Awaiting Interview'
+    if (c.match_pass === true) return 'Interview Pending'
     if (c.match_pass === false) return 'Screened Out'
     return 'Pending'
   }
@@ -195,19 +323,25 @@ export default function ClientCandidates() {
 
   const counts = {
     'All': byJob.length,
-    'Awaiting Interview': byJob.filter(c => getStatus(c) === 'Awaiting Interview').length,
+    'Interview Pending': byJob.filter(c => getStatus(c) === 'Interview Pending').length,
     'Interview Done': byJob.filter(c => getStatus(c) === 'Interview Done').length,
     'Screened Out': byJob.filter(c => getStatus(c) === 'Screened Out').length,
   }
 
-  const selected = candidates.find(c => c.id === selectedId)
+  const selected  = candidates.find(c => c.id === selectedId)
+  const watching  = candidates.find(c => c.id === watchId)
 
   if (loading) return <div className="page"><span className="spinner" /></div>
 
   if (selected) {
     return (
       <div className="page">
-        <CandidateProfile candidate={selected} onBack={() => setSelectedId(null)} />
+        <CandidateProfile
+          candidate={selected}
+          onBack={() => setSelectedId(null)}
+          onWatch={() => setWatchId(selected.id)}
+        />
+        {watching && <VideoModal candidate={watching} onClose={() => setWatchId(null)} />}
       </div>
     )
   }
@@ -256,6 +390,7 @@ export default function ClientCandidates() {
             const s = c.scores
             const rec = s?.recommendation
             const status = getStatus(c)
+            const hasVideo = c.video_urls?.length > 0
             return (
               <div key={c.id} className="table-row clickable" onClick={() => setSelectedId(c.id)}>
                 <div className="col-main">
@@ -285,8 +420,17 @@ export default function ClientCandidates() {
                       {rec}
                     </span>
                   )}
+                  {hasVideo && (
+                    <button
+                      className="btn btn-secondary"
+                      style={{ fontSize: 11, padding: '4px 10px', color: '#B8924A', borderColor: '#B8924A' }}
+                      onClick={e => { e.stopPropagation(); setWatchId(c.id) }}
+                    >
+                      ▶ Watch
+                    </button>
+                  )}
+                  {status === 'Interview Pending'  && !hasVideo && <span className="badge badge-amber">Interview Pending</span>}
                   {status === 'Screened Out'       && !s && <span className="badge badge-red">Screened Out</span>}
-                  {status === 'Awaiting Interview' && <span className="badge badge-amber">Awaiting Interview</span>}
                   {status === 'Pending'            && <span className="badge" style={{ color: 'var(--text-3)', background: 'var(--surface2)' }}>Pending</span>}
                 </div>
               </div>
@@ -294,6 +438,8 @@ export default function ClientCandidates() {
           })
         )}
       </div>
+
+      {watching && <VideoModal candidate={watching} onClose={() => setWatchId(null)} />}
     </div>
   )
 }

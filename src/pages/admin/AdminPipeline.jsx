@@ -1,15 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useLocation } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../lib/AuthContext'
 import { callClaude } from '../../utils/api'
 import mammoth from 'mammoth'
 import { extractContent, isSupported, fileExt, ACCEPT_ATTR } from '../../utils/fileExtract'
 import { triggerTalentPoolMatch, mapMatchToCandidate } from '../../utils/talentPool'
 import TagInput from '../../components/TagInput'
-import VideoInterview from '../../components/VideoInterview'
 import VideoPlayer from '../../components/VideoPlayer'
-
-// ── Prompts ──────────────────────────────────────────────────────────────────
 
 const CV_PARSE_SYSTEM = `You are a CV parser. Return ONLY valid JSON — no markdown:
 {"name":"string","email":"string","currentRole":"string","totalYears":number,"skills":["..."],"education":"string","summary":"string","highlights":["..."]}`
@@ -20,22 +18,8 @@ Job: ${job.title} | ${job.experience_years}+ years | Required: ${(job.required_s
 Description: ${job.description ?? ''}
 Return ONLY valid JSON: {"matchScore":number,"pass":boolean,"reason":"string","rank":"top10|strong|moderate|weak"}`
 
-const interviewSystem = (job, c) =>
-  `You are a technical interviewer for: ${job.title}.
-Required skills: ${(job.required_skills ?? []).join(', ')}
-Candidate: ${c.full_name}, ${c.candidate_role}, ${c.total_years}y exp, skills: ${(c.skills ?? []).join(', ')}
-Highlights: ${(c.highlights ?? []).join('; ')}
-Rules: Ask personalised questions from their CV. Cover ${job.tech_weight ?? 60}% technical, ${job.comm_weight ?? 40}% behavioural. After 4-5 answers end with exactly: INTERVIEW_COMPLETE`
-
-const SCORING_SYSTEM = `You are an interview evaluator. Return ONLY valid JSON:
-{"technicalAbility":number,"communication":number,"roleFit":number,"problemSolving":number,"experienceRelevance":number,"overallScore":number,"recommendation":"Strong Hire|Hire|Borderline|Reject","confidence":number,"insight":"string","strengths":["..."],"flags":["..."],"bestAnswer":"string"}`
-
 const FORMAT_ICON = { pdf:'📕', docx:'📝', txt:'📄', jpg:'🖼️', jpeg:'🖼️', png:'🖼️' }
-const INTERVIEW_COMPLETE = 'INTERVIEW_COMPLETE'
-const DIMS = [
-  ['technicalAbility','Technical'],['communication','Communication'],
-  ['roleFit','Role Fit'],['problemSolving','Problem Solving'],['experienceRelevance','Experience'],
-]
+const REC_COLOR   = { 'Strong Hire': 'var(--green)', 'Hire': 'var(--accent)', 'Borderline': 'var(--amber)', 'Reject': 'var(--red)' }
 
 function dimColor(v) { return v >= 70 ? 'var(--green)' : v >= 50 ? 'var(--accent)' : 'var(--red)' }
 
@@ -57,11 +41,14 @@ function ScoreRing({ score, size = 48 }) {
 const DEFAULT_JOB_FORM = { title:'', experience_years:3, required_skills:[], preferred_skills:[], description:'', tech_weight:60, comm_weight:40 }
 
 export default function AdminPipeline({ allowedClientIds } = {}) {
+  const { profile } = useAuth()
+  const isClient = profile?.user_role === 'client'
   const location = useLocation()
+
   const [clients, setClients] = useState([])
   const [clientId, setClientId] = useState('')
   const [clientJobs, setClientJobs] = useState([])
-  const [jobId, setJobId] = useState('') // '' | 'new' | uuid
+  const [jobId, setJobId] = useState('')
   const [jobForm, setJobForm] = useState(DEFAULT_JOB_FORM)
   const [activeJob, setActiveJob] = useState(null)
   const [candidates, setCandidates] = useState([])
@@ -70,30 +57,35 @@ export default function AdminPipeline({ allowedClientIds } = {}) {
   const [parsing, setParsing] = useState(false)
   const [screening, setScreening] = useState(false)
   const [screeningDone, setScreeningDone] = useState(false)
-  const [ivStates, setIvStates] = useState({})
-  const [selectedIvId, setSelectedIvId] = useState(null)
   const [log, setLog] = useState([])
   const [useTalentPool, setUseTalentPool] = useState(false)
   const [poolMatchLoading, setPoolMatchLoading] = useState(false)
   const [poolMatchProgress, setPoolMatchProgress] = useState({ current: 0, total: 0 })
-  const [videoInterviewTarget, setVideoInterviewTarget] = useState(null) // candidate object
-  const [videoPlayerTarget,    setVideoPlayerTarget]    = useState(null) // candidate object
-  const [inviteModal, setInviteModal] = useState(null) // { candidate, email, sending, sent, error }
+  const [videoPlayerTarget, setVideoPlayerTarget] = useState(null)
+
+  // AI interview invite modal
+  const [aiInviteModal, setAiInviteModal] = useState(null)
+  // Live interview invite modal
+  const [liveInviteModal, setLiveInviteModal] = useState(null)
+  // Final decision modal
+  const [decisionModal, setDecisionModal] = useState(null)
+  // Live call modal (iframe embed)
+  const [liveCallModal, setLiveCallModal] = useState(null)
+
   const running = parsing || screening || poolMatchLoading
   const fileInputRef = useRef()
   const logRef = useRef()
-  const chatRef = useRef()
 
   useEffect(() => { loadClients() }, [])
   useEffect(() => { if (clientId) loadClientJobs(clientId) }, [clientId])
-  // Auto-select client from ?client=uuid URL param (set by Clients/Jobs pages)
   useEffect(() => {
     if (!clients.length || clientId) return
+    // Auto-select if only one client (client portal)
+    if (clients.length === 1) { setClientId(clients[0].id); return }
     const urlClient = new URLSearchParams(location.search).get('client')
     if (urlClient && clients.some(c => c.id === urlClient)) setClientId(urlClient)
   }, [clients, location.search])
   useEffect(() => { logRef.current?.scrollTo(0, logRef.current.scrollHeight) }, [log])
-  useEffect(() => { chatRef.current?.scrollTo(0, chatRef.current.scrollHeight) }, [ivStates])
 
   async function loadClients() {
     let q = supabase.from('profiles').select('id, full_name, company_name, email').eq('user_role', 'client').order('company_name')
@@ -104,7 +96,7 @@ export default function AdminPipeline({ allowedClientIds } = {}) {
 
   async function loadClientJobs(cid) {
     setJobId(''); setActiveJob(null); setCandidates([]); setFiles([])
-    setScreeningDone(false); setIvStates({})
+    setScreeningDone(false)
     const { data } = await supabase.from('jobs').select('*').eq('recruiter_id', cid).order('created_at', { ascending: false })
     setClientJobs(data ?? [])
   }
@@ -130,12 +122,11 @@ export default function AdminPipeline({ allowedClientIds } = {}) {
 
     setCandidates(loaded)
     setScreeningDone(loaded.some(c => c.match_score != null))
-    setIvStates(Object.fromEntries(loaded.filter(c => c.match_pass).map(c => [c.id, {
-      messages: c.interview_transcript ?? [], input: '', loading: false,
-      complete: (c.interview_transcript ?? []).length > 0, scoring: false,
-      scores: c.scores ?? null,
-    }])))
-    if (loaded.filter(c => c.match_pass).length > 0) setSelectedIvId(loaded.find(c => c.match_pass)?.id ?? null)
+  }
+
+  async function refreshCandidates() {
+    if (!jobId || jobId === 'new') return
+    await selectJob(jobId, useTalentPool)
   }
 
   async function runPoolMatch() {
@@ -158,26 +149,75 @@ export default function AdminPipeline({ allowedClientIds } = {}) {
 
   const addLog = (msg, type = '') => setLog(p => [...p, { id: Date.now() + Math.random(), msg, type }])
 
-  async function sendInvite() {
-    const { candidate, email } = inviteModal
+  // ── AI interview invite ────────────────────────────────────────────────────
+  async function sendAiInterviewInvite() {
+    const { candidate, email } = aiInviteModal
     if (!email.trim()) return
-    setInviteModal(m => ({ ...m, sending: true, error: null }))
+    setAiInviteModal(m => ({ ...m, sending: true, error: null }))
     const companyName = clients.find(c => c.id === clientId)?.company_name ?? ''
-    const { error } = await supabase.functions.invoke('invite-candidate', {
-      body: { email: email.trim(), name: candidate.full_name, job_title: activeJob?.title ?? '', company_name: companyName },
+    const { error } = await supabase.functions.invoke('send-ai-interview-invite', {
+      body: { email: email.trim(), name: candidate.full_name, job_title: activeJob?.title ?? '', company_name: companyName, token: candidate.interview_invite_token },
     })
     if (error) {
-      setInviteModal(m => ({ ...m, sending: false, error: error.message }))
+      setAiInviteModal(m => ({ ...m, sending: false, error: error.message }))
     } else {
-      setInviteModal(m => ({ ...m, sending: false, sent: true }))
-      addLog(`✉ Invite sent to ${email.trim()}`, 'ok')
+      setAiInviteModal(m => ({ ...m, sending: false, sent: true }))
+      addLog(`✉ AI interview invite sent to ${email.trim()}`, 'ok')
     }
+  }
+
+  // ── Live interview invite ─────────────────────────────────────────────────
+  async function sendLiveInterviewInvite() {
+    const { candidate, email } = liveInviteModal
+    if (!email.trim()) return
+    setLiveInviteModal(m => ({ ...m, sending: true, error: null }))
+
+    // Generate tokens and room URL if not yet set
+    const liveToken = candidate.live_interview_token ?? crypto.randomUUID()
+    const roomUrl = candidate.live_room_url ?? `https://meet.jit.si/oneselect-${liveToken}`
+
+    // Persist tokens to DB
+    const table = candidate._fromPool ? 'job_matches' : 'candidates'
+    await supabase.from(table).update({
+      live_interview_token: liveToken,
+      live_room_url: roomUrl,
+      live_interview_status: 'scheduled',
+    }).eq('id', candidate.id)
+
+    const companyName = clients.find(c => c.id === clientId)?.company_name ?? ''
+    const { error } = await supabase.functions.invoke('send-live-interview-invite', {
+      body: { email: email.trim(), name: candidate.full_name, job_title: activeJob?.title ?? '', company_name: companyName, token: liveToken, room_url: roomUrl },
+    })
+    if (error) {
+      setLiveInviteModal(m => ({ ...m, sending: false, error: error.message }))
+    } else {
+      setLiveInviteModal(m => ({ ...m, sending: false, sent: true }))
+      addLog(`✉ Live interview invite sent to ${email.trim()}`, 'ok')
+      await refreshCandidates()
+    }
+  }
+
+  // ── Final decision ────────────────────────────────────────────────────────
+  async function saveDecision(decision) {
+    const { candidate, notes } = decisionModal
+    const table = candidate._fromPool ? 'job_matches' : 'candidates'
+    await supabase.from(table).update({ final_decision: decision, decision_notes: notes }).eq('id', candidate.id)
+    setDecisionModal(null)
+    addLog(`✓ Decision saved: ${candidate.full_name} → ${decision}`, 'ok')
+    await refreshCandidates()
+  }
+
+  // ── Mark live interview complete ──────────────────────────────────────────
+  async function markLiveComplete(candidate) {
+    const table = candidate._fromPool ? 'job_matches' : 'candidates'
+    await supabase.from(table).update({ live_interview_status: 'completed' }).eq('id', candidate.id)
+    addLog(`✓ Live interview marked complete: ${candidate.full_name}`, 'ok')
+    await refreshCandidates()
   }
 
   const setForm = (k, v) => setJobForm(f => ({ ...f, [k]: v }))
   const setTech = (v) => { setForm('tech_weight', v); setForm('comm_weight', 100 - v) }
 
-  // ── Save new job ──────────────────────────────────────────────────────────
   async function saveJob() {
     addLog(`Creating job: ${jobForm.title}…`, 'info')
     const { data, error } = await supabase.from('jobs').insert({
@@ -198,7 +238,6 @@ export default function AdminPipeline({ allowedClientIds } = {}) {
     setJobId(data.id)
   }
 
-  // ── CV upload ─────────────────────────────────────────────────────────────
   const addFiles = useCallback((incoming) => {
     const valid = Array.from(incoming).filter(isSupported)
     if (!valid.length) return
@@ -247,18 +286,6 @@ export default function AdminPipeline({ allowedClientIds } = {}) {
 
         if (error) throw new Error(error.message)
         addLog(`✓ Saved ${parsed.name}`, 'ok')
-
-        // Auto-invite candidate to the portal
-        if (parsed.email) {
-          const companyName = clients.find(c => c.id === clientId)?.company_name ?? ''
-          supabase.functions.invoke('invite-candidate', {
-            body: { email: parsed.email, name: parsed.name, job_title: activeJob.title, company_name: companyName },
-          }).then(({ error: inviteErr }) => {
-            if (inviteErr) addLog(`⚠ Invite email failed for ${parsed.name}: ${inviteErr.message}`, 'err')
-            else addLog(`✉ Invite sent to ${parsed.email}`, 'ok')
-          })
-        }
-
         patchFile(entry.id, { status: 'done', parsed })
         setCandidates(p => [...p, { ...saved, _status: 'parsed' }])
       } catch (err) {
@@ -269,13 +296,11 @@ export default function AdminPipeline({ allowedClientIds } = {}) {
     setParsing(false)
   }
 
-  // ── Screening ─────────────────────────────────────────────────────────────
   async function runScreening() {
     if (!activeJob) return
     setScreening(true)
     const system = screeningSystem(activeJob)
     const toScreen = candidates.filter(c => c._status === 'parsed')
-    // Accumulate locally — don't rely on stale candidates closure at the end
     const passedThisRun = []
     for (const c of toScreen) {
       setCandidates(p => p.map(x => x.id === c.id ? { ...x, _status: 'screening' } : x))
@@ -295,110 +320,61 @@ export default function AdminPipeline({ allowedClientIds } = {}) {
     }
     setScreening(false)
     setScreeningDone(true)
-    setIvStates(Object.fromEntries(passedThisRun.map(c => [c.id, { messages: [], input: '', loading: false, complete: false, scoring: false, scores: null }])))
-    if (passedThisRun.length > 0) setSelectedIvId(passedThisRun[0].id)
     addLog(`Screening complete. ${passedThisRun.length} passed.`, 'info')
-  }
-
-  // ── Interviews ────────────────────────────────────────────────────────────
-  function patchIv(id, updates) { setIvStates(p => ({ ...p, [id]: { ...p[id], ...updates } })) }
-
-  async function startInterview(candidate) {
-    patchIv(candidate.id, { loading: true })
-    addLog(`Starting interview: ${candidate.full_name}…`, 'info')
-    try {
-      const sys = interviewSystem(activeJob, candidate)
-      const reply = await callClaude([{ role: 'user', content: 'Please begin the interview.' }], sys, 1024)
-      const msgs = [{ role: 'assistant', content: reply }]
-      const done = reply.includes(INTERVIEW_COMPLETE)
-      patchIv(candidate.id, { messages: msgs, loading: false, complete: done })
-      if (done) scoreInterview(candidate, msgs)
-    } catch (err) {
-      addLog(`✗ Interview error: ${err.message}`, 'err')
-      patchIv(candidate.id, { loading: false })
-    }
-  }
-
-  async function sendMessage(candidate, text) {
-    if (!text.trim()) return
-    const cur = ivStates[candidate.id]
-    const msgs = [...cur.messages, { role: 'user', content: text }]
-    patchIv(candidate.id, { messages: msgs, input: '', loading: true })
-    try {
-      const sys = interviewSystem(activeJob, candidate)
-      const reply = await callClaude(msgs, sys, 1024)
-      const all = [...msgs, { role: 'assistant', content: reply }]
-      const done = reply.includes(INTERVIEW_COMPLETE)
-      patchIv(candidate.id, { messages: all, loading: false, complete: done })
-      if (done) scoreInterview(candidate, all)
-    } catch (err) {
-      addLog(`✗ ${err.message}`, 'err')
-      patchIv(candidate.id, { loading: false })
-    }
-  }
-
-  async function scoreInterview(candidate, messages) {
-    patchIv(candidate.id, { scoring: true })
-    addLog(`Scoring ${candidate.full_name}'s interview…`, 'info')
-    const transcript = messages.map(m => `${m.role === 'user' ? 'Candidate' : 'Interviewer'}: ${m.content.replace(INTERVIEW_COMPLETE,'').trim()}`).join('\n\n')
-    try {
-      const reply = await callClaude([{ role: 'user', content: `Score this interview:\n\n${transcript}` }], SCORING_SYSTEM, 2048)
-      const scores = JSON.parse(reply.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, ''))
-      if (candidate._fromPool) {
-        await supabase.from('job_matches').update({ interview_transcript: messages, scores }).eq('id', candidate._matchId)
-      } else {
-        await supabase.from('candidates').update({ interview_transcript: messages, scores }).eq('id', candidate.id)
-      }
-      patchIv(candidate.id, { scoring: false, scores })
-      addLog(`✓ ${candidate.full_name} scored: ${scores.overallScore}/100 — ${scores.recommendation}`, 'ok')
-    } catch (err) {
-      addLog(`✗ Scoring error: ${err.message}`, 'err')
-      patchIv(candidate.id, { scoring: false })
-    }
   }
 
   // ── Derived state ─────────────────────────────────────────────────────────
   const passedCandidates = candidates.filter(c => c.match_pass)
-  const selectedIv = passedCandidates.find(c => c.id === selectedIvId)
-  const selIvState = selectedIvId ? ivStates[selectedIvId] : null
-  const doneCount  = files.filter(f => f.status === 'done').length
-  const pendingCount = files.filter(f => f.status === 'pending').length
-  const screenedCount = candidates.filter(c => c._status === 'screened').length
-  const parseProgress = files.length ? (doneCount / files.length) * 100 : 0
+  const doneCount      = files.filter(f => f.status === 'done').length
+  const pendingCount   = files.filter(f => f.status === 'pending').length
+  const screenedCount  = candidates.filter(c => c._status === 'screened').length
+  const parseProgress  = files.length ? (doneCount / files.length) * 100 : 0
   const screenProgress = candidates.length ? (screenedCount / candidates.length) * 100 : 0
+
+  // Candidates that have completed AI interview (have scores or video)
+  const aiInterviewCandidates = passedCandidates
+
+  // Candidates in the live interview stage (AI interview done, have scores)
+  const liveInterviewCandidates = passedCandidates.filter(c => c.scores?.overallScore != null)
+
+  // Candidates ready for final decision (live interview completed)
+  const decisionCandidates = passedCandidates.filter(c => c.live_interview_status === 'completed')
 
   const clientLabel = (c) => c.company_name || c.full_name || c.email
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  const appUrl = 'https://oneselect-ai-t6uo-phi.vercel.app'
+
   return (
     <div className="page">
       <div className="page-head">
         <div><h2>Pipeline</h2><p>Run the full AI hiring pipeline for a client</p></div>
       </div>
 
-      {/* ── 1 Setup ── */}
+      {/* ── 1 Job Setup ── */}
       <div className="section-card">
         <div className="section-card-head"><h3>1 · Job Setup</h3></div>
         <div className="section-card-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div className="form-grid">
-            <div className="field">
-              <label>Select Client</label>
-              <select value={clientId} onChange={e => setClientId(e.target.value)}>
-                <option value="">— choose client —</option>
-                {clients.map(c => <option key={c.id} value={c.id}>{clientLabel(c)}</option>)}
-              </select>
-            </div>
+            {!isClient && (
+              <div className="field">
+                <label>Select Client</label>
+                <select value={clientId} onChange={e => setClientId(e.target.value)}>
+                  <option value="">— choose client —</option>
+                  {clients.map(c => <option key={c.id} value={c.id}>{clientLabel(c)}</option>)}
+                </select>
+              </div>
+            )}
             <div className="field">
               <label>Select Job</label>
               <select value={jobId} disabled={!clientId} onChange={e => selectJob(e.target.value)}>
                 <option value="">— choose job —</option>
-                <option value="new">+ Create new job</option>
+                {!isClient && <option value="new">+ Create new job</option>}
                 {clientJobs.map(j => <option key={j.id} value={j.id}>{j.title}</option>)}
               </select>
             </div>
           </div>
 
-          {jobId === 'new' && (
+          {jobId === 'new' && !isClient && (
             <div style={{ borderTop: '1px solid var(--border)', paddingTop: 16 }}>
               <div className="form-grid">
                 <div className="field">
@@ -451,8 +427,8 @@ export default function AdminPipeline({ allowedClientIds } = {}) {
         </div>
       </div>
 
-      {/* ── 2 Candidates ── */}
-      {activeJob && (
+      {/* ── 2 CV Upload — hidden for clients ── */}
+      {activeJob && !isClient && (
         <div className="section-card">
           <div className="section-card-head">
             <h3>{useTalentPool ? '2 · Talent Pool' : '2 · CV Upload'}</h3>
@@ -478,18 +454,9 @@ export default function AdminPipeline({ allowedClientIds } = {}) {
                   Match all available talent pool candidates against this job using AI screening.
                 </p>
                 <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                  <button
-                    className="btn btn-primary"
-                    disabled={poolMatchLoading}
-                    onClick={runPoolMatch}
-                  >
+                  <button className="btn btn-primary" disabled={poolMatchLoading} onClick={runPoolMatch}>
                     {poolMatchLoading ? (
-                      <>
-                        <span className="spinner" style={{ width: 12, height: 12 }} />
-                        {poolMatchProgress.total > 0
-                          ? ` ${poolMatchProgress.current}/${poolMatchProgress.total}`
-                          : ' Matching…'}
-                      </>
+                      <><span className="spinner" style={{ width: 12, height: 12 }} />{poolMatchProgress.total > 0 ? ` ${poolMatchProgress.current}/${poolMatchProgress.total}` : ' Matching…'}</>
                     ) : 'Run Pool Match'}
                   </button>
                   {poolMatchLoading && poolMatchProgress.total > 0 && (
@@ -541,7 +508,7 @@ export default function AdminPipeline({ allowedClientIds } = {}) {
                         <div className="file-status">
                           {f.status === 'pending'  && <span className="badge badge-amber">Pending</span>}
                           {f.status === 'parsing'  && <span className="spinner" />}
-                          {f.status === 'done'     && <span className="badge badge-green">Parsed</span>}
+                          {f.status === 'done'     && <span className="badge badge-green">CV Parsed</span>}
                           {f.status === 'error'    && <span className="badge badge-red">Error</span>}
                         </div>
                       </div>
@@ -554,8 +521,8 @@ export default function AdminPipeline({ allowedClientIds } = {}) {
         </div>
       )}
 
-      {/* ── 3 Screening ── */}
-      {activeJob && candidates.length > 0 && (
+      {/* ── 3 AI Screening — hidden for clients ── */}
+      {activeJob && candidates.length > 0 && !isClient && (
         <div className="section-card">
           <div className="section-card-head">
             <h3>3 · AI Screening</h3>
@@ -576,11 +543,6 @@ export default function AdminPipeline({ allowedClientIds } = {}) {
                   {c.match_score != null && <ScoreRing score={c.match_score} size={42} />}
                   {c.match_rank && <span className={`badge ${c.match_rank === 'top10' ? 'badge-blue' : c.match_rank === 'strong' ? 'badge-green' : c.match_rank === 'moderate' ? 'badge-amber' : 'badge-red'}`}>{c.match_rank}</span>}
                   {c.match_pass != null && <span className={`badge ${c.match_pass ? 'badge-green' : 'badge-red'}`}>{c.match_pass ? 'Pass' : 'Fail'}</span>}
-                  <button
-                    className="btn btn-secondary"
-                    style={{ fontSize: 10, padding: '2px 8px' }}
-                    onClick={e => { e.stopPropagation(); setInviteModal({ candidate: c, email: c.email ?? '', sending: false, sent: false, error: null }) }}
-                  >✉ Invite</button>
                 </div>
               </div>
             ))}
@@ -588,184 +550,301 @@ export default function AdminPipeline({ allowedClientIds } = {}) {
         </div>
       )}
 
-      {/* ── 4 Interviews ── */}
-      {screeningDone && passedCandidates.length > 0 && (
+      {/* ── 4 AI Video Interview ── */}
+      {(screeningDone || (isClient && activeJob)) && passedCandidates.length > 0 && (
         <div className="section-card">
-          <div className="section-card-head"><h3>4 · AI Interviews</h3><span className="mono text-muted" style={{ fontSize: 11 }}>{passedCandidates.length} candidates passed</span></div>
-          <div className="section-card-body" style={{ padding: 0 }}>
-            <div className="interview-panel">
-              {/* sidebar */}
-              <div className="iv-sidebar">
-                <div className="iv-sidebar-head">Passed Candidates</div>
-                {passedCandidates.map(c => {
-                  const s = ivStates[c.id]
-                  const hasVideo = c.video_urls?.length > 0
-                  return (
-                    <div key={c.id} className={`candidate-row${c.id === selectedIvId ? ' active' : ''}`} onClick={() => setSelectedIvId(c.id)}>
-                      <div className="c-info">
-                        <div className="c-name" style={{ fontSize: 12 }}>{c.full_name}</div>
-                        <div className="c-meta">{c.candidate_role}</div>
-                        {/* Video interview actions */}
-                        <div style={{ display: 'flex', gap: 4, marginTop: 4 }} onClick={e => e.stopPropagation()}>
-                          {hasVideo ? (
-                            <>
-                              <span className="badge badge-green" style={{ fontSize: 8 }}>
-                                Video · {c.integrity_score ?? 100}%
-                              </span>
-                              <button
-                                className="btn btn-secondary"
-                                style={{ fontSize: 9, padding: '2px 6px' }}
-                                onClick={() => setVideoPlayerTarget(c)}
-                              >▶ Watch</button>
-                            </>
-                          ) : (
-                            <button
-                              className="btn btn-secondary"
-                              style={{ fontSize: 9, padding: '2px 6px', color: 'var(--accent)' }}
-                              onClick={() => setVideoInterviewTarget(c)}
-                            >📹 Video Interview</button>
-                          )}
-                        </div>
-                      </div>
-                      <div>
-                        {!s?.messages?.length && <span className="badge badge-amber" style={{ fontSize: 9 }}>Ready</span>}
-                        {s?.messages?.length > 0 && !s?.complete && <span className="badge badge-blue" style={{ fontSize: 9 }}>Active</span>}
-                        {s?.complete && !s?.scores && <span className="badge badge-amber" style={{ fontSize: 9 }}>Scoring</span>}
-                        {s?.scores && <span className="badge badge-green" style={{ fontSize: 9 }}>Done·{s.scores.overallScore}</span>}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-
-              {/* chat */}
-              <div className="iv-chat">
-                {selectedIv && selIvState ? (
-                  <>
-                    <div className="iv-chat-head">
-                      <div><h4>{selectedIv.full_name}</h4><p>{selectedIv.candidate_role}</p></div>
-                      {selIvState.scores && <span className="badge badge-green">{selIvState.scores.overallScore} · {selIvState.scores.recommendation}</span>}
-                    </div>
-                    <div className="iv-chat-body" ref={chatRef}>
-                      {selIvState.messages.length === 0 && !selIvState.loading && (
-                        <div className="iv-chat-empty">
-                          <p>Ready to interview <strong style={{ color: 'var(--text)' }}>{selectedIv.full_name}</strong></p>
-                          <button className="btn btn-primary" style={{ fontSize: 12 }} onClick={() => startInterview(selectedIv)}>Start Interview</button>
-                        </div>
-                      )}
-                      {selIvState.messages.map((msg, i) => (
-                        <div key={i} className={`bubble ${msg.role}`}>
-                          <div className="bubble-who">{msg.role === 'assistant' ? 'Interviewer' : 'Candidate'}</div>
-                          <div className="bubble-body">{msg.content.replace(INTERVIEW_COMPLETE,'').trim()}</div>
-                        </div>
-                      ))}
-                      {selIvState.loading && (
-                        <div className="bubble assistant">
-                          <div className="bubble-who">Interviewer</div>
-                          <div className="bubble-body"><div className="typing-dots"><span/><span/><span/></div></div>
-                        </div>
-                      )}
-                      {selIvState.scoring && <div className="scoring-banner"><span className="spinner" style={{ width: 12, height: 12 }} /> Scoring interview…</div>}
-                      {selIvState.scores && (
-                        <div style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 'var(--r)', padding: 14, marginTop: 4 }}>
-                          <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-3)', marginBottom: 12 }}>Scores</div>
-                          {DIMS.map(([key, label]) => (
-                            <div key={key} className="score-dim">
-                              <span className="dim-label">{label}</span>
-                              <div className="dim-track"><div className="dim-fill" style={{ width: `${selIvState.scores[key]}%`, background: dimColor(selIvState.scores[key]) }} /></div>
-                              <span className="dim-val">{selIvState.scores[key]}</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                    {!selIvState.complete && selIvState.messages.length > 0 && (
-                      <div className="iv-chat-input">
-                        <input
-                          placeholder="Type candidate's answer…"
-                          value={selIvState.input}
-                          disabled={selIvState.loading}
-                          onChange={e => patchIv(selectedIvId, { input: e.target.value })}
-                          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(selectedIv, selIvState.input) } }}
-                        />
-                        <button className="btn btn-primary" style={{ fontSize: 12, padding: '7px 14px' }} disabled={selIvState.loading || !selIvState.input.trim()} onClick={() => sendMessage(selectedIv, selIvState.input)}>Send</button>
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <div className="iv-chat-empty" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <p style={{ color: 'var(--text-3)' }}>Select a candidate to begin</p>
+          <div className="section-card-head">
+            <h3>4 · AI Video Interview</h3>
+            <span className="mono text-muted" style={{ fontSize: 11 }}>{passedCandidates.length} passed screening</span>
+          </div>
+          <div className="candidate-list">
+            {aiInterviewCandidates.map(c => {
+              const hasVideo  = c.video_urls?.length > 0
+              const hasScores = !!c.scores?.overallScore
+              const rec       = c.scores?.recommendation
+              return (
+                <div key={c.id} className="candidate-row" style={{ cursor: 'default' }}>
+                  <div className="c-info">
+                    <div className="c-name">{c.full_name}</div>
+                    <div className="c-meta">{c.candidate_role} · {c.total_years}y</div>
                   </div>
-                )}
-              </div>
+                  <div className="c-score" style={{ gap: 6, flexWrap: 'wrap' }}>
+                    {!hasVideo && !hasScores && (
+                      <>
+                        <span className="badge badge-amber">Interview Pending</span>
+                        {!isClient && (
+                          <button
+                            className="btn btn-secondary"
+                            style={{ fontSize: 10, padding: '2px 8px' }}
+                            onClick={e => { e.stopPropagation(); setAiInviteModal({ candidate: c, email: c.email ?? '', sending: false, sent: false, error: null }) }}
+                          >✉ Invite</button>
+                        )}
+                        {c.interview_invite_token && (
+                          <button
+                            className="btn btn-secondary"
+                            style={{ fontSize: 10, padding: '2px 8px' }}
+                            onClick={() => navigator.clipboard.writeText(`${appUrl}/interview/${c.interview_invite_token}`)}
+                          >⎘ Copy Link</button>
+                        )}
+                      </>
+                    )}
+                    {hasVideo && !hasScores && (
+                      <>
+                        <span className="badge badge-blue">Interview Submitted</span>
+                        <button className="btn btn-secondary" style={{ fontSize: 10, padding: '2px 8px' }} onClick={() => setVideoPlayerTarget(c)}>▶ Watch</button>
+                      </>
+                    )}
+                    {hasScores && (
+                      <>
+                        <span className="badge badge-green">Interview Completed</span>
+                        <span className="mono" style={{ fontSize: 12, fontWeight: 700, color: dimColor(c.scores.overallScore) }}>{c.scores.overallScore}/100</span>
+                        {rec && <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: REC_COLOR[rec] ?? 'var(--text-3)' }}>{rec}</span>}
+                        {hasVideo && <button className="btn btn-secondary" style={{ fontSize: 10, padding: '2px 8px' }} onClick={() => setVideoPlayerTarget(c)}>▶ Watch</button>}
+                      </>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── 5 Live Interview ── */}
+      {liveInterviewCandidates.length > 0 && (
+        <div className="section-card">
+          <div className="section-card-head">
+            <h3>5 · Live Interview</h3>
+            <span className="mono text-muted" style={{ fontSize: 11 }}>{liveInterviewCandidates.length} candidates</span>
+          </div>
+          <div className="candidate-list">
+            {liveInterviewCandidates.map(c => {
+              const liveStatus = c.live_interview_status ?? 'none'
+              const scheduled  = liveStatus === 'scheduled'
+              const completed  = liveStatus === 'completed'
+              return (
+                <div key={c.id} className="candidate-row" style={{ cursor: 'default' }}>
+                  <div className="c-info">
+                    <div className="c-name">{c.full_name}</div>
+                    <div className="c-meta">{c.candidate_role} · {c.total_years}y</div>
+                  </div>
+                  <div className="c-score" style={{ gap: 6, flexWrap: 'wrap' }}>
+                    {!scheduled && !completed && (
+                      <>
+                        <span className="badge" style={{ color: 'var(--text-3)', background: 'var(--surface2)' }}>Not Scheduled</span>
+                        <button
+                          className="btn btn-secondary"
+                          style={{ fontSize: 10, padding: '2px 8px' }}
+                          onClick={e => { e.stopPropagation(); setLiveInviteModal({ candidate: c, email: c.email ?? '', sending: false, sent: false, error: null }) }}
+                        >📅 Schedule</button>
+                      </>
+                    )}
+                    {scheduled && !completed && (
+                      <>
+                        <span className="badge badge-blue">Scheduled</span>
+                        <button
+                          className="btn btn-primary"
+                          style={{ fontSize: 10, padding: '2px 8px' }}
+                          onClick={() => setLiveCallModal({ candidate: c })}
+                        >🎥 Join Call</button>
+                        <button
+                          className="btn btn-secondary"
+                          style={{ fontSize: 10, padding: '2px 8px' }}
+                          onClick={() => markLiveComplete(c)}
+                        >✓ Mark Done</button>
+                      </>
+                    )}
+                    {completed && (
+                      <span className="badge badge-green">Live Done</span>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── 6 Final Decision ── */}
+      {decisionCandidates.length > 0 && (
+        <div className="section-card">
+          <div className="section-card-head">
+            <h3>6 · Final Decision</h3>
+            <span className="mono text-muted" style={{ fontSize: 11 }}>{decisionCandidates.length} candidates</span>
+          </div>
+          <div className="candidate-list">
+            {decisionCandidates.map(c => {
+              const decision = c.final_decision
+              return (
+                <div key={c.id} className="candidate-row" style={{ cursor: 'default' }}>
+                  <div className="c-info">
+                    <div className="c-name">{c.full_name}</div>
+                    <div className="c-meta">{c.candidate_role} · {c.total_years}y</div>
+                    {c.decision_notes && <div style={{ fontSize: 11, color: 'var(--text-2)', marginTop: 3 }}>{c.decision_notes}</div>}
+                  </div>
+                  <div className="c-score" style={{ gap: 6 }}>
+                    {!decision && (
+                      <>
+                        <span className="badge" style={{ color: 'var(--text-3)', background: 'var(--surface2)' }}>Pending Decision</span>
+                        <button
+                          className="btn btn-primary"
+                          style={{ fontSize: 10, padding: '2px 8px', background: 'var(--green)' }}
+                          onClick={() => setDecisionModal({ candidate: c, notes: '' })}
+                        >Hire / Reject</button>
+                      </>
+                    )}
+                    {decision === 'hired' && <span className="badge badge-green" style={{ fontSize: 12 }}>✓ Hired</span>}
+                    {decision === 'rejected' && <span className="badge badge-red" style={{ fontSize: 12 }}>✗ Rejected</span>}
+                    {decision && (
+                      <button
+                        className="btn btn-secondary"
+                        style={{ fontSize: 10, padding: '2px 8px' }}
+                        onClick={() => setDecisionModal({ candidate: c, notes: c.decision_notes ?? '' })}
+                      >Edit</button>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── Video Player modal ── */}
+      {videoPlayerTarget && (
+        <VideoPlayer candidate={videoPlayerTarget} onClose={() => setVideoPlayerTarget(null)} />
+      )}
+
+      {/* ── AI Invite modal ── */}
+      {aiInviteModal && (
+        <div style={modalOverlay}>
+          <div style={modalBox}>
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text)', marginBottom: 4 }}>Send AI Interview Invite</div>
+              <div style={{ fontSize: 13, color: 'var(--text-3)' }}>{aiInviteModal.candidate.full_name}</div>
+            </div>
+            <div>
+              <label style={modalLabel}>Email</label>
+              <input
+                autoFocus
+                style={modalInput}
+                value={aiInviteModal.email}
+                onChange={e => setAiInviteModal(m => ({ ...m, email: e.target.value, sent: false, error: null }))}
+                onKeyDown={e => { if (e.key === 'Enter' && !aiInviteModal.sending && !aiInviteModal.sent) sendAiInterviewInvite() }}
+                placeholder="candidate@email.com"
+                disabled={aiInviteModal.sending || aiInviteModal.sent}
+              />
+            </div>
+            {aiInviteModal.error && <div style={{ fontSize: 12, color: 'var(--red)' }}>⚠ {aiInviteModal.error}</div>}
+            {aiInviteModal.sent && <div style={{ fontSize: 12, color: 'var(--green)' }}>✓ Invite sent to {aiInviteModal.email}</div>}
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button className="btn btn-secondary" onClick={() => setAiInviteModal(null)}>{aiInviteModal.sent ? 'Close' : 'Cancel'}</button>
+              {!aiInviteModal.sent && (
+                <button className="btn btn-primary" disabled={aiInviteModal.sending || !aiInviteModal.email.trim()} onClick={sendAiInterviewInvite}>
+                  {aiInviteModal.sending ? <><span className="spinner" style={{ width: 11, height: 11 }} /> Sending…</> : 'Send Invite'}
+                </button>
+              )}
             </div>
           </div>
         </div>
       )}
 
-      {/* ── Video Interview modal ── */}
-      {videoInterviewTarget && activeJob && (
-        <VideoInterview
-          job={activeJob}
-          candidate={videoInterviewTarget}
-          matchId={videoInterviewTarget.id}
-          isFromPool={videoInterviewTarget._fromPool ?? false}
-          onClose={() => setVideoInterviewTarget(null)}
-          onComplete={(result) => {
-            setCandidates(prev => prev.map(c =>
-              c.id === videoInterviewTarget.id
-                ? { ...c, video_urls: result.video_urls, integrity_score: result.integrity_score, integrity_flags: result.integrity_flags }
-                : c
-            ))
-            setVideoInterviewTarget(null)
-          }}
-        />
-      )}
-
-      {/* ── Video Player modal ── */}
-      {videoPlayerTarget && (
-        <VideoPlayer
-          candidate={videoPlayerTarget}
-          onClose={() => setVideoPlayerTarget(null)}
-        />
-      )}
-
-      {/* ── Invite modal ── */}
-      {inviteModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000 }}>
-          <div style={{ background: 'var(--surface)', borderRadius: 12, padding: 28, width: 400, display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* ── Live Invite modal ── */}
+      {liveInviteModal && (
+        <div style={modalOverlay}>
+          <div style={modalBox}>
             <div>
-              <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text)', marginBottom: 4 }}>Invite to Candidate Portal</div>
-              <div style={{ fontSize: 13, color: 'var(--text-3)' }}>{inviteModal.candidate.full_name}</div>
+              <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text)', marginBottom: 4 }}>Schedule Live Interview</div>
+              <div style={{ fontSize: 13, color: 'var(--text-3)' }}>{liveInviteModal.candidate.full_name}</div>
             </div>
             <div>
-              <label style={{ fontSize: 11, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-3)', display: 'block', marginBottom: 6 }}>Email</label>
+              <label style={modalLabel}>Candidate Email</label>
               <input
                 autoFocus
-                style={{ width: '100%', padding: '9px 12px', borderRadius: 7, border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)', fontSize: 13, boxSizing: 'border-box' }}
-                value={inviteModal.email}
-                onChange={e => setInviteModal(m => ({ ...m, email: e.target.value, sent: false, error: null }))}
-                onKeyDown={e => { if (e.key === 'Enter' && !inviteModal.sending && !inviteModal.sent) sendInvite() }}
+                style={modalInput}
+                value={liveInviteModal.email}
+                onChange={e => setLiveInviteModal(m => ({ ...m, email: e.target.value, sent: false, error: null }))}
+                onKeyDown={e => { if (e.key === 'Enter' && !liveInviteModal.sending && !liveInviteModal.sent) sendLiveInterviewInvite() }}
                 placeholder="candidate@email.com"
-                disabled={inviteModal.sending || inviteModal.sent}
+                disabled={liveInviteModal.sending || liveInviteModal.sent}
               />
             </div>
-            {inviteModal.error && (
-              <div style={{ fontSize: 12, color: 'var(--red)' }}>⚠ {inviteModal.error}</div>
-            )}
-            {inviteModal.sent && (
-              <div style={{ fontSize: 12, color: 'var(--green)' }}>✓ Invite sent to {inviteModal.email}</div>
-            )}
+            {liveInviteModal.error && <div style={{ fontSize: 12, color: 'var(--red)' }}>⚠ {liveInviteModal.error}</div>}
+            {liveInviteModal.sent && <div style={{ fontSize: 12, color: 'var(--green)' }}>✓ Live interview invite sent</div>}
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <button className="btn btn-secondary" onClick={() => setInviteModal(null)}>
-                {inviteModal.sent ? 'Close' : 'Cancel'}
-              </button>
-              {!inviteModal.sent && (
-                <button className="btn btn-primary" disabled={inviteModal.sending || !inviteModal.email.trim()} onClick={sendInvite}>
-                  {inviteModal.sending ? <><span className="spinner" style={{ width: 11, height: 11 }} /> Sending…</> : 'Send Invite'}
+              <button className="btn btn-secondary" onClick={() => setLiveInviteModal(null)}>{liveInviteModal.sent ? 'Close' : 'Cancel'}</button>
+              {!liveInviteModal.sent && (
+                <button className="btn btn-primary" disabled={liveInviteModal.sending || !liveInviteModal.email.trim()} onClick={sendLiveInterviewInvite}>
+                  {liveInviteModal.sending ? <><span className="spinner" style={{ width: 11, height: 11 }} /> Sending…</> : 'Send Invite'}
                 </button>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Decision modal ── */}
+      {decisionModal && (
+        <div style={modalOverlay}>
+          <div style={modalBox}>
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text)', marginBottom: 4 }}>Final Decision</div>
+              <div style={{ fontSize: 13, color: 'var(--text-3)' }}>{decisionModal.candidate.full_name}</div>
+            </div>
+            <div>
+              <label style={modalLabel}>Notes (optional)</label>
+              <textarea
+                style={{ ...modalInput, height: 80, resize: 'vertical' }}
+                value={decisionModal.notes}
+                onChange={e => setDecisionModal(m => ({ ...m, notes: e.target.value }))}
+                placeholder="Add any notes about this decision…"
+              />
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button className="btn btn-secondary" onClick={() => setDecisionModal(null)}>Cancel</button>
+              <button
+                className="btn btn-secondary"
+                style={{ color: 'var(--red)', borderColor: 'var(--red)' }}
+                onClick={() => saveDecision('rejected')}
+              >✗ Reject</button>
+              <button
+                className="btn btn-primary"
+                style={{ background: 'var(--green)' }}
+                onClick={() => saveDecision('hired')}
+              >✓ Hire</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Live Call modal ── */}
+      {liveCallModal && (
+        <div style={{ ...modalOverlay, alignItems: 'stretch', padding: 0 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', width: '100%', height: '100%', background: '#000' }}>
+            <div style={{ padding: '10px 16px', background: 'rgba(0,0,0,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.1)', flexShrink: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ color: '#B8924A', fontFamily: 'monospace', fontSize: 13, letterSpacing: '0.1em' }}>ONE SELECT</span>
+                <span style={{ color: 'rgba(255,255,255,0.3)' }}>·</span>
+                <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 13 }}>{liveCallModal.candidate.full_name} — Live Interview</span>
+              </div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <button
+                  className="btn btn-secondary"
+                  style={{ fontSize: 11, padding: '4px 12px' }}
+                  onClick={() => { markLiveComplete(liveCallModal.candidate); setLiveCallModal(null) }}
+                >✓ End & Mark Done</button>
+                <button
+                  onClick={() => setLiveCallModal(null)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.4)', fontSize: 20, padding: '4px 8px' }}
+                >✕</button>
+              </div>
+            </div>
+            <iframe
+              src={liveCallModal.candidate.live_room_url ?? `https://meet.jit.si/oneselect-${liveCallModal.candidate.live_interview_token ?? liveCallModal.candidate.id}`}
+              style={{ flex: 1, border: 'none', width: '100%' }}
+              allow="camera; microphone; fullscreen; display-capture"
+              title="Live Interview"
+            />
           </div>
         </div>
       )}
@@ -784,4 +863,21 @@ export default function AdminPipeline({ allowedClientIds } = {}) {
       )}
     </div>
   )
+}
+
+const modalOverlay = {
+  position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+  display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000,
+}
+const modalBox = {
+  background: 'var(--surface)', borderRadius: 12, padding: 28,
+  width: 420, display: 'flex', flexDirection: 'column', gap: 16,
+}
+const modalLabel = {
+  fontSize: 11, fontFamily: 'var(--font-mono)', textTransform: 'uppercase',
+  letterSpacing: '0.08em', color: 'var(--text-3)', display: 'block', marginBottom: 6,
+}
+const modalInput = {
+  width: '100%', padding: '9px 12px', borderRadius: 7, border: '1px solid var(--border)',
+  background: 'var(--bg)', color: 'var(--text)', fontSize: 13, boxSizing: 'border-box',
 }
