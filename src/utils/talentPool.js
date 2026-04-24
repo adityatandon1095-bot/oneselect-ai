@@ -82,6 +82,7 @@ export function mapMatchToCandidate(m) {
     live_interview_notes: m.live_interview_notes,
     final_decision: m.final_decision,
     decision_notes: m.decision_notes,
+    offer_status: m.offer_status,
     _status: m.match_score != null ? 'screened' : 'parsed',
   }
 }

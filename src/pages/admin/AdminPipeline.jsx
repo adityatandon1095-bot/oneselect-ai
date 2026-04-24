@@ -197,7 +197,7 @@ Return the subject line first starting with "SUBJECT: ", then a blank line, then
     setOutreachModal(m => ({ ...m, sending: true, error: null }))
     try {
       const { error } = await supabase.functions.invoke('send-outreach-email', {
-        body: { to: email.trim(), subject, body: emailContent, candidate_name: candidate.full_name },
+        body: { to_email: email.trim(), to_name: candidate.full_name, subject, body: emailContent, job_title: activeJob?.title ?? '' },
       })
       if (error) throw new Error(error.message)
 
@@ -205,7 +205,8 @@ Return the subject line first starting with "SUBJECT: ", then a blank line, then
       const { data: logRow } = await supabase.from('outreach_log').insert({
         candidate_id: candidate.id,
         job_id: activeJob?.id,
-        email_content: emailContent,
+        subject,
+        email_body: emailContent,
         sent_at: new Date().toISOString(),
         responded: false,
       }).select().single()
@@ -271,16 +272,14 @@ Return the subject line first starting with "SUBJECT: ", then a blank line, then
       room_url: roomUrl,
     }).select().single()
 
-    const companyName = clients.find(c => c.id === clientId)?.company_name ?? ''
     const { error } = await supabase.functions.invoke('send-schedule-invite', {
       body: {
         mode: 'propose',
-        email: email.trim(),
-        name: candidate.full_name,
+        token: schedRow?.confirm_token,
+        proposed_slots: filledSlots,
         job_title: activeJob?.title ?? '',
-        company_name: companyName,
-        slots: filledSlots,
-        confirm_token: schedRow?.confirm_token,
+        candidate_email: email.trim(),
+        candidate_name: candidate.full_name,
         room_url: roomUrl,
       },
     })
@@ -339,13 +338,11 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
     if (!letterContent.trim()) return
     setOfferModal(m => ({ ...m, sending: true, error: null }))
     try {
-      const companyName = clients.find(c => c.id === clientId)?.company_name ?? ''
       const { error } = await supabase.functions.invoke('send-offer-letter', {
         body: {
-          email: candidate.email ?? '',
+          candidate_email: candidate.email ?? '',
           candidate_name: candidate.full_name,
           job_title: activeJob?.title ?? '',
-          company_name: companyName,
           letter_content: letterContent,
         },
       })
