@@ -10,6 +10,7 @@ import AdminPipeline from './pages/admin/AdminPipeline'
 import AdminTalentPool from './pages/admin/AdminTalentPool'
 import AdminSettings from './pages/admin/AdminSettings'
 import AdminRecruiters from './pages/admin/AdminRecruiters'
+import AdminAnalytics from './pages/admin/AdminAnalytics'
 import RecruiterLayout from './pages/recruiter/RecruiterLayout'
 import RecruiterDashboard from './pages/recruiter/RecruiterDashboard'
 import RecruiterClients from './pages/recruiter/RecruiterClients'
@@ -25,6 +26,7 @@ import ClientReports from './pages/client/ClientReports'
 import ClientSettings from './pages/client/ClientSettings'
 import PublicVideoInterview from './pages/PublicVideoInterview'
 import PublicLiveInterview from './pages/PublicLiveInterview'
+import PublicScheduleConfirm from './pages/PublicScheduleConfirm'
 import './App.css'
 
 class ErrorBoundary extends Component {
@@ -97,6 +99,7 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/interview/:token" element={<PublicVideoInterview />} />
           <Route path="/live/:token" element={<PublicLiveInterview />} />
+          <Route path="/schedule/:token" element={<PublicScheduleConfirm />} />
           <Route path="/" element={<RootRedirect />} />
 
           <Route path="/admin" element={<ProtectedRoute role="admin"><AdminLayout /></ProtectedRoute>}>
@@ -107,6 +110,7 @@ export default function App() {
             <Route path="jobs" element={<AdminJobs />} />
             <Route path="pipeline" element={<AdminPipeline />} />
             <Route path="talent-pool" element={<AdminTalentPool />} />
+            <Route path="analytics" element={<AdminAnalytics />} />
             <Route path="settings" element={<AdminSettings />} />
           </Route>
 

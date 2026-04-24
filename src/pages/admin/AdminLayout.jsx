@@ -8,6 +8,7 @@ const NAV = [
   { to: '/admin/jobs',        label: 'Jobs',        icon: '◫' },
   { to: '/admin/talent-pool', label: 'Talent Pool', icon: '◌' },
   { to: '/admin/pipeline',    label: 'Pipeline',    icon: '◐' },
+  { to: '/admin/analytics',   label: 'Analytics',   icon: '◱' },
   { to: '/admin/settings',    label: 'Settings',    icon: '◷' },
 ]
 

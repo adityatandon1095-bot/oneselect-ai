@@ -8,6 +8,7 @@ export default function RecruiterDashboard() {
   const navigate = useNavigate()
   const [clients, setClients] = useState([])
   const [stats, setStats] = useState({ clients: 0, jobs: 0, candidates: 0, interviewed: 0 })
+  const [funnel, setFunnel] = useState(null)
   const [loading, setLoading] = useState(true)
 
   // First-login password change
@@ -63,12 +64,18 @@ export default function RecruiterDashboard() {
     // Load candidate stats
     let interviewed = 0
     if (jobIds.length) {
-      const { data: cData } = await supabase
-        .from('candidates')
-        .select('id, scores')
-        .in('job_id', jobIds)
-        .not('scores', 'is', null)
-      interviewed = (cData ?? []).length
+      const [{ data: cData }, { data: mData }] = await Promise.all([
+        supabase.from('candidates').select('id, job_id, match_pass, scores, live_interview_status, final_decision').in('job_id', jobIds),
+        supabase.from('job_matches').select('id, job_id, match_pass, scores, live_interview_status, final_decision').in('job_id', jobIds),
+      ])
+      const all = [...(cData ?? []), ...(mData ?? [])]
+      interviewed = all.filter(c => c.scores?.overallScore != null).length
+      const total    = all.length
+      const passed   = all.filter(c => c.match_pass === true).length
+      const videoComp = interviewed
+      const liveSched = all.filter(c => c.live_interview_status === 'scheduled' || c.live_interview_status === 'completed').length
+      const hired    = all.filter(c => c.final_decision === 'hired').length
+      if (total > 0) setFunnel({ total, passed, videoComp, liveSched, hired })
     }
 
     const totalCandidates = allJobs.reduce((sum, j) => sum + (j.candidates?.[0]?.count ?? 0), 0)
@@ -197,6 +204,27 @@ export default function RecruiterDashboard() {
           <span className="metric-label">Interviews Done</span>
         </div>
       </div>
+
+      {funnel && (
+        <div className="section-card">
+          <div className="section-card-head"><h3>Pipeline Conversion</h3></div>
+          <div style={{ padding: '12px 20px 20px', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {[
+              { label: 'CVs',           value: funnel.total,     color: '#9ca3af',  rate: null },
+              { label: 'Screening Pass', value: funnel.passed,   color: '#B8924A',  rate: funnel.total     ? Math.round(funnel.passed    / funnel.total     * 100) : 0 },
+              { label: 'Video Done',    value: funnel.videoComp, color: '#6366f1',  rate: funnel.passed    ? Math.round(funnel.videoComp / funnel.passed    * 100) : 0 },
+              { label: 'Live Interview', value: funnel.liveSched, color: '#22c55e',  rate: funnel.videoComp ? Math.round(funnel.liveSched / funnel.videoComp * 100) : 0 },
+              { label: 'Hired',         value: funnel.hired,     color: '#10b981',  rate: funnel.liveSched ? Math.round(funnel.hired     / funnel.liveSched  * 100) : 0 },
+            ].map(s => (
+              <div key={s.label} style={{ flex: '1 1 90px', minWidth: 80, padding: '12px 14px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, borderLeft: `3px solid ${s.color}` }}>
+                <div style={{ fontSize: 22, fontWeight: 300, fontFamily: 'var(--font-head)', color: s.color }}>{s.value}</div>
+                <div style={{ fontSize: 9, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-3)', marginTop: 4 }}>{s.label}</div>
+                {s.rate !== null && <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--text-3)', marginTop: 2 }}>{s.rate}%</div>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {clients.length === 0 ? (
         <div className="section-card">

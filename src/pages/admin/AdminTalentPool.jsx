@@ -8,6 +8,9 @@ import { triggerTalentPoolMatch } from '../../utils/talentPool'
 const CV_PARSE_SYSTEM = `You are a CV parser. Return ONLY valid JSON — no markdown:
 {"name":"string","email":"string","currentRole":"string","totalYears":number,"skills":["..."],"education":"string","summary":"string","highlights":["..."]}`
 
+const NLP_SEARCH_SYSTEM = `You are a talent database search parser. Given a recruiter's natural language query, return ONLY valid JSON (no markdown):
+{"role":"primary job title or role type","minYears":null,"maxYears":null,"skills":["skill1","skill2"],"availability":"available|any","booleanSearch":"full LinkedIn/Naukri boolean search string using AND OR NOT operators and quoted phrases"}`
+
 const FORMAT_ICON = { pdf: '📕', docx: '📝', txt: '📄', jpg: '🖼️', jpeg: '🖼️', png: '🖼️' }
 const AVAILABILITY_OPTS = ['available', 'placed', 'unavailable']
 const AVAIL_BADGE = { available: 'badge-green', placed: 'badge-blue', unavailable: 'badge-amber' }
@@ -31,6 +34,15 @@ export default function AdminTalentPool() {
   const [resultFilter, setResultFilter] = useState('all')
   const [showLog, setShowLog]       = useState(false)
   const [selected, setSelected]     = useState(null)
+  const [nlpQuery, setNlpQuery]     = useState('')
+  const [nlpSearching, setNlpSearching] = useState(false)
+  const [nlpResults, setNlpResults] = useState(null)
+  const [nlpParsed, setNlpParsed]   = useState(null)
+  const [booleanStr, setBooleanStr] = useState('')
+  const [boolCopied, setBoolCopied] = useState(false)
+  const [addJobSelections, setAddJobSelections] = useState({})
+  const [addedToJob, setAddedToJob] = useState({})
+  const [addingCandidateId, setAddingCandidateId] = useState(null)
   const fileInputRef = useRef()
   const logRef       = useRef()
 
@@ -120,6 +132,79 @@ export default function AdminTalentPool() {
     await supabase.from('talent_pool').update({ availability }).eq('id', id)
     setCandidates(p => p.map(c => c.id === id ? { ...c, availability } : c))
     if (selected?.id === id) setSelected(s => ({ ...s, availability }))
+  }
+
+  function scoreCandidate(c, parsed) {
+    let score = 0
+    const role = (parsed.role ?? '').toLowerCase()
+    const cRole = (c.candidate_role ?? '').toLowerCase()
+    if (role) {
+      if (cRole.includes(role)) score += 40
+      else {
+        const words = role.split(/\s+/)
+        score += Math.round((words.filter(w => cRole.includes(w)).length / words.length) * 30)
+      }
+    } else {
+      score += 20
+    }
+    const reqSkills = (parsed.skills ?? []).map(s => s.toLowerCase())
+    const cSkills   = (c.skills ?? []).map(s => s.toLowerCase())
+    if (reqSkills.length > 0) {
+      const matched = reqSkills.filter(rs => cSkills.some(cs => cs.includes(rs) || rs.includes(cs)))
+      score += Math.round((matched.length / reqSkills.length) * 40)
+    } else {
+      score += 20
+    }
+    const years = c.total_years ?? 0
+    if (parsed.minYears != null) {
+      if (years >= parsed.minYears) score += 10
+      else if (years >= parsed.minYears - 2) score += 5
+    } else {
+      score += 5
+    }
+    if (parsed.maxYears != null && years > parsed.maxYears) score -= 5
+    if (parsed.availability === 'available' && c.availability === 'available') score += 5
+    else if (parsed.availability !== 'available') score += 5
+    return score
+  }
+
+  async function runNlpSearch() {
+    if (!nlpQuery.trim()) return
+    setNlpSearching(true)
+    setNlpResults(null)
+    setNlpParsed(null)
+    setBooleanStr('')
+    try {
+      const reply = await callClaude([{ role: 'user', content: nlpQuery }], NLP_SEARCH_SYSTEM, 512)
+      const jsonStr = reply.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
+      const parsed = JSON.parse(jsonStr)
+      setNlpParsed(parsed)
+      setBooleanStr(parsed.booleanSearch ?? '')
+      const scored = candidates
+        .map(c => ({ ...c, nlpScore: scoreCandidate(c, parsed) }))
+        .filter(c => c.nlpScore > 15)
+        .sort((a, b) => b.nlpScore - a.nlpScore)
+      setNlpResults(scored)
+    } catch (_) {
+      setNlpResults([])
+    }
+    setNlpSearching(false)
+  }
+
+  async function addToJobPipeline(candidate, jobId) {
+    if (!jobId) return
+    setAddingCandidateId(candidate.id)
+    const { error } = await supabase.from('candidates').insert({
+      job_id:         jobId,
+      full_name:      candidate.full_name,
+      email:          candidate.email ?? '',
+      candidate_role: candidate.candidate_role ?? '',
+      total_years:    candidate.total_years ?? 0,
+      summary:        candidate.summary ?? '',
+      raw_text:       candidate.raw_text ?? '',
+    })
+    setAddingCandidateId(null)
+    if (!error) setAddedToJob(p => ({ ...p, [candidate.id + jobId]: true }))
   }
 
   async function runMatch() {
@@ -483,6 +568,118 @@ export default function AdminTalentPool() {
           </div>
         )
       })()}
+
+      {/* ── 4 AI Smart Search ── */}
+      <div className="section-card">
+        <div className="section-card-head"><h3>4 · AI Smart Search</h3></div>
+        <div className="section-card-body">
+          <p style={{ fontSize: 13, color: 'var(--text-2)', marginBottom: 14 }}>
+            Describe your ideal candidate in plain English. AI converts it to structured filters and a Boolean search string for LinkedIn / Naukri.
+          </p>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <input
+              type="text"
+              placeholder='e.g. "Senior product manager 7+ years fintech experience in Delhi"'
+              value={nlpQuery}
+              onChange={e => setNlpQuery(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && runNlpSearch()}
+              style={{ flex: 1, padding: '9px 12px', fontSize: 13 }}
+            />
+            <button
+              className="btn btn-primary"
+              disabled={!nlpQuery.trim() || nlpSearching}
+              onClick={runNlpSearch}
+              style={{ whiteSpace: 'nowrap' }}
+            >
+              {nlpSearching ? <><span className="spinner" style={{ width: 12, height: 12 }} /> Searching…</> : 'Search Pool'}
+            </button>
+          </div>
+
+          {nlpParsed && (
+            <div style={{ marginTop: 14, display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+              {nlpParsed.role && <span style={{ fontSize: 10, padding: '3px 8px', background: 'rgba(184,146,74,0.1)', border: '1px solid rgba(184,146,74,0.3)', borderRadius: 'var(--r)', fontFamily: 'var(--font-mono)', color: 'var(--accent)' }}>role: {nlpParsed.role}</span>}
+              {nlpParsed.minYears != null && <span style={{ fontSize: 10, padding: '3px 8px', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 'var(--r)', fontFamily: 'var(--font-mono)', color: 'var(--text-3)' }}>{nlpParsed.minYears}+ yrs</span>}
+              {(nlpParsed.skills ?? []).map(s => (
+                <span key={s} style={{ fontSize: 10, padding: '3px 8px', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 'var(--r)', fontFamily: 'var(--font-mono)', color: 'var(--text-3)' }}>{s}</span>
+              ))}
+            </div>
+          )}
+
+          {booleanStr && (
+            <div style={{ marginTop: 14, padding: '12px 14px', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 'var(--r)', position: 'relative' }}>
+              <div style={{ fontSize: 9, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-3)', marginBottom: 6 }}>Boolean Search String</div>
+              <code style={{ fontSize: 11, color: 'var(--text-2)', lineHeight: 1.6, display: 'block', wordBreak: 'break-word' }}>{booleanStr}</code>
+              <button
+                onClick={() => { navigator.clipboard.writeText(booleanStr); setBoolCopied(true); setTimeout(() => setBoolCopied(false), 2000) }}
+                style={{ position: 'absolute', top: 10, right: 10, fontSize: 10, padding: '3px 8px', background: boolCopied ? 'var(--green-d)' : 'var(--surface)', border: `1px solid ${boolCopied ? 'var(--green)' : 'var(--border)'}`, borderRadius: 'var(--r)', cursor: 'pointer', fontFamily: 'var(--font-mono)', color: boolCopied ? 'var(--green)' : 'var(--text-3)' }}
+              >
+                {boolCopied ? '✓ Copied' : 'Copy'}
+              </button>
+            </div>
+          )}
+        </div>
+
+        {nlpResults !== null && (
+          <div>
+            {nlpResults.length === 0 ? (
+              <div className="empty-state">No candidates match this query. Try broader terms.</div>
+            ) : (
+              <>
+                <div style={{ padding: '8px 20px 4px', fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-3)', borderTop: '1px solid var(--border)' }}>
+                  {nlpResults.length} match{nlpResults.length !== 1 ? 'es' : ''} found
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12, padding: '12px 20px 20px' }}>
+                  {nlpResults.map(c => {
+                    const jobKey = addJobSelections[c.id] || ''
+                    const added = addedToJob[c.id + jobKey]
+                    return (
+                      <div key={c.id} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--r)', padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <div className="profile-avatar" style={{ width: 36, height: 36, fontSize: 14, borderRadius: 'var(--r)', flexShrink: 0 }}>
+                            {(c.full_name ?? '?')[0].toUpperCase()}
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.full_name}</div>
+                            <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--text-3)' }}>{c.candidate_role} · {c.total_years}y</div>
+                          </div>
+                          <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--accent)', flexShrink: 0 }}>{c.nlpScore}</span>
+                        </div>
+                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                          {(c.skills ?? []).slice(0, 4).map(s => (
+                            <span key={s} style={{ fontSize: 9, padding: '2px 6px', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 'var(--r)', fontFamily: 'var(--font-mono)', color: 'var(--text-3)' }}>{s}</span>
+                          ))}
+                        </div>
+                        {added ? (
+                          <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--green)', textAlign: 'center', padding: '6px 0' }}>✓ Added to pipeline</div>
+                        ) : (
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            <select
+                              value={addJobSelections[c.id] ?? ''}
+                              onChange={e => setAddJobSelections(p => ({ ...p, [c.id]: e.target.value }))}
+                              style={{ flex: 1, fontSize: 11, padding: '4px 6px' }}
+                            >
+                              <option value="">— select job —</option>
+                              {jobs.map(j => <option key={j.id} value={j.id}>{j.title}{j.profiles?.company_name ? ` · ${j.profiles.company_name}` : ''}</option>)}
+                            </select>
+                            <button
+                              className="btn btn-primary"
+                              style={{ padding: '4px 10px', fontSize: 11, whiteSpace: 'nowrap' }}
+                              disabled={!addJobSelections[c.id] || addingCandidateId === c.id}
+                              onClick={() => addToJobPipeline(c, addJobSelections[c.id])}
+                            >
+                              {addingCandidateId === c.id ? <span className="spinner" style={{ width: 10, height: 10 }} /> : 'Add →'}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* ── Candidate Detail Modal ── */}
       {selected && (

@@ -39,38 +39,49 @@ function ScoreRing({ score, size = 48 }) {
 }
 
 const DEFAULT_JOB_FORM = { title:'', experience_years:3, required_skills:[], preferred_skills:[], description:'', tech_weight:60, comm_weight:40 }
+const appUrl = 'https://oneselect-ai-t6uo-phi.vercel.app'
 
 export default function AdminPipeline({ allowedClientIds } = {}) {
   const { profile } = useAuth()
   const isClient = profile?.user_role === 'client'
   const location = useLocation()
 
-  const [clients, setClients] = useState([])
-  const [clientId, setClientId] = useState('')
-  const [clientJobs, setClientJobs] = useState([])
-  const [jobId, setJobId] = useState('')
-  const [jobForm, setJobForm] = useState(DEFAULT_JOB_FORM)
-  const [activeJob, setActiveJob] = useState(null)
-  const [candidates, setCandidates] = useState([])
-  const [files, setFiles] = useState([])
-  const [dragging, setDragging] = useState(false)
-  const [parsing, setParsing] = useState(false)
-  const [screening, setScreening] = useState(false)
+  const [clients, setClients]         = useState([])
+  const [clientId, setClientId]       = useState('')
+  const [clientJobs, setClientJobs]   = useState([])
+  const [jobId, setJobId]             = useState('')
+  const [jobForm, setJobForm]         = useState(DEFAULT_JOB_FORM)
+  const [activeJob, setActiveJob]     = useState(null)
+  const [candidates, setCandidates]   = useState([])
+  const [files, setFiles]             = useState([])
+  const [dragging, setDragging]       = useState(false)
+  const [parsing, setParsing]         = useState(false)
+  const [screening, setScreening]     = useState(false)
   const [screeningDone, setScreeningDone] = useState(false)
-  const [log, setLog] = useState([])
+  const [log, setLog]                 = useState([])
   const [useTalentPool, setUseTalentPool] = useState(false)
   const [poolMatchLoading, setPoolMatchLoading] = useState(false)
   const [poolMatchProgress, setPoolMatchProgress] = useState({ current: 0, total: 0 })
   const [videoPlayerTarget, setVideoPlayerTarget] = useState(null)
 
-  // AI interview invite modal
+  // Outreach (Feature 1)
+  const [outreachLog, setOutreachLog]     = useState({}) // candidateId → {sent_at, responded, id}
+  const [outreachModal, setOutreachModal] = useState(null)
+
+  // AI invite modal (unchanged)
   const [aiInviteModal, setAiInviteModal] = useState(null)
-  // Live interview invite modal
-  const [liveInviteModal, setLiveInviteModal] = useState(null)
+
+  // Schedule modal — replaces simple liveInviteModal (Feature 4)
+  const [scheduleModal, setScheduleModal] = useState(null)
+
   // Final decision modal
   const [decisionModal, setDecisionModal] = useState(null)
-  // Live call modal (iframe embed)
+
+  // Live call modal
   const [liveCallModal, setLiveCallModal] = useState(null)
+
+  // Offer letter modal (Feature 5)
+  const [offerModal, setOfferModal] = useState(null)
 
   const running = parsing || screening || poolMatchLoading
   const fileInputRef = useRef()
@@ -80,7 +91,6 @@ export default function AdminPipeline({ allowedClientIds } = {}) {
   useEffect(() => { if (clientId) loadClientJobs(clientId) }, [clientId])
   useEffect(() => {
     if (!clients.length || clientId) return
-    // Auto-select if only one client (client portal)
     if (clients.length === 1) { setClientId(clients[0].id); return }
     const urlClient = new URLSearchParams(location.search).get('client')
     if (urlClient && clients.some(c => c.id === urlClient)) setClientId(urlClient)
@@ -122,6 +132,12 @@ export default function AdminPipeline({ allowedClientIds } = {}) {
 
     setCandidates(loaded)
     setScreeningDone(loaded.some(c => c.match_score != null))
+
+    // Load outreach log for this job
+    const { data: outData } = await supabase.from('outreach_log').select('id, candidate_id, sent_at, responded').eq('job_id', id)
+    const map = {}
+    ;(outData ?? []).forEach(r => { map[r.candidate_id] = r })
+    setOutreachLog(map)
   }
 
   async function refreshCandidates() {
@@ -149,6 +165,67 @@ export default function AdminPipeline({ allowedClientIds } = {}) {
 
   const addLog = (msg, type = '') => setLog(p => [...p, { id: Date.now() + Math.random(), msg, type }])
 
+  // ── Feature 1: Outreach ───────────────────────────────────────────────────
+  async function openOutreachModal(candidate) {
+    const companyName = clients.find(c => c.id === clientId)?.company_name ?? ''
+    setOutreachModal({ candidate, email: candidate.email ?? '', emailContent: '', subject: '', generating: true, sending: false, sent: false, error: null })
+    try {
+      const prompt = `Write a professional, personalized recruiter outreach email to a candidate for the following:
+
+Job: ${activeJob?.title ?? ''}
+Company: ${companyName}
+Candidate: ${candidate.full_name}, ${candidate.candidate_role}, ${candidate.total_years}y experience
+Skills: ${(candidate.skills ?? []).join(', ')}
+Summary: ${candidate.summary ?? ''}
+
+Return the subject line first starting with "SUBJECT: ", then a blank line, then the email body (150-200 words). Be warm, specific to their background, and clear about next steps.`
+
+      const reply = await callClaude([{ role: 'user', content: prompt }], 'You are a professional recruiter writing personalized outreach emails.', 600)
+      const lines = reply.trim().split('\n')
+      const subjectLine = lines.find(l => l.startsWith('SUBJECT:'))
+      const subject = subjectLine ? subjectLine.replace('SUBJECT:', '').trim() : `Exciting opportunity — ${activeJob?.title ?? 'new role'}`
+      const body = lines.filter(l => !l.startsWith('SUBJECT:')).join('\n').trim()
+      setOutreachModal(m => ({ ...m, subject, emailContent: body, generating: false }))
+    } catch (err) {
+      setOutreachModal(m => ({ ...m, generating: false, error: 'AI generation failed: ' + err.message }))
+    }
+  }
+
+  async function sendOutreach() {
+    const { candidate, email, subject, emailContent } = outreachModal
+    if (!email.trim()) return
+    setOutreachModal(m => ({ ...m, sending: true, error: null }))
+    try {
+      const { error } = await supabase.functions.invoke('send-outreach-email', {
+        body: { to: email.trim(), subject, body: emailContent, candidate_name: candidate.full_name },
+      })
+      if (error) throw new Error(error.message)
+
+      // Log to outreach_log
+      const { data: logRow } = await supabase.from('outreach_log').insert({
+        candidate_id: candidate.id,
+        job_id: activeJob?.id,
+        email_content: emailContent,
+        sent_at: new Date().toISOString(),
+        responded: false,
+      }).select().single()
+
+      setOutreachLog(m => ({ ...m, [candidate.id]: logRow }))
+      setOutreachModal(m => ({ ...m, sending: false, sent: true }))
+      addLog(`✉ Outreach sent to ${email.trim()}`, 'ok')
+    } catch (err) {
+      setOutreachModal(m => ({ ...m, sending: false, error: err.message }))
+    }
+  }
+
+  async function toggleResponded(candidateId) {
+    const existing = outreachLog[candidateId]
+    if (!existing) return
+    const next = !existing.responded
+    await supabase.from('outreach_log').update({ responded: next }).eq('id', existing.id)
+    setOutreachLog(m => ({ ...m, [candidateId]: { ...existing, responded: next } }))
+  }
+
   // ── AI interview invite ────────────────────────────────────────────────────
   async function sendAiInterviewInvite() {
     const { candidate, email } = aiInviteModal
@@ -166,17 +243,16 @@ export default function AdminPipeline({ allowedClientIds } = {}) {
     }
   }
 
-  // ── Live interview invite ─────────────────────────────────────────────────
-  async function sendLiveInterviewInvite() {
-    const { candidate, email } = liveInviteModal
-    if (!email.trim()) return
-    setLiveInviteModal(m => ({ ...m, sending: true, error: null }))
+  // ── Feature 4: Schedule live interview with 3 time slots ─────────────────
+  async function sendScheduleInvite() {
+    const { candidate, email, slots } = scheduleModal
+    const filledSlots = slots.filter(s => s.trim())
+    if (!email.trim() || filledSlots.length === 0) return
+    setScheduleModal(m => ({ ...m, sending: true, error: null }))
 
-    // Generate tokens and room URL if not yet set
     const liveToken = candidate.live_interview_token ?? crypto.randomUUID()
-    const roomUrl = candidate.live_room_url ?? `https://meet.jit.si/oneselect-${liveToken}`
+    const roomUrl   = candidate.live_room_url ?? `https://meet.jit.si/oneselect-${liveToken}`
 
-    // Persist tokens to DB
     const table = candidate._fromPool ? 'job_matches' : 'candidates'
     await supabase.from(table).update({
       live_interview_token: liveToken,
@@ -184,15 +260,36 @@ export default function AdminPipeline({ allowedClientIds } = {}) {
       live_interview_status: 'scheduled',
     }).eq('id', candidate.id)
 
+    // Create interview_schedules record
+    const { data: schedRow } = await supabase.from('interview_schedules').insert({
+      candidate_id: candidate.id,
+      job_id: activeJob?.id,
+      proposed_slots: filledSlots,
+      status: 'pending',
+      candidate_email: email.trim(),
+      candidate_name: candidate.full_name,
+      room_url: roomUrl,
+    }).select().single()
+
     const companyName = clients.find(c => c.id === clientId)?.company_name ?? ''
-    const { error } = await supabase.functions.invoke('send-live-interview-invite', {
-      body: { email: email.trim(), name: candidate.full_name, job_title: activeJob?.title ?? '', company_name: companyName, token: liveToken, room_url: roomUrl },
+    const { error } = await supabase.functions.invoke('send-schedule-invite', {
+      body: {
+        mode: 'propose',
+        email: email.trim(),
+        name: candidate.full_name,
+        job_title: activeJob?.title ?? '',
+        company_name: companyName,
+        slots: filledSlots,
+        confirm_token: schedRow?.confirm_token,
+        room_url: roomUrl,
+      },
     })
+
     if (error) {
-      setLiveInviteModal(m => ({ ...m, sending: false, error: error.message }))
+      setScheduleModal(m => ({ ...m, sending: false, error: error.message }))
     } else {
-      setLiveInviteModal(m => ({ ...m, sending: false, sent: true }))
-      addLog(`✉ Live interview invite sent to ${email.trim()}`, 'ok')
+      setScheduleModal(m => ({ ...m, sending: false, sent: true }))
+      addLog(`📅 Schedule invite sent to ${email.trim()}`, 'ok')
       await refreshCandidates()
     }
   }
@@ -205,14 +302,73 @@ export default function AdminPipeline({ allowedClientIds } = {}) {
     setDecisionModal(null)
     addLog(`✓ Decision saved: ${candidate.full_name} → ${decision}`, 'ok')
     await refreshCandidates()
+    if (decision === 'hired') {
+      openOfferModal({ ...candidate, final_decision: 'hired' })
+    }
   }
 
-  // ── Mark live interview complete ──────────────────────────────────────────
   async function markLiveComplete(candidate) {
     const table = candidate._fromPool ? 'job_matches' : 'candidates'
     await supabase.from(table).update({ live_interview_status: 'completed' }).eq('id', candidate.id)
     addLog(`✓ Live interview marked complete: ${candidate.full_name}`, 'ok')
     await refreshCandidates()
+  }
+
+  // ── Feature 5: Offer letter ────────────────────────────────────────────────
+  async function openOfferModal(candidate) {
+    const companyName = clients.find(c => c.id === clientId)?.company_name ?? ''
+    setOfferModal({ candidate, letterContent: '', generating: true, sending: false, sent: false, error: null })
+    try {
+      const prompt = `Write a professional job offer letter for:
+Candidate: ${candidate.full_name}
+Role: ${activeJob?.title ?? ''}
+Company: ${companyName}
+Decision notes: ${candidate.decision_notes ?? 'N/A'}
+
+Write a formal but warm offer letter (350-500 words) including: congratulations opening, role description, next steps (mention signing and returning this letter), and a professional closing. Return only the letter body.`
+
+      const letter = await callClaude([{ role: 'user', content: prompt }], 'You are writing formal employment offer letters.', 1000)
+      setOfferModal(m => ({ ...m, letterContent: letter.trim(), generating: false }))
+    } catch (err) {
+      setOfferModal(m => ({ ...m, generating: false, error: 'AI generation failed: ' + err.message }))
+    }
+  }
+
+  async function sendOfferLetter() {
+    const { candidate, letterContent } = offerModal
+    if (!letterContent.trim()) return
+    setOfferModal(m => ({ ...m, sending: true, error: null }))
+    try {
+      const companyName = clients.find(c => c.id === clientId)?.company_name ?? ''
+      const { error } = await supabase.functions.invoke('send-offer-letter', {
+        body: {
+          email: candidate.email ?? '',
+          candidate_name: candidate.full_name,
+          job_title: activeJob?.title ?? '',
+          company_name: companyName,
+          letter_content: letterContent,
+        },
+      })
+      if (error) throw new Error(error.message)
+
+      // Log to offers table
+      await supabase.from('offers').insert({
+        candidate_id: candidate.id,
+        job_id: activeJob?.id,
+        letter_content: letterContent,
+        sent_at: new Date().toISOString(),
+        status: 'sent',
+      })
+
+      const table = candidate._fromPool ? 'job_matches' : 'candidates'
+      await supabase.from(table).update({ offer_status: 'sent' }).eq('id', candidate.id)
+
+      setOfferModal(m => ({ ...m, sending: false, sent: true }))
+      addLog(`📄 Offer letter sent to ${candidate.email}`, 'ok')
+      await refreshCandidates()
+    } catch (err) {
+      setOfferModal(m => ({ ...m, sending: false, error: err.message }))
+    }
   }
 
   const setForm = (k, v) => setJobForm(f => ({ ...f, [k]: v }))
@@ -246,7 +402,6 @@ export default function AdminPipeline({ allowedClientIds } = {}) {
   }, [])
 
   const onDrop = useCallback((e) => { e.preventDefault(); setDragging(false); addFiles(e.dataTransfer.files) }, [addFiles])
-
   function patchFile(id, updates) { setFiles(p => p.map(f => f.id === id ? { ...f, ...updates } : f)) }
 
   async function parseAll() {
@@ -330,19 +485,16 @@ export default function AdminPipeline({ allowedClientIds } = {}) {
   const screenedCount  = candidates.filter(c => c._status === 'screened').length
   const parseProgress  = files.length ? (doneCount / files.length) * 100 : 0
   const screenProgress = candidates.length ? (screenedCount / candidates.length) * 100 : 0
-
-  // Candidates that have completed AI interview (have scores or video)
-  const aiInterviewCandidates = passedCandidates
-
-  // Candidates in the live interview stage (AI interview done, have scores)
   const liveInterviewCandidates = passedCandidates.filter(c => c.scores?.overallScore != null)
-
-  // Candidates ready for final decision (live interview completed)
   const decisionCandidates = passedCandidates.filter(c => c.live_interview_status === 'completed')
-
   const clientLabel = (c) => c.company_name || c.full_name || c.email
 
-  const appUrl = 'https://oneselect-ai-t6uo-phi.vercel.app'
+  function outreachBadge(cId) {
+    const o = outreachLog[cId]
+    if (!o) return null
+    if (o.responded) return <span className="badge badge-green" style={{ fontSize: 9 }}>Responded</span>
+    return <span className="badge badge-blue" style={{ fontSize: 9 }}>Outreach Sent</span>
+  }
 
   return (
     <div className="page">
@@ -377,39 +529,16 @@ export default function AdminPipeline({ allowedClientIds } = {}) {
           {jobId === 'new' && !isClient && (
             <div style={{ borderTop: '1px solid var(--border)', paddingTop: 16 }}>
               <div className="form-grid">
-                <div className="field">
-                  <label>Job Title</label>
-                  <input type="text" value={jobForm.title} placeholder="e.g. Senior Backend Engineer" onChange={e => setForm('title', e.target.value)} />
-                </div>
-                <div className="field">
-                  <label>Years of Experience</label>
-                  <input type="number" min={0} value={jobForm.experience_years} onChange={e => setForm('experience_years', +e.target.value)} />
-                </div>
-                <div className="field span-2">
-                  <label>Required Skills</label>
-                  <TagInput value={jobForm.required_skills} onChange={v => setForm('required_skills', v)} placeholder="Type and press Enter…" />
-                </div>
-                <div className="field span-2">
-                  <label>Preferred Skills</label>
-                  <TagInput value={jobForm.preferred_skills} onChange={v => setForm('preferred_skills', v)} placeholder="Nice-to-have…" />
-                </div>
-                <div className="field span-2">
-                  <label>Description</label>
-                  <textarea rows={4} value={jobForm.description} onChange={e => setForm('description', e.target.value)} placeholder="Role responsibilities and context…" />
-                </div>
+                <div className="field"><label>Job Title</label><input type="text" value={jobForm.title} placeholder="e.g. Senior Backend Engineer" onChange={e => setForm('title', e.target.value)} /></div>
+                <div className="field"><label>Years of Experience</label><input type="number" min={0} value={jobForm.experience_years} onChange={e => setForm('experience_years', +e.target.value)} /></div>
+                <div className="field span-2"><label>Required Skills</label><TagInput value={jobForm.required_skills} onChange={v => setForm('required_skills', v)} placeholder="Type and press Enter…" /></div>
+                <div className="field span-2"><label>Preferred Skills</label><TagInput value={jobForm.preferred_skills} onChange={v => setForm('preferred_skills', v)} placeholder="Nice-to-have…" /></div>
+                <div className="field span-2"><label>Description</label><textarea rows={4} value={jobForm.description} onChange={e => setForm('description', e.target.value)} placeholder="Role responsibilities and context…" /></div>
                 <div className="field span-2">
                   <label>Evaluation Weights</label>
                   <div className="weight-sliders">
-                    <div className="weight-row">
-                      <span>Technical</span>
-                      <input type="range" min={10} max={90} value={jobForm.tech_weight} onChange={e => setTech(+e.target.value)} />
-                      <span className="weight-val">{jobForm.tech_weight}%</span>
-                    </div>
-                    <div className="weight-row">
-                      <span>Communication</span>
-                      <input type="range" min={10} max={90} value={jobForm.comm_weight} onChange={e => { setForm('comm_weight', +e.target.value); setForm('tech_weight', 100 - +e.target.value) }} />
-                      <span className="weight-val">{jobForm.comm_weight}%</span>
-                    </div>
+                    <div className="weight-row"><span>Technical</span><input type="range" min={10} max={90} value={jobForm.tech_weight} onChange={e => setTech(+e.target.value)} /><span className="weight-val">{jobForm.tech_weight}%</span></div>
+                    <div className="weight-row"><span>Communication</span><input type="range" min={10} max={90} value={jobForm.comm_weight} onChange={e => { setForm('comm_weight', +e.target.value); setForm('tech_weight', 100 - +e.target.value) }} /><span className="weight-val">{jobForm.comm_weight}%</span></div>
                   </div>
                 </div>
               </div>
@@ -437,11 +566,7 @@ export default function AdminPipeline({ allowedClientIds } = {}) {
               <button
                 className={`btn ${useTalentPool ? 'btn-primary' : 'btn-secondary'}`}
                 style={{ fontSize: 11, padding: '4px 10px' }}
-                onClick={() => {
-                  const next = !useTalentPool
-                  setUseTalentPool(next)
-                  if (jobId && jobId !== 'new') selectJob(jobId, next)
-                }}
+                onClick={() => { const next = !useTalentPool; setUseTalentPool(next); if (jobId && jobId !== 'new') selectJob(jobId, next) }}
               >
                 {useTalentPool ? '◎ Pool mode' : '◎ Use Talent Pool'}
               </button>
@@ -450,21 +575,13 @@ export default function AdminPipeline({ allowedClientIds } = {}) {
           <div className="section-card-body">
             {useTalentPool ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                <p style={{ fontSize: 13, color: 'var(--text-2)', margin: 0 }}>
-                  Match all available talent pool candidates against this job using AI screening.
-                </p>
+                <p style={{ fontSize: 13, color: 'var(--text-2)', margin: 0 }}>Match all available talent pool candidates against this job using AI screening.</p>
                 <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                   <button className="btn btn-primary" disabled={poolMatchLoading} onClick={runPoolMatch}>
-                    {poolMatchLoading ? (
-                      <><span className="spinner" style={{ width: 12, height: 12 }} />{poolMatchProgress.total > 0 ? ` ${poolMatchProgress.current}/${poolMatchProgress.total}` : ' Matching…'}</>
-                    ) : 'Run Pool Match'}
+                    {poolMatchLoading ? <><span className="spinner" style={{ width: 12, height: 12 }} />{poolMatchProgress.total > 0 ? ` ${poolMatchProgress.current}/${poolMatchProgress.total}` : ' Matching…'}</> : 'Run Pool Match'}
                   </button>
                   {poolMatchLoading && poolMatchProgress.total > 0 && (
-                    <div style={{ flex: 1 }}>
-                      <div className="progress-track">
-                        <div className="progress-fill" style={{ width: `${(poolMatchProgress.current / poolMatchProgress.total) * 100}%` }} />
-                      </div>
-                    </div>
+                    <div style={{ flex: 1 }}><div className="progress-track"><div className="progress-fill" style={{ width: `${(poolMatchProgress.current / poolMatchProgress.total) * 100}%` }} /></div></div>
                   )}
                 </div>
               </div>
@@ -482,7 +599,6 @@ export default function AdminPipeline({ allowedClientIds } = {}) {
                   <div className="format-pills">{['PDF','DOCX','TXT','JPG','PNG'].map(f => <span key={f} className="format-pill">{f}</span>)}</div>
                   <input ref={fileInputRef} type="file" accept={ACCEPT_ATTR} multiple style={{ display: 'none' }} onChange={e => { addFiles(e.target.files); e.target.value = '' }} />
                 </div>
-
                 {files.length > 0 && (
                   <div className="file-list">
                     <div className="file-list-header">
@@ -506,10 +622,10 @@ export default function AdminPipeline({ allowedClientIds } = {}) {
                           </div>
                         </div>
                         <div className="file-status">
-                          {f.status === 'pending'  && <span className="badge badge-amber">Pending</span>}
-                          {f.status === 'parsing'  && <span className="spinner" />}
-                          {f.status === 'done'     && <span className="badge badge-green">CV Parsed</span>}
-                          {f.status === 'error'    && <span className="badge badge-red">Error</span>}
+                          {f.status === 'pending' && <span className="badge badge-amber">Pending</span>}
+                          {f.status === 'parsing' && <span className="spinner" />}
+                          {f.status === 'done'    && <span className="badge badge-green">CV Parsed</span>}
+                          {f.status === 'error'   && <span className="badge badge-red">Error</span>}
                         </div>
                       </div>
                     ))}
@@ -543,6 +659,19 @@ export default function AdminPipeline({ allowedClientIds } = {}) {
                   {c.match_score != null && <ScoreRing score={c.match_score} size={42} />}
                   {c.match_rank && <span className={`badge ${c.match_rank === 'top10' ? 'badge-blue' : c.match_rank === 'strong' ? 'badge-green' : c.match_rank === 'moderate' ? 'badge-amber' : 'badge-red'}`}>{c.match_rank}</span>}
                   {c.match_pass != null && <span className={`badge ${c.match_pass ? 'badge-green' : 'badge-red'}`}>{c.match_pass ? 'Pass' : 'Fail'}</span>}
+                  {outreachBadge(c.id)}
+                  {outreachLog[c.id]?.responded === false && (
+                    <button className="btn btn-secondary" style={{ fontSize: 9, padding: '2px 6px' }} onClick={() => toggleResponded(c.id)}>Mark Responded</button>
+                  )}
+                  {outreachLog[c.id]?.responded && (
+                    <button className="btn btn-secondary" style={{ fontSize: 9, padding: '2px 6px', color: 'var(--text-3)' }} onClick={() => toggleResponded(c.id)}>Undo</button>
+                  )}
+                  {!outreachLog[c.id] && (
+                    <button className="btn btn-secondary" style={{ fontSize: 10, padding: '2px 8px' }} onClick={() => openOutreachModal(c)}>✉ Outreach</button>
+                  )}
+                  {outreachLog[c.id] && !outreachLog[c.id].responded && (
+                    <button className="btn btn-secondary" style={{ fontSize: 10, padding: '2px 8px' }} onClick={() => openOutreachModal(c)}>↻ Resend</button>
+                  )}
                 </div>
               </div>
             ))}
@@ -558,7 +687,7 @@ export default function AdminPipeline({ allowedClientIds } = {}) {
             <span className="mono text-muted" style={{ fontSize: 11 }}>{passedCandidates.length} passed screening</span>
           </div>
           <div className="candidate-list">
-            {aiInterviewCandidates.map(c => {
+            {passedCandidates.map(c => {
               const hasVideo  = c.video_urls?.length > 0
               const hasScores = !!c.scores?.overallScore
               const rec       = c.scores?.recommendation
@@ -573,18 +702,10 @@ export default function AdminPipeline({ allowedClientIds } = {}) {
                       <>
                         <span className="badge badge-amber">Interview Pending</span>
                         {!isClient && (
-                          <button
-                            className="btn btn-secondary"
-                            style={{ fontSize: 10, padding: '2px 8px' }}
-                            onClick={e => { e.stopPropagation(); setAiInviteModal({ candidate: c, email: c.email ?? '', sending: false, sent: false, error: null }) }}
-                          >✉ Invite</button>
+                          <button className="btn btn-secondary" style={{ fontSize: 10, padding: '2px 8px' }} onClick={e => { e.stopPropagation(); setAiInviteModal({ candidate: c, email: c.email ?? '', sending: false, sent: false, error: null }) }}>✉ Invite</button>
                         )}
                         {c.interview_invite_token && (
-                          <button
-                            className="btn btn-secondary"
-                            style={{ fontSize: 10, padding: '2px 8px' }}
-                            onClick={() => navigator.clipboard.writeText(`${appUrl}/interview/${c.interview_invite_token}`)}
-                          >⎘ Copy Link</button>
+                          <button className="btn btn-secondary" style={{ fontSize: 10, padding: '2px 8px' }} onClick={() => navigator.clipboard.writeText(`${appUrl}/interview/${c.interview_invite_token}`)}>⎘ Copy Link</button>
                         )}
                       </>
                     )}
@@ -632,31 +753,17 @@ export default function AdminPipeline({ allowedClientIds } = {}) {
                     {!scheduled && !completed && (
                       <>
                         <span className="badge" style={{ color: 'var(--text-3)', background: 'var(--surface2)' }}>Not Scheduled</span>
-                        <button
-                          className="btn btn-secondary"
-                          style={{ fontSize: 10, padding: '2px 8px' }}
-                          onClick={e => { e.stopPropagation(); setLiveInviteModal({ candidate: c, email: c.email ?? '', sending: false, sent: false, error: null }) }}
-                        >📅 Schedule</button>
+                        <button className="btn btn-secondary" style={{ fontSize: 10, padding: '2px 8px' }} onClick={() => setScheduleModal({ candidate: c, email: c.email ?? '', slots: ['', '', ''], sending: false, sent: false, error: null })}>📅 Schedule</button>
                       </>
                     )}
                     {scheduled && !completed && (
                       <>
                         <span className="badge badge-blue">Scheduled</span>
-                        <button
-                          className="btn btn-primary"
-                          style={{ fontSize: 10, padding: '2px 8px' }}
-                          onClick={() => setLiveCallModal({ candidate: c })}
-                        >🎥 Join Call</button>
-                        <button
-                          className="btn btn-secondary"
-                          style={{ fontSize: 10, padding: '2px 8px' }}
-                          onClick={() => markLiveComplete(c)}
-                        >✓ Mark Done</button>
+                        <button className="btn btn-primary" style={{ fontSize: 10, padding: '2px 8px' }} onClick={() => setLiveCallModal({ candidate: c })}>🎥 Join Call</button>
+                        <button className="btn btn-secondary" style={{ fontSize: 10, padding: '2px 8px' }} onClick={() => markLiveComplete(c)}>✓ Mark Done</button>
                       </>
                     )}
-                    {completed && (
-                      <span className="badge badge-green">Live Done</span>
-                    )}
+                    {completed && <span className="badge badge-green">Live Done</span>}
                   </div>
                 </div>
               )
@@ -675,6 +782,7 @@ export default function AdminPipeline({ allowedClientIds } = {}) {
           <div className="candidate-list">
             {decisionCandidates.map(c => {
               const decision = c.final_decision
+              const offerSent = c.offer_status === 'sent'
               return (
                 <div key={c.id} className="candidate-row" style={{ cursor: 'default' }}>
                   <div className="c-info">
@@ -686,22 +794,18 @@ export default function AdminPipeline({ allowedClientIds } = {}) {
                     {!decision && (
                       <>
                         <span className="badge" style={{ color: 'var(--text-3)', background: 'var(--surface2)' }}>Pending Decision</span>
-                        <button
-                          className="btn btn-primary"
-                          style={{ fontSize: 10, padding: '2px 8px', background: 'var(--green)' }}
-                          onClick={() => setDecisionModal({ candidate: c, notes: '' })}
-                        >Hire / Reject</button>
+                        <button className="btn btn-primary" style={{ fontSize: 10, padding: '2px 8px', background: 'var(--green)' }} onClick={() => setDecisionModal({ candidate: c, notes: '' })}>Hire / Reject</button>
                       </>
                     )}
-                    {decision === 'hired' && <span className="badge badge-green" style={{ fontSize: 12 }}>✓ Hired</span>}
-                    {decision === 'rejected' && <span className="badge badge-red" style={{ fontSize: 12 }}>✗ Rejected</span>}
-                    {decision && (
-                      <button
-                        className="btn btn-secondary"
-                        style={{ fontSize: 10, padding: '2px 8px' }}
-                        onClick={() => setDecisionModal({ candidate: c, notes: c.decision_notes ?? '' })}
-                      >Edit</button>
+                    {decision === 'hired' && (
+                      <>
+                        <span className="badge badge-green" style={{ fontSize: 12 }}>✓ Hired</span>
+                        {!offerSent && <button className="btn btn-secondary" style={{ fontSize: 10, padding: '2px 8px' }} onClick={() => openOfferModal(c)}>📄 Send Offer</button>}
+                        {offerSent && <span className="badge badge-blue" style={{ fontSize: 10 }}>Offer Sent</span>}
+                      </>
                     )}
+                    {decision === 'rejected' && <span className="badge badge-red" style={{ fontSize: 12 }}>✗ Rejected</span>}
+                    {decision && <button className="btn btn-secondary" style={{ fontSize: 10, padding: '2px 8px' }} onClick={() => setDecisionModal({ candidate: c, notes: c.decision_notes ?? '' })}>Edit</button>}
                   </div>
                 </div>
               )
@@ -710,116 +814,134 @@ export default function AdminPipeline({ allowedClientIds } = {}) {
         </div>
       )}
 
-      {/* ── Video Player modal ── */}
-      {videoPlayerTarget && (
-        <VideoPlayer candidate={videoPlayerTarget} onClose={() => setVideoPlayerTarget(null)} />
-      )}
+      {/* ── Video Player ── */}
+      {videoPlayerTarget && <VideoPlayer candidate={videoPlayerTarget} onClose={() => setVideoPlayerTarget(null)} />}
 
-      {/* ── AI Invite modal ── */}
-      {aiInviteModal && (
-        <div style={modalOverlay}>
-          <div style={modalBox}>
+      {/* ── Outreach Modal (Feature 1) ── */}
+      {outreachModal && (
+        <div style={MO}>
+          <div style={{ ...MB, width: 560 }}>
             <div>
-              <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text)', marginBottom: 4 }}>Send AI Interview Invite</div>
-              <div style={{ fontSize: 13, color: 'var(--text-3)' }}>{aiInviteModal.candidate.full_name}</div>
+              <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>Outreach Email</div>
+              <div style={{ fontSize: 13, color: 'var(--text-3)' }}>{outreachModal.candidate.full_name} · {outreachModal.candidate.candidate_role}</div>
             </div>
+            <div><label style={ML}>Recipient Email</label><input style={MI} value={outreachModal.email} onChange={e => setOutreachModal(m => ({ ...m, email: e.target.value }))} placeholder="candidate@email.com" /></div>
+            <div><label style={ML}>Subject</label><input style={MI} value={outreachModal.subject ?? ''} onChange={e => setOutreachModal(m => ({ ...m, subject: e.target.value }))} placeholder="Subject line…" /></div>
             <div>
-              <label style={modalLabel}>Email</label>
-              <input
-                autoFocus
-                style={modalInput}
-                value={aiInviteModal.email}
-                onChange={e => setAiInviteModal(m => ({ ...m, email: e.target.value, sent: false, error: null }))}
-                onKeyDown={e => { if (e.key === 'Enter' && !aiInviteModal.sending && !aiInviteModal.sent) sendAiInterviewInvite() }}
-                placeholder="candidate@email.com"
-                disabled={aiInviteModal.sending || aiInviteModal.sent}
+              <label style={ML}>Email Body {outreachModal.generating && <span style={{ color: 'var(--accent)' }}>· AI drafting…</span>}</label>
+              <textarea style={{ ...MI, height: 200, resize: 'vertical', fontFamily: 'var(--font-body)', fontSize: 13, lineHeight: 1.6 }}
+                value={outreachModal.emailContent}
+                onChange={e => setOutreachModal(m => ({ ...m, emailContent: e.target.value }))}
+                placeholder="AI-drafted email will appear here…"
+                disabled={outreachModal.generating}
               />
             </div>
+            {outreachModal.error && <div style={{ fontSize: 12, color: 'var(--red)' }}>⚠ {outreachModal.error}</div>}
+            {outreachModal.sent && <div style={{ fontSize: 12, color: 'var(--green)' }}>✓ Outreach email sent successfully</div>}
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button className="btn btn-secondary" onClick={() => setOutreachModal(null)}>{outreachModal.sent ? 'Close' : 'Cancel'}</button>
+              {!outreachModal.sent && <button className="btn btn-primary" disabled={outreachModal.generating || outreachModal.sending || !outreachModal.emailContent.trim()} onClick={sendOutreach}>
+                {outreachModal.sending ? <><span className="spinner" style={{ width: 11, height: 11 }} /> Sending…</> : '✉ Send Outreach'}
+              </button>}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── AI Invite Modal ── */}
+      {aiInviteModal && (
+        <div style={MO}>
+          <div style={MB}>
+            <div><div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>Send AI Interview Invite</div><div style={{ fontSize: 13, color: 'var(--text-3)' }}>{aiInviteModal.candidate.full_name}</div></div>
+            <div><label style={ML}>Email</label><input autoFocus style={MI} value={aiInviteModal.email} onChange={e => setAiInviteModal(m => ({ ...m, email: e.target.value, sent: false, error: null }))} onKeyDown={e => { if (e.key === 'Enter' && !aiInviteModal.sending && !aiInviteModal.sent) sendAiInterviewInvite() }} placeholder="candidate@email.com" disabled={aiInviteModal.sending || aiInviteModal.sent} /></div>
             {aiInviteModal.error && <div style={{ fontSize: 12, color: 'var(--red)' }}>⚠ {aiInviteModal.error}</div>}
             {aiInviteModal.sent && <div style={{ fontSize: 12, color: 'var(--green)' }}>✓ Invite sent to {aiInviteModal.email}</div>}
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
               <button className="btn btn-secondary" onClick={() => setAiInviteModal(null)}>{aiInviteModal.sent ? 'Close' : 'Cancel'}</button>
-              {!aiInviteModal.sent && (
-                <button className="btn btn-primary" disabled={aiInviteModal.sending || !aiInviteModal.email.trim()} onClick={sendAiInterviewInvite}>
-                  {aiInviteModal.sending ? <><span className="spinner" style={{ width: 11, height: 11 }} /> Sending…</> : 'Send Invite'}
-                </button>
-              )}
+              {!aiInviteModal.sent && <button className="btn btn-primary" disabled={aiInviteModal.sending || !aiInviteModal.email.trim()} onClick={sendAiInterviewInvite}>{aiInviteModal.sending ? <><span className="spinner" style={{ width: 11, height: 11 }} /> Sending…</> : 'Send Invite'}</button>}
             </div>
           </div>
         </div>
       )}
 
-      {/* ── Live Invite modal ── */}
-      {liveInviteModal && (
-        <div style={modalOverlay}>
-          <div style={modalBox}>
+      {/* ── Schedule Modal (Feature 4) ── */}
+      {scheduleModal && (
+        <div style={MO}>
+          <div style={{ ...MB, width: 500 }}>
             <div>
-              <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text)', marginBottom: 4 }}>Schedule Live Interview</div>
-              <div style={{ fontSize: 13, color: 'var(--text-3)' }}>{liveInviteModal.candidate.full_name}</div>
+              <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>Schedule Live Interview</div>
+              <div style={{ fontSize: 13, color: 'var(--text-3)' }}>{scheduleModal.candidate.full_name} — propose 3 time slots</div>
             </div>
-            <div>
-              <label style={modalLabel}>Candidate Email</label>
-              <input
-                autoFocus
-                style={modalInput}
-                value={liveInviteModal.email}
-                onChange={e => setLiveInviteModal(m => ({ ...m, email: e.target.value, sent: false, error: null }))}
-                onKeyDown={e => { if (e.key === 'Enter' && !liveInviteModal.sending && !liveInviteModal.sent) sendLiveInterviewInvite() }}
-                placeholder="candidate@email.com"
-                disabled={liveInviteModal.sending || liveInviteModal.sent}
-              />
-            </div>
-            {liveInviteModal.error && <div style={{ fontSize: 12, color: 'var(--red)' }}>⚠ {liveInviteModal.error}</div>}
-            {liveInviteModal.sent && <div style={{ fontSize: 12, color: 'var(--green)' }}>✓ Live interview invite sent</div>}
+            <div><label style={ML}>Candidate Email</label><input style={MI} value={scheduleModal.email} onChange={e => setScheduleModal(m => ({ ...m, email: e.target.value }))} placeholder="candidate@email.com" /></div>
+            {[0, 1, 2].map(i => (
+              <div key={i}>
+                <label style={ML}>Slot {i + 1}</label>
+                <input type="datetime-local" style={MI} value={scheduleModal.slots[i]} onChange={e => {
+                  const next = [...scheduleModal.slots]; next[i] = e.target.value
+                  setScheduleModal(m => ({ ...m, slots: next }))
+                }} />
+              </div>
+            ))}
+            {scheduleModal.error && <div style={{ fontSize: 12, color: 'var(--red)' }}>⚠ {scheduleModal.error}</div>}
+            {scheduleModal.sent && <div style={{ fontSize: 12, color: 'var(--green)' }}>✓ Schedule invite sent — candidate can confirm a slot</div>}
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <button className="btn btn-secondary" onClick={() => setLiveInviteModal(null)}>{liveInviteModal.sent ? 'Close' : 'Cancel'}</button>
-              {!liveInviteModal.sent && (
-                <button className="btn btn-primary" disabled={liveInviteModal.sending || !liveInviteModal.email.trim()} onClick={sendLiveInterviewInvite}>
-                  {liveInviteModal.sending ? <><span className="spinner" style={{ width: 11, height: 11 }} /> Sending…</> : 'Send Invite'}
-                </button>
-              )}
+              <button className="btn btn-secondary" onClick={() => setScheduleModal(null)}>{scheduleModal.sent ? 'Close' : 'Cancel'}</button>
+              {!scheduleModal.sent && <button className="btn btn-primary" disabled={scheduleModal.sending || !scheduleModal.email.trim() || !scheduleModal.slots.some(s => s)} onClick={sendScheduleInvite}>
+                {scheduleModal.sending ? <><span className="spinner" style={{ width: 11, height: 11 }} /> Sending…</> : '📅 Send Schedule'}
+              </button>}
             </div>
           </div>
         </div>
       )}
 
-      {/* ── Decision modal ── */}
+      {/* ── Decision Modal ── */}
       {decisionModal && (
-        <div style={modalOverlay}>
-          <div style={modalBox}>
-            <div>
-              <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text)', marginBottom: 4 }}>Final Decision</div>
-              <div style={{ fontSize: 13, color: 'var(--text-3)' }}>{decisionModal.candidate.full_name}</div>
-            </div>
-            <div>
-              <label style={modalLabel}>Notes (optional)</label>
-              <textarea
-                style={{ ...modalInput, height: 80, resize: 'vertical' }}
-                value={decisionModal.notes}
-                onChange={e => setDecisionModal(m => ({ ...m, notes: e.target.value }))}
-                placeholder="Add any notes about this decision…"
-              />
-            </div>
+        <div style={MO}>
+          <div style={MB}>
+            <div><div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>Final Decision</div><div style={{ fontSize: 13, color: 'var(--text-3)' }}>{decisionModal.candidate.full_name}</div></div>
+            <div><label style={ML}>Notes (optional)</label><textarea style={{ ...MI, height: 80, resize: 'vertical' }} value={decisionModal.notes} onChange={e => setDecisionModal(m => ({ ...m, notes: e.target.value }))} placeholder="Add notes about this decision…" /></div>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
               <button className="btn btn-secondary" onClick={() => setDecisionModal(null)}>Cancel</button>
-              <button
-                className="btn btn-secondary"
-                style={{ color: 'var(--red)', borderColor: 'var(--red)' }}
-                onClick={() => saveDecision('rejected')}
-              >✗ Reject</button>
-              <button
-                className="btn btn-primary"
-                style={{ background: 'var(--green)' }}
-                onClick={() => saveDecision('hired')}
-              >✓ Hire</button>
+              <button className="btn btn-secondary" style={{ color: 'var(--red)', borderColor: 'var(--red)' }} onClick={() => saveDecision('rejected')}>✗ Reject</button>
+              <button className="btn btn-primary" style={{ background: 'var(--green)' }} onClick={() => saveDecision('hired')}>✓ Hire</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ── Live Call modal ── */}
+      {/* ── Offer Letter Modal (Feature 5) ── */}
+      {offerModal && (
+        <div style={MO}>
+          <div style={{ ...MB, width: 580 }}>
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>Offer Letter</div>
+              <div style={{ fontSize: 13, color: 'var(--text-3)' }}>{offerModal.candidate.full_name} · {activeJob?.title}</div>
+            </div>
+            <div>
+              <label style={ML}>Letter Content {offerModal.generating && <span style={{ color: 'var(--accent)' }}>· AI drafting…</span>}</label>
+              <textarea
+                style={{ ...MI, height: 280, resize: 'vertical', fontFamily: 'var(--font-body)', fontSize: 13, lineHeight: 1.7 }}
+                value={offerModal.letterContent}
+                onChange={e => setOfferModal(m => ({ ...m, letterContent: e.target.value }))}
+                placeholder="AI-generated offer letter will appear here…"
+                disabled={offerModal.generating}
+              />
+            </div>
+            {offerModal.error && <div style={{ fontSize: 12, color: 'var(--red)' }}>⚠ {offerModal.error}</div>}
+            {offerModal.sent && <div style={{ fontSize: 12, color: 'var(--green)' }}>✓ Offer letter sent as PDF to {offerModal.candidate.email}</div>}
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button className="btn btn-secondary" onClick={() => setOfferModal(null)}>{offerModal.sent ? 'Close' : 'Cancel'}</button>
+              {!offerModal.sent && <button className="btn btn-primary" disabled={offerModal.generating || offerModal.sending || !offerModal.letterContent.trim()} onClick={sendOfferLetter}>
+                {offerModal.sending ? <><span className="spinner" style={{ width: 11, height: 11 }} /> Sending…</> : '📄 Send as PDF'}
+              </button>}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Live Call Modal ── */}
       {liveCallModal && (
-        <div style={{ ...modalOverlay, alignItems: 'stretch', padding: 0 }}>
+        <div style={{ ...MO, alignItems: 'stretch', padding: 0 }}>
           <div style={{ display: 'flex', flexDirection: 'column', width: '100%', height: '100%', background: '#000' }}>
             <div style={{ padding: '10px 16px', background: 'rgba(0,0,0,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.1)', flexShrink: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -828,15 +950,8 @@ export default function AdminPipeline({ allowedClientIds } = {}) {
                 <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 13 }}>{liveCallModal.candidate.full_name} — Live Interview</span>
               </div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <button
-                  className="btn btn-secondary"
-                  style={{ fontSize: 11, padding: '4px 12px' }}
-                  onClick={() => { markLiveComplete(liveCallModal.candidate); setLiveCallModal(null) }}
-                >✓ End & Mark Done</button>
-                <button
-                  onClick={() => setLiveCallModal(null)}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.4)', fontSize: 20, padding: '4px 8px' }}
-                >✕</button>
+                <button className="btn btn-secondary" style={{ fontSize: 11, padding: '4px 12px' }} onClick={() => { markLiveComplete(liveCallModal.candidate); setLiveCallModal(null) }}>✓ End & Mark Done</button>
+                <button onClick={() => setLiveCallModal(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.4)', fontSize: 20, padding: '4px 8px' }}>✕</button>
               </div>
             </div>
             <iframe
@@ -865,19 +980,8 @@ export default function AdminPipeline({ allowedClientIds } = {}) {
   )
 }
 
-const modalOverlay = {
-  position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
-  display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000,
-}
-const modalBox = {
-  background: 'var(--surface)', borderRadius: 12, padding: 28,
-  width: 420, display: 'flex', flexDirection: 'column', gap: 16,
-}
-const modalLabel = {
-  fontSize: 11, fontFamily: 'var(--font-mono)', textTransform: 'uppercase',
-  letterSpacing: '0.08em', color: 'var(--text-3)', display: 'block', marginBottom: 6,
-}
-const modalInput = {
-  width: '100%', padding: '9px 12px', borderRadius: 7, border: '1px solid var(--border)',
-  background: 'var(--bg)', color: 'var(--text)', fontSize: 13, boxSizing: 'border-box',
-}
+// Modal style constants
+const MO = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000 }
+const MB = { background: 'var(--surface)', borderRadius: 12, padding: 28, width: 420, display: 'flex', flexDirection: 'column', gap: 16, maxHeight: '90vh', overflowY: 'auto' }
+const ML = { fontSize: 11, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-3)', display: 'block', marginBottom: 6 }
+const MI = { width: '100%', padding: '9px 12px', borderRadius: 7, border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)', fontSize: 13, boxSizing: 'border-box' }

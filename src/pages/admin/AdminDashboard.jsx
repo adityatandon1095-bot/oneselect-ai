@@ -7,6 +7,8 @@ export default function AdminDashboard() {
   const [stats, setStats] = useState({ clients: 0, jobs: 0, candidates: 0, interviews: 0, poolTotal: 0, poolAvailable: 0 })
   const [recentJobs, setRecentJobs] = useState([])
   const [loading, setLoading] = useState(true)
+  const [sendingUpdates, setSendingUpdates] = useState(false)
+  const [updateResult, setUpdateResult] = useState(null)
 
   useEffect(() => { load() }, [])
 
@@ -33,6 +35,18 @@ export default function AdminDashboard() {
     setLoading(false)
   }
 
+  async function sendWeeklyUpdates() {
+    setSendingUpdates(true)
+    setUpdateResult(null)
+    try {
+      const { error } = await supabase.functions.invoke('weekly-client-update', { body: {} })
+      setUpdateResult(error ? { ok: false, msg: error.message } : { ok: true, msg: 'Weekly updates sent to all active clients.' })
+    } catch (e) {
+      setUpdateResult({ ok: false, msg: e.message })
+    }
+    setSendingUpdates(false)
+  }
+
   if (loading) return <div className="page" style={{ display: 'flex', alignItems: 'center', gap: 10 }}><span className="spinner" /> Loading…</div>
 
   return (
@@ -41,6 +55,16 @@ export default function AdminDashboard() {
         <div>
           <h2>Dashboard</h2>
           <p>Platform-wide overview</p>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+          <button className="btn btn-secondary" disabled={sendingUpdates} onClick={sendWeeklyUpdates}>
+            {sendingUpdates ? <><span className="spinner" style={{ width: 11, height: 11 }} /> Sending…</> : '✉ Send Weekly Updates'}
+          </button>
+          {updateResult && (
+            <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: updateResult.ok ? 'var(--green)' : 'var(--red)' }}>
+              {updateResult.msg}
+            </span>
+          )}
         </div>
       </div>
 
