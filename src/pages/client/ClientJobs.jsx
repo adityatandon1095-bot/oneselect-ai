@@ -213,7 +213,10 @@ export default function ClientJobs() {
               {activeJobs.map(j => (
                 <div key={j.id} className="table-row clickable" onClick={() => navigate('/client/candidates')}>
                   <div className="col-main">
-                    <div className="col-name">{j.title}</div>
+                    <div className="col-name">
+                      {j.job_code && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-3)', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 'var(--r)', padding: '1px 6px', marginRight: 7, letterSpacing: '0.04em' }}>{j.job_code}</span>}
+                      {j.title}
+                    </div>
                     <div className="col-sub">
                       {j.experience_years}+ yrs
                       {j.required_skills?.length ? ` · ${j.required_skills.slice(0, 3).join(', ')}${j.required_skills.length > 3 ? '…' : ''}` : ''}
@@ -255,7 +258,10 @@ export default function ClientJobs() {
               {closedJobs.map(j => (
                 <div key={j.id} className="table-row" style={{ opacity: 0.6 }}>
                   <div className="col-main">
-                    <div className="col-name">{j.title}</div>
+                    <div className="col-name">
+                      {j.job_code && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-3)', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 'var(--r)', padding: '1px 6px', marginRight: 7, letterSpacing: '0.04em' }}>{j.job_code}</span>}
+                      {j.title}
+                    </div>
                     <div className="col-sub">{j.experience_years}+ yrs</div>
                   </div>
                   <div className="col-right">

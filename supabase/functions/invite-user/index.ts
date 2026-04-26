@@ -109,7 +109,7 @@ serve(async (req) => {
       ? 'Welcome to One Select — Recruiter Access'
       : 'Welcome to One Select — Your Portal is Ready'
 
-    const loginUrl = `${APP_URL}/login`
+    const loginUrl = `${APP_URL}/login?email=${encodeURIComponent(email)}`
     const portalLabel = isRecruiter ? 'Recruiter Portal' : 'Client Portal'
     const bodyIntro = isRecruiter
       ? `You've been added as a recruiter on One Select. Log in to manage your assigned clients' hiring pipelines.`

@@ -24,6 +24,7 @@ import ClientPipeline from './pages/client/ClientPipeline'
 import ClientCandidates from './pages/client/ClientCandidates'
 import ClientReports from './pages/client/ClientReports'
 import ClientSettings from './pages/client/ClientSettings'
+import ClientChat from './pages/client/ClientChat'
 import PublicVideoInterview from './pages/PublicVideoInterview'
 import PublicLiveInterview from './pages/PublicLiveInterview'
 import PublicScheduleConfirm from './pages/PublicScheduleConfirm'
@@ -132,6 +133,7 @@ export default function App() {
             <Route path="candidates" element={<ClientCandidates />} />
             <Route path="reports" element={<ClientReports />} />
             <Route path="settings" element={<ClientSettings />} />
+            <Route path="chat"     element={<ClientChat />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />

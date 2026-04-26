@@ -17,26 +17,26 @@ export default function Login() {
   const [confirmPw, setConfirmPw] = useState('')
   const [error, setError]         = useState('')
   const [info, setInfo]           = useState('')
-  const [loading, setLoading]     = useState(false)
+  const [loading, setLoading]         = useState(false)
+  const [signingOut, setSigningOut]   = useState(false)
   const navigate = useNavigate()
 
-  // Detect when Supabase redirects back with a PASSWORD_RECOVERY token.
-  // The Supabase client processes the URL hash immediately on load — before useEffect
-  // runs — so the PASSWORD_RECOVERY event can fire before the listener is attached.
-  // We guard against that by also checking the URL hash/params directly on mount.
   useEffect(() => {
     const hashParams   = new URLSearchParams(window.location.hash.slice(1))
     const searchParams = new URLSearchParams(window.location.search)
     const urlType = hashParams.get('type') || searchParams.get('type')
 
+    // Pre-fill email from invite link ?email= param
+    const prefilledEmail = searchParams.get('email') ?? ''
+    if (prefilledEmail) setEmail(prefilledEmail)
+
     if (urlType === 'recovery' || urlType === 'invite') {
-      // Keep the recovery/invite session so the user can set their password
       setMode('reset')
     } else {
-      // No auth token in the URL — clear any existing session immediately.
-      // This ensures invite email links always land on a fresh login form
-      // even if a different user's session is active in the same browser.
-      supabase.auth.signOut()
+      // Await signout so the admin session is fully cleared before the form renders.
+      // Without await, autofill can fire a submit before signout completes.
+      setSigningOut(true)
+      supabase.auth.signOut().finally(() => setSigningOut(false))
     }
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
@@ -137,6 +137,8 @@ export default function Login() {
     // Navigate to dashboard — auth state will route correctly
     navigate('/', { replace: true })
   }
+
+  if (signingOut) return <div className="page"><span className="spinner" /></div>
 
   return (
     <div className="login-screen">

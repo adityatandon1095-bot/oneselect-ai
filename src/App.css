@@ -437,6 +437,195 @@ select option { background: var(--surface); color: var(--text); }
 .client-table-row:last-child { border-bottom: none; }
 .client-table-row:hover { background: var(--surface2); }
 
+/* ── Hiring AI Chat ──────────────────────────────────────────────── */
+
+/* Floating bubble */
+.hchat-bubble {
+  position: fixed; bottom: 28px; right: 28px; z-index: 900;
+  width: 52px; height: 52px; border-radius: 50%;
+  background: var(--accent); border: none; cursor: pointer;
+  box-shadow: 0 4px 20px rgba(184,146,74,0.45);
+  display: flex; align-items: center; justify-content: center;
+  transition: transform 0.2s, box-shadow 0.2s; color: #fff;
+}
+.hchat-bubble:hover { transform: scale(1.08); box-shadow: 0 6px 28px rgba(184,146,74,0.6); }
+.hchat-bubble-pulse {
+  position: absolute; inset: -3px; border-radius: 50%;
+  border: 2px solid var(--accent); opacity: 0; pointer-events: none;
+  animation: hchat-pulse 2.8s ease-out infinite;
+}
+@keyframes hchat-pulse {
+  0%   { transform: scale(0.92); opacity: 0.55; }
+  70%  { transform: scale(1.22); opacity: 0; }
+  100% { transform: scale(1.22); opacity: 0; }
+}
+
+/* Drawer panel */
+.hchat-drawer {
+  position: fixed; bottom: 94px; right: 28px; z-index: 899;
+  width: 380px; height: 530px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; box-shadow: 0 16px 56px rgba(45,55,72,0.14);
+  display: flex; flex-direction: column; overflow: hidden;
+  transform-origin: bottom right;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.hchat-drawer.closed { opacity: 0; transform: scale(0.9) translateY(10px); pointer-events: none; }
+.hchat-drawer.open   { opacity: 1; transform: scale(1) translateY(0); }
+
+/* Drawer header */
+.hchat-head {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 14px; border-bottom: 1px solid var(--border);
+  flex-shrink: 0; background: var(--surface);
+}
+.hchat-head-av {
+  width: 32px; height: 32px; border-radius: 50%;
+  background: var(--accent); display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-mono); font-size: 10px; font-weight: 500; color: #fff;
+  flex-shrink: 0; letter-spacing: 0.04em;
+}
+.hchat-head-info { flex: 1; min-width: 0; }
+.hchat-head-info strong { display: block; font-size: 13px; font-weight: 500; color: var(--text); font-family: var(--font-body); }
+.hchat-head-info span   { font-size: 10px; color: var(--text-3); font-family: var(--font-mono); letter-spacing: 0.04em; }
+.hchat-head-btns { display: flex; gap: 2px; flex-shrink: 0; }
+.hchat-icon-btn {
+  background: none; border: none; cursor: pointer;
+  padding: 6px; border-radius: var(--r);
+  color: var(--text-3); display: flex; align-items: center; justify-content: center;
+  transition: color 0.12s, background 0.12s;
+}
+.hchat-icon-btn:hover { color: var(--text); background: var(--surface2); }
+
+/* Messages area */
+.hchat-messages {
+  flex: 1; overflow-y: auto; padding: 14px;
+  display: flex; flex-direction: column; gap: 10px;
+  scroll-behavior: smooth;
+}
+
+/* Date separator */
+.hchat-date-sep { display: flex; align-items: center; gap: 10px; margin: 4px 0; }
+.hchat-date-sep::before, .hchat-date-sep::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+.hchat-date-sep span {
+  font-family: var(--font-mono); font-size: 9px; color: var(--text-3);
+  text-transform: uppercase; letter-spacing: 0.1em; white-space: nowrap;
+}
+
+/* Message rows */
+.hchat-row { display: flex; gap: 8px; align-items: flex-end; }
+.hchat-row.user { flex-direction: row-reverse; }
+.hchat-row-av {
+  width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-mono); font-size: 8px; font-weight: 500;
+  margin-bottom: 1px; letter-spacing: 0.03em;
+}
+.hchat-row.assistant .hchat-row-av { background: var(--accent); color: #fff; }
+.hchat-row.user      .hchat-row-av { background: var(--surface3); color: var(--text-3); }
+.hchat-bubble-msg {
+  max-width: 78%; padding: 9px 12px; border-radius: 10px;
+  font-size: 13px; line-height: 1.6; white-space: pre-wrap; word-break: break-word;
+}
+.hchat-row.assistant .hchat-bubble-msg {
+  background: var(--surface2); border: 1px solid var(--border);
+  color: var(--text); border-bottom-left-radius: 3px;
+}
+.hchat-row.user .hchat-bubble-msg {
+  background: var(--accent); color: #fff; border-bottom-right-radius: 3px;
+}
+
+/* Typing bubble */
+.hchat-typing-row { display: flex; gap: 8px; align-items: flex-end; }
+.hchat-typing-bubble {
+  padding: 10px 14px; background: var(--surface2);
+  border: 1px solid var(--border); border-radius: 10px; border-bottom-left-radius: 3px;
+}
+
+/* Empty state */
+.hchat-empty {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; padding: 24px; text-align: center;
+}
+.hchat-empty-icon { font-size: 28px; opacity: 0.18; margin-bottom: 12px; }
+.hchat-empty h4 {
+  font-size: 13px; font-weight: 400; color: var(--text);
+  margin-bottom: 6px; font-family: var(--font-body); text-transform: none; letter-spacing: 0;
+}
+.hchat-empty p { font-size: 12px; color: var(--text-3); font-weight: 300; margin-bottom: 16px; }
+.hchat-suggestions { display: flex; flex-direction: column; gap: 6px; width: 100%; max-width: 290px; }
+.hchat-suggestion {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: var(--r); padding: 8px 12px; font-size: 12px;
+  color: var(--text-2); cursor: pointer; text-align: left; line-height: 1.5;
+  transition: border-color 0.12s, color 0.12s, background 0.12s;
+  font-family: var(--font-body); font-weight: 300;
+}
+.hchat-suggestion:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-d); }
+
+/* Input area */
+.hchat-input-area {
+  display: flex; gap: 8px; align-items: flex-end;
+  padding: 10px 12px; border-top: 1px solid var(--border);
+  flex-shrink: 0; background: var(--surface);
+}
+.hchat-input {
+  flex: 1; min-height: 36px; max-height: 96px;
+  padding: 8px 10px; font-size: 13px;
+  font-family: var(--font-body); font-weight: 300;
+  background: var(--bg); color: var(--text);
+  border: 1px solid var(--border2) !important;
+  border-radius: 6px !important;
+  resize: none; outline: none; line-height: 1.5;
+  transition: border-color 0.12s;
+}
+.hchat-input:focus { border-color: var(--accent) !important; }
+.hchat-send {
+  width: 36px; height: 36px; border-radius: 6px; flex-shrink: 0;
+  background: var(--accent); border: none; cursor: pointer; color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.12s;
+}
+.hchat-send:hover:not(:disabled) { background: #9A7A38; }
+.hchat-send:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Full chat page */
+.hchat-page {
+  display: flex; flex-direction: column;
+  height: 100vh; overflow: hidden;
+}
+.hchat-page-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  padding: 24px 36px; border-bottom: 1px solid var(--border);
+  flex-shrink: 0; background: var(--surface); gap: 16px;
+}
+.hchat-page-head h2 { font-size: 24px; font-weight: 400; margin: 0 0 2px; }
+.hchat-page-head p  { font-size: 12px; color: var(--text-3); margin: 0; font-weight: 300; }
+.hchat-page-msgs {
+  flex: 1; overflow-y: auto; padding: 24px 36px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.hchat-page-msgs .hchat-bubble-msg { max-width: 72%; font-size: 14px; }
+.hchat-page-input {
+  flex-shrink: 0; padding: 14px 36px; border-top: 1px solid var(--border);
+  background: var(--surface); display: flex; gap: 10px; align-items: flex-end;
+}
+.hchat-page-input .hchat-input { border-radius: 8px !important; font-size: 14px; max-height: 120px; }
+.hchat-page-input .hchat-send  { width: 42px; height: 42px; border-radius: 8px; }
+
+@media (max-width: 640px) {
+  .hchat-drawer {
+    position: fixed; inset: 0; width: 100%; height: 100%;
+    border-radius: 0; transform-origin: bottom center;
+  }
+  .hchat-drawer.closed { transform: translateY(100%); opacity: 1; }
+  .hchat-drawer.open   { transform: translateY(0); }
+  .hchat-bubble { bottom: 20px; right: 20px; }
+  .hchat-page-head, .hchat-page-msgs, .hchat-page-input { padding-left: 16px; padding-right: 16px; }
+  .hchat-page-head { padding-top: 16px; padding-bottom: 16px; }
+  .hchat-page-msgs .hchat-bubble-msg { max-width: 85%; }
+}
+
 /* ── Print ───────────────────────────────────────────────────────── */
 @media print {
   .sidebar, .no-print { display: none !important; }

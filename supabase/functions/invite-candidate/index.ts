@@ -109,7 +109,7 @@ serve(async (req) => {
                 <table style="width:100%;border-collapse:collapse;">
                   <tr>
                     <td style="padding:8px 0;color:#6B7280;font-size:14px;width:120px;">Portal</td>
-                    <td style="padding:8px 0;"><a href="${appUrl}/login" style="color:#B8924A;">${appUrl}/login</a></td>
+                    <td style="padding:8px 0;"><a href="${appUrl}/login?email=${encodeURIComponent(email)}" style="color:#B8924A;">${appUrl}/login</a></td>
                   </tr>
                   <tr>
                     <td style="padding:8px 0;color:#6B7280;font-size:14px;">Email</td>
@@ -124,7 +124,7 @@ serve(async (req) => {
                 </table>
               </div>
               <div style="text-align:center;margin:32px 0;">
-                <a href="${appUrl}/login" style="background:#B8924A;color:white;padding:14px 40px;text-decoration:none;font-family:monospace;font-size:12px;letter-spacing:0.1em;text-transform:uppercase;display:inline-block;">LOG IN & START INTERVIEW →</a>
+                <a href="${appUrl}/login?email=${encodeURIComponent(email)}" style="background:#B8924A;color:white;padding:14px 40px;text-decoration:none;font-family:monospace;font-size:12px;letter-spacing:0.1em;text-transform:uppercase;display:inline-block;">LOG IN & START INTERVIEW →</a>
               </div>
               <p style="color:#9CA3AF;font-size:13px;line-height:1.6;margin:24px 0 0;padding-top:24px;border-top:1px solid #E8E4DC;">
                 You will be prompted to set a new password after your first login.

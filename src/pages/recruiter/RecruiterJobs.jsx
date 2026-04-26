@@ -338,7 +338,10 @@ export default function RecruiterJobs() {
                 return (
                   <div key={j.id} className="table-row">
                     <div className="col-main">
-                      <div className="col-name">{j.title}</div>
+                      <div className="col-name">
+                        {j.job_code && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-3)', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 'var(--r)', padding: '1px 6px', marginRight: 7, letterSpacing: '0.04em' }}>{j.job_code}</span>}
+                        {j.title}
+                      </div>
                       <div className="col-sub">
                         {j.profiles?.company_name ?? j.profiles?.email ?? '—'} ·{' '}
                         {j.experience_years ?? 0}+ yrs

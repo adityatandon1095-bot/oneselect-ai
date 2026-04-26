@@ -229,7 +229,10 @@ export default function AdminJobs() {
                 }}>
                   {/* Job title */}
                   <div>
-                    <div style={{ fontWeight: 500, fontSize: 13, color: 'var(--text)' }}>{j.title}</div>
+                    <div style={{ fontWeight: 500, fontSize: 13, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
+                      {j.job_code && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-3)', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 'var(--r)', padding: '1px 6px', letterSpacing: '0.04em', fontWeight: 400 }}>{j.job_code}</span>}
+                      {j.title}
+                    </div>
                     <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2 }}>
                       {j.experience_years ?? 0}+ yrs
                       {(j.required_skills ?? []).length > 0 &&
