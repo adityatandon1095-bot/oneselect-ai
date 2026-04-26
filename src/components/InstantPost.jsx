@@ -84,8 +84,11 @@ function Tag({ label, cls = 'badge-blue' }) {
 export default function InstantPost({ onClose, onSave, onCustomize }) {
   const { profile } = useAuth()
 
-  const [step,       setStep]       = useState('input')    // input | generating | preview
-  const [brief,      setBrief]      = useState('')
+  const BRIEF_KEY = 'os_instantpost_brief'
+  const [step,       setStep]       = useState('input')
+  const [brief,      setBrief]      = useState(() => {
+    try { return localStorage.getItem(BRIEF_KEY) ?? '' } catch { return '' }
+  })
   const [statusIdx,  setStatusIdx]  = useState(0)
   const [job,        setJob]        = useState(null)
   const [topMatches, setTopMatches] = useState([])
@@ -106,6 +109,14 @@ export default function InstantPost({ onClose, onSave, onCustomize }) {
     }
     return () => clearInterval(intervalRef.current)
   }, [step])
+
+  function handleBriefChange(val) {
+    setBrief(val)
+    try {
+      if (val.trim()) localStorage.setItem(BRIEF_KEY, val)
+      else localStorage.removeItem(BRIEF_KEY)
+    } catch { /* ignore */ }
+  }
 
   async function handleGenerate() {
     if (!brief.trim()) return
@@ -153,6 +164,7 @@ export default function InstantPost({ onClose, onSave, onCustomize }) {
 
   function handlePost() {
     if (!job) return
+    try { localStorage.removeItem(BRIEF_KEY) } catch { /* ignore */ }
     setPosting(true)
     onSave({
       title:            job.title,
@@ -195,7 +207,7 @@ export default function InstantPost({ onClose, onSave, onCustomize }) {
 
             <textarea
               value={brief}
-              onChange={e => setBrief(e.target.value)}
+              onChange={e => handleBriefChange(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleGenerate() } }}
               placeholder='e.g. "Senior Java developer with Spring Boot and microservices experience"'
               rows={3}

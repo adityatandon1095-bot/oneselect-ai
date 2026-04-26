@@ -2,6 +2,25 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 
+function sanitizeAuthError(msg) {
+  if (!msg) return 'An error occurred. Please try again.'
+  const m = String(msg).toLowerCase()
+  if (m.includes('invalid login') || m.includes('invalid credentials') || m.includes('user not found'))
+    return 'Invalid email or password.'
+  if (m.includes('email not confirmed'))
+    return 'Please verify your email address before signing in.'
+  if (m.includes('too many requests') || m.includes('rate limit'))
+    return 'Too many login attempts. Please wait a few minutes and try again.'
+  if (m.includes('jwt') || m.includes('token') || m.includes('expired'))
+    return 'This link has expired or already been used. Please request a new one.'
+  if (m.includes('password') && m.includes('weak'))
+    return 'Password is too weak. Use at least 8 characters with mixed case and numbers.'
+  if (m.includes('network') || m.includes('fetch'))
+    return 'Connection error. Please check your internet and try again.'
+  // Generic fallback — don't expose internal DB/stack details
+  return 'An error occurred. Please try again or contact support.'
+}
+
 function roleHome(role) {
   if (role === 'admin')     return '/admin/dashboard'
   if (role === 'candidate') return '/candidate/dashboard'
@@ -36,7 +55,7 @@ export default function Login() {
       // Await signout so the admin session is fully cleared before the form renders.
       // Without await, autofill can fire a submit before signout completes.
       setSigningOut(true)
-      supabase.auth.signOut().finally(() => setSigningOut(false))
+      supabase.auth.signOut({ scope: 'local' }).finally(() => setSigningOut(false))
     }
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
@@ -56,7 +75,7 @@ export default function Login() {
     setLoading(true)
 
     const { data, error: authError } = await supabase.auth.signInWithPassword({ email, password })
-    if (authError) { setError(authError.message); setLoading(false); return }
+    if (authError) { setError(sanitizeAuthError(authError.message)); setLoading(false); return }
 
     const userId   = data.user.id
     const metaRole = data.user.user_metadata?.role  // set by invite-user edge function
@@ -117,7 +136,7 @@ export default function Login() {
     })
 
     setLoading(false)
-    if (resetError) { setError(resetError.message); return }
+    if (resetError) { setError(sanitizeAuthError(resetError.message)); return }
     setInfo(`Password reset link sent to ${email.trim()}. Check your inbox.`)
   }
 
@@ -132,7 +151,7 @@ export default function Login() {
     const { error: updateError } = await supabase.auth.updateUser({ password: newPassword })
     setLoading(false)
 
-    if (updateError) { setError(updateError.message); return }
+    if (updateError) { setError(sanitizeAuthError(updateError.message)); return }
 
     // Navigate to dashboard — auth state will route correctly
     navigate('/', { replace: true })

@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { callClaude } from '../utils/api'
 import { extractContent, isSupported, fileExt, ACCEPT_ATTR } from '../utils/fileExtract'
 
@@ -112,6 +112,14 @@ export default function CVUpload({ onNext }) {
   }
 
   const remove = (id) => setFiles((prev) => prev.filter((f) => f.id !== id))
+
+  // Warn before navigating away when files are loaded or actively parsing
+  useEffect(() => {
+    if (files.length === 0) return
+    const handler = (e) => { e.preventDefault(); e.returnValue = '' }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [files.length])
 
   const doneCount    = files.filter((f) => f.status === 'done').length
   const pendingCount = files.filter((f) => f.status === 'pending').length

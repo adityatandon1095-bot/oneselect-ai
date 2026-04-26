@@ -1,20 +1,25 @@
+import { supabase } from '../lib/supabase'
+
+// All Claude calls are proxied through a Supabase edge function so the API
+// key is never exposed in the browser bundle.
 export async function callClaude(messages, systemPrompt, maxTokens = 1000) {
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': import.meta.env.VITE_ANTHROPIC_API_KEY,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
-    },
-    body: JSON.stringify({
-      model: import.meta.env.VITE_CLAUDE_MODEL || 'claude-sonnet-4-6',
-      max_tokens: maxTokens,
-      system: systemPrompt,
-      messages,
-    }),
-  })
+  const { data: sessionData } = await supabase.auth.getSession()
+  const token = sessionData?.session?.access_token
+
+  const res = await fetch(
+    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/call-claude`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify({ messages, systemPrompt, maxTokens }),
+    }
+  )
+
   const data = await res.json()
-  if (!res.ok) throw new Error(data.error?.message || `API error ${res.status}`)
-  return data.content.map((b) => b.text || '').join('')
+  if (!res.ok || data.error) throw new Error(data.error || `API error ${res.status}`)
+  return data.text
 }

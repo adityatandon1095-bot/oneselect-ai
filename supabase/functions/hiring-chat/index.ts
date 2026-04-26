@@ -54,6 +54,22 @@ serve(async (req) => {
     const clientId = user.id
     const admin    = createClient(supabaseUrl, serviceKey)
 
+    // ── Rate limit: 50 user messages per client per UTC day ───────────────
+    const dayStart = new Date()
+    dayStart.setUTCHours(0, 0, 0, 0)
+    const { count: todayCount } = await admin
+      .from('chat_history')
+      .select('*', { count: 'exact', head: true })
+      .eq('client_id', clientId)
+      .eq('role', 'user')
+      .gte('created_at', dayStart.toISOString())
+    if ((todayCount ?? 0) >= 50) {
+      return new Response(
+        JSON.stringify({ error: 'Daily message limit reached (50 messages). Resets at midnight UTC.' }),
+        { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
     // ── Fetch client data ──────────────────────────────────────────────────
     const [{ data: profile }, { data: jobs }] = await Promise.all([
       admin.from('profiles').select('company_name, full_name').eq('id', clientId).single(),

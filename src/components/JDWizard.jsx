@@ -1,6 +1,18 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { callClaude } from '../utils/api'
 import TagInput from './TagInput'
+
+const DRAFT_KEY = 'os_jdwizard_draft'
+
+function saveDraft(state) {
+  try { localStorage.setItem(DRAFT_KEY, JSON.stringify(state)) } catch { /* ignore */ }
+}
+function loadDraft() {
+  try { return JSON.parse(localStorage.getItem(DRAFT_KEY) ?? 'null') } catch { return null }
+}
+function clearDraft() {
+  try { localStorage.removeItem(DRAFT_KEY) } catch { /* ignore */ }
+}
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -77,39 +89,55 @@ function stripFences(text) {
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function JDWizard({ onClose, onSave, showAssign = false, recruiters = [], prefill = null }) {
+  // Load saved draft once on mount (ignored when prefill is provided)
+  const savedDraft = useRef(prefill ? null : loadDraft())
+  const d = savedDraft.current
+  const mountedRef = useRef(false)
+
   // ── Navigation state ──────────────────────────────────────────────────────
-  // If prefill is provided (from InstantPost "Edit & Customize"), land straight on review
-  const [step, setStep]     = useState(prefill ? 'review' : 'mode')
-  const [jdMode, setJdMode] = useState(prefill ? 'ai' : null)
+  const [step, setStep]     = useState(prefill ? 'review' : (d?.step ?? 'mode'))
+  const [jdMode, setJdMode] = useState(prefill ? 'ai'     : (d?.jdMode ?? null))
 
   // ── Form values ───────────────────────────────────────────────────────────
-  const [brief,         setBrief]         = useState(prefill?.title ?? '')
-  const [pastedJD,      setPastedJD]      = useState('')
-  const [clarifyQ,      setClarifyQ]      = useState('')  // AI's follow-up question
-  const [clarifyA,      setClarifyA]      = useState('')  // user's answer
-  const [industry,      setIndustry]      = useState('')
-  const [location,      setLocation]      = useState('')
-  const [workMode,      setWorkMode]      = useState('')
-  const [expYears,      setExpYears]      = useState(3)
-  const [compMode,      setCompMode]      = useState('ai') // 'ai' | 'manual'
-  const [compMin,       setCompMin]       = useState('')
-  const [compMax,       setCompMax]       = useState('')
+  const [brief,         setBrief]         = useState(prefill?.title ?? d?.brief ?? '')
+  const [pastedJD,      setPastedJD]      = useState(d?.pastedJD ?? '')
+  const [clarifyQ,      setClarifyQ]      = useState(d?.clarifyQ ?? '')
+  const [clarifyA,      setClarifyA]      = useState(d?.clarifyA ?? '')
+  const [industry,      setIndustry]      = useState(d?.industry ?? '')
+  const [location,      setLocation]      = useState(d?.location ?? '')
+  const [workMode,      setWorkMode]      = useState(d?.workMode ?? '')
+  const [expYears,      setExpYears]      = useState(d?.expYears ?? 3)
+  const [compMode,      setCompMode]      = useState(d?.compMode ?? 'ai')
+  const [compMin,       setCompMin]       = useState(d?.compMin ?? '')
+  const [compMax,       setCompMax]       = useState(d?.compMax ?? '')
   const [compRec,       setCompRec]       = useState('')
   const [compRecLoaded, setCompRecLoaded] = useState(false)
 
   // ── Generated output (pre-populated when coming from InstantPost) ─────────
-  const [title,          setTitle]          = useState(prefill?.title          ?? '')
-  const [description,    setDescription]    = useState(prefill?.description    ?? '')
-  const [requiredSkills, setRequiredSkills] = useState(prefill?.required_skills  ?? [])
-  const [preferredSkills,setPreferredSkills]= useState(prefill?.preferred_skills ?? [])
+  const [title,          setTitle]          = useState(prefill?.title           ?? d?.title          ?? '')
+  const [description,    setDescription]    = useState(prefill?.description     ?? d?.description    ?? '')
+  const [requiredSkills, setRequiredSkills] = useState(prefill?.required_skills ?? d?.requiredSkills ?? [])
+  const [preferredSkills,setPreferredSkills]= useState(prefill?.preferred_skills ?? d?.preferredSkills ?? [])
 
   // ── Assignment ────────────────────────────────────────────────────────────
   const [assignedTo, setAssignedTo] = useState('')
 
   // ── UI state ──────────────────────────────────────────────────────────────
-  const [loading,   setLoading]   = useState(false)
-  const [error,     setError]     = useState('')
-  const [copied,    setCopied]    = useState(false)
+  const [loading,    setLoading]    = useState(false)
+  const [error,      setError]      = useState('')
+  const [copied,     setCopied]     = useState(false)
+  const [draftSaved, setDraftSaved] = useState(false)
+
+  // ── Auto-save draft to localStorage whenever form state changes ───────────
+  useEffect(() => {
+    if (!mountedRef.current) { mountedRef.current = true; return }
+    if (prefill) return  // prefill flow doesn't use drafts
+    saveDraft({ step, jdMode, brief, pastedJD, clarifyQ, clarifyA, industry, location, workMode, expYears, compMode, compMin, compMax, title, description, requiredSkills, preferredSkills })
+    setDraftSaved(true)
+    const t = setTimeout(() => setDraftSaved(false), 1800)
+    return () => clearTimeout(t)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, jdMode, brief, pastedJD, clarifyQ, clarifyA, industry, location, workMode, expYears, compMode, compMin, compMax, title, description, requiredSkills, preferredSkills])
 
   // ── AI: brief → clarify question ─────────────────────────────────────────
   async function handleBriefNext() {
@@ -216,6 +244,7 @@ export default function JDWizard({ onClose, onSave, showAssign = false, recruite
   }
 
   function doSave() {
+    clearDraft()
     onSave({
       title,
       description,
@@ -278,10 +307,27 @@ export default function JDWizard({ onClose, onSave, showAssign = false, recruite
 
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
-          <h3 style={{ margin: 0, fontFamily: 'var(--font-head)', fontWeight: 400, fontSize: 20, color: 'var(--text)' }}>
-            {STEP_TITLE[step]}
-          </h3>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: 'var(--text-3)', lineHeight: 1, padding: '2px 6px' }}>✕</button>
+          <div>
+            <h3 style={{ margin: 0, fontFamily: 'var(--font-head)', fontWeight: 400, fontSize: 20, color: 'var(--text)' }}>
+              {STEP_TITLE[step]}
+            </h3>
+            {draftSaved && (
+              <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--green)', letterSpacing: '0.06em', textTransform: 'uppercase', marginTop: 4, display: 'block' }}>
+                ✓ Draft saved
+              </span>
+            )}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {!prefill && d && step !== 'mode' && (
+              <button
+                onClick={() => { clearDraft(); savedDraft.current = null; setStep('mode'); setJdMode(null); setBrief(''); setPastedJD(''); setClarifyQ(''); setClarifyA(''); setIndustry(''); setLocation(''); setWorkMode(''); setExpYears(3); setCompMode('ai'); setCompMin(''); setCompMax(''); setTitle(''); setDescription(''); setRequiredSkills([]); setPreferredSkills([]) }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.06em', padding: '2px 6px' }}
+              >
+                Discard draft
+              </button>
+            )}
+            <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: 'var(--text-3)', lineHeight: 1, padding: '2px 6px' }}>✕</button>
+          </div>
         </div>
 
         {/* Progress bar */}

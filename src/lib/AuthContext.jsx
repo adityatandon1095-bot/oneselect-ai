@@ -106,7 +106,20 @@ export function AuthProvider({ children }) {
     }
   }, [])
 
-  const signOut = () => supabase.auth.signOut()
+  const signOut = async () => {
+    // Clear all app-specific draft and session keys from localStorage
+    try {
+      const keysToRemove = Object.keys(localStorage).filter(k =>
+        k.startsWith('os_') ||
+        k.startsWith('welcomed_') ||
+        k.startsWith('pw_set_')
+      )
+      keysToRemove.forEach(k => localStorage.removeItem(k))
+    } catch { /* ignore storage errors */ }
+    // scope: 'global' invalidates the refresh token server-side, preventing
+    // session reuse from any other tab or device
+    await supabase.auth.signOut({ scope: 'global' })
+  }
 
   return (
     <AuthContext.Provider value={{ user, profile, profileLoading, loading, signOut }}>
