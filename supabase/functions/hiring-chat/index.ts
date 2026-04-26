@@ -169,7 +169,7 @@ ${candidatesBlock}
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
+        model: 'claude-sonnet-4-20250514',
         max_tokens: 1200,
         system: systemPrompt,
         messages,
