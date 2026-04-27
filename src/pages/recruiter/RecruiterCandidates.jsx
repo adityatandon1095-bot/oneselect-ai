@@ -89,6 +89,42 @@ function CandidateProfile({ candidate, onBack }) {
         </div>
       )}
 
+      {/* ── Candidate summary — always shown ── */}
+      {(candidate.summary || (candidate.skills ?? []).length > 0 || candidate.education || (candidate.highlights ?? []).length > 0) && (
+        <div className="profile-grid" style={{ marginBottom: 16 }}>
+          {candidate.summary && (
+            <div className="profile-section full">
+              <h4>Summary</h4>
+              <p style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.7, margin: 0 }}>{candidate.summary}</p>
+            </div>
+          )}
+          {(candidate.skills ?? []).length > 0 && (
+            <div className="profile-section">
+              <h4>Skills</h4>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                {candidate.skills.map(sk => (
+                  <span key={sk} style={{ fontSize: 11, padding: '3px 8px', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 'var(--r)', color: 'var(--text-2)' }}>{sk}</span>
+                ))}
+              </div>
+            </div>
+          )}
+          {candidate.education && (
+            <div className="profile-section">
+              <h4>Education</h4>
+              <p style={{ fontSize: 13, color: 'var(--text-2)', margin: 0 }}>{candidate.education}</p>
+            </div>
+          )}
+          {(candidate.highlights ?? []).length > 0 && (
+            <div className="profile-section full">
+              <h4>Career Highlights</h4>
+              <ul style={{ margin: 0, paddingLeft: 16, fontSize: 13, color: 'var(--text-2)', lineHeight: 1.8 }}>
+                {candidate.highlights.map((h, i) => <li key={i}>{h}</li>)}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+
       {s.overallScore == null && candidate.match_pass && (
         <div style={{ padding: '32px 24px', textAlign: 'center', background: 'var(--surface)', border: '1px solid var(--border)', marginBottom: 16 }}>
           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--text-3)', marginBottom: 8 }}>Interview Status</div>

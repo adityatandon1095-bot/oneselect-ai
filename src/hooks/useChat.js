@@ -6,7 +6,7 @@ function makeTitle(text) {
   return t.length <= 40 ? t : t.slice(0, 37) + '...'
 }
 
-export function useChat(userId) {
+export function useChat(userId, endpoint = 'hiring-chat') {
   const [conversations, setConversations] = useState([])
   const [activeId,      setActiveId]      = useState(null)
   const [messages,      setMessages]      = useState([])
@@ -172,7 +172,7 @@ export function useChat(userId) {
       const token = sessionData?.session?.access_token
 
       const res = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/hiring-chat`,
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${endpoint}`,
         {
           method: 'POST',
           headers: {

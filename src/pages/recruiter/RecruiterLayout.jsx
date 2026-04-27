@@ -1,5 +1,6 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../lib/AuthContext'
+import RecruiterChatBubble from '../../components/RecruiterChatBubble'
 
 const NAV = [
   { to: '/recruiter/dashboard',   label: 'Dashboard',   icon: '◈' },
@@ -8,6 +9,7 @@ const NAV = [
   { to: '/recruiter/candidates',  label: 'Candidates',  icon: '◑' },
   { to: '/recruiter/talent-pool', label: 'Talent Pool', icon: '◭' },
   { to: '/recruiter/pipeline',    label: 'Pipeline',    icon: '◐' },
+  { to: '/recruiter/chat',        label: 'AI Assistant', icon: '◎' },
   { to: '/recruiter/settings',    label: 'Settings',    icon: '◷' },
 ]
 
@@ -56,6 +58,8 @@ export default function RecruiterLayout() {
       <main className="content">
         <Outlet />
       </main>
+
+      <RecruiterChatBubble />
     </div>
   )
 }
