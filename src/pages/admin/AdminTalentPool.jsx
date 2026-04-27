@@ -43,6 +43,7 @@ export default function AdminTalentPool() {
   const [addJobSelections, setAddJobSelections] = useState({})
   const [addedToJob, setAddedToJob] = useState({})
   const [addingCandidateId, setAddingCandidateId] = useState(null)
+  const [deletePoolModal, setDeletePoolModal]     = useState(null)
   const fileInputRef = useRef()
   const logRef       = useRef()
 
@@ -189,6 +190,17 @@ export default function AdminTalentPool() {
       setNlpResults([])
     }
     setNlpSearching(false)
+  }
+
+  async function handleDeletePoolCandidate() {
+    const id = deletePoolModal.candidate.id
+    setDeletePoolModal(m => ({ ...m, deleting: true }))
+    const { error } = await supabase.from('talent_pool').delete().eq('id', id)
+    if (!error) {
+      setCandidates(p => p.filter(c => c.id !== id))
+      if (selected?.id === id) setSelected(null)
+    }
+    setDeletePoolModal(null)
   }
 
   async function addToJobPipeline(candidate, jobId) {
@@ -406,6 +418,12 @@ export default function AdminTalentPool() {
                 <span className={`badge ${AVAIL_BADGE[c.availability ?? 'available']}`} style={{ fontSize: 9 }}>
                   {c.availability ?? 'available'}
                 </span>
+                <button
+                  className="btn btn-ghost"
+                  title="Remove from pool"
+                  style={{ padding: '2px 6px', fontSize: 14, color: 'var(--red)', opacity: 0.5 }}
+                  onClick={e => { e.stopPropagation(); setDeletePoolModal({ candidate: c }) }}
+                >🗑</button>
               </div>
             </div>
           ))
@@ -680,6 +698,37 @@ export default function AdminTalentPool() {
           </div>
         )}
       </div>
+
+      {/* ── Delete Pool Candidate Modal ── */}
+      {deletePoolModal && (
+        <div className="modal-overlay" onClick={() => setDeletePoolModal(null)}>
+          <div className="modal" style={{ maxWidth: 420 }} onClick={e => e.stopPropagation()}>
+            <div className="modal-head">
+              <div>
+                <h3>Remove from Pool</h3>
+                <p style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>This cannot be undone</p>
+              </div>
+              <button className="modal-close" onClick={() => setDeletePoolModal(null)}>✕</button>
+            </div>
+            <div className="modal-body">
+              <p style={{ fontSize: 13, color: 'var(--text-2)' }}>
+                Are you sure you want to remove <strong>{deletePoolModal.candidate.full_name}</strong> from the talent pool?
+              </p>
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
+                <button className="btn btn-secondary" onClick={() => setDeletePoolModal(null)}>Cancel</button>
+                <button
+                  className="btn btn-primary"
+                  style={{ background: 'var(--red)', borderColor: 'var(--red)' }}
+                  disabled={deletePoolModal.deleting}
+                  onClick={handleDeletePoolCandidate}
+                >
+                  {deletePoolModal.deleting ? <><span className="spinner" style={{ width: 11, height: 11 }} /> Removing…</> : 'Remove'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Candidate Detail Modal ── */}
       {selected && (

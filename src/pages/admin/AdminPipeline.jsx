@@ -39,6 +39,7 @@ function ScoreRing({ score, size = 48 }) {
 }
 
 const DEFAULT_JOB_FORM = { title:'', experience_years:3, required_skills:[], preferred_skills:[], description:'', tech_weight:60, comm_weight:40 }
+const EMPTY_MANUAL = { full_name:'', email:'', phone:'', candidate_role:'', total_years:'', skills:'', education:'', summary:'', addToPool:false }
 const appUrl = 'https://oneselect-ai-t6uo-phi.vercel.app'
 
 export default function AdminPipeline({ allowedClientIds } = {}) {
@@ -82,6 +83,10 @@ export default function AdminPipeline({ allowedClientIds } = {}) {
 
   // Offer letter modal (Feature 5)
   const [offerModal, setOfferModal] = useState(null)
+
+  // Delete + Add Manually
+  const [deleteModal, setDeleteModal]           = useState(null)
+  const [addManuallyModal, setAddManuallyModal] = useState(null)
 
   const running = parsing || screening || poolMatchLoading
   const fileInputRef = useRef()
@@ -311,6 +316,56 @@ Return the subject line first starting with "SUBJECT: ", then a blank line, then
     await supabase.from(table).update({ live_interview_status: 'completed' }).eq('id', candidate.id)
     addLog(`✓ Live interview marked complete: ${candidate.full_name}`, 'ok')
     await refreshCandidates()
+  }
+
+  async function handleDeleteCandidate() {
+    const { candidate } = deleteModal
+    setDeleteModal(m => ({ ...m, deleting: true }))
+    const table = candidate._fromPool ? 'job_matches' : 'candidates'
+    const { error } = await supabase.from(table).delete().eq('id', candidate.id)
+    if (error) { addLog(`✗ Delete failed: ${error.message}`, 'err'); setDeleteModal(null); return }
+    setCandidates(p => p.filter(c => c.id !== candidate.id))
+    addLog(`✓ Removed ${candidate.full_name} from pipeline`, 'ok')
+    setDeleteModal(null)
+  }
+
+  async function handleAddManually() {
+    const f = addManuallyModal
+    if (!f.full_name.trim()) return
+    setAddManuallyModal(m => ({ ...m, saving: true, error: null }))
+    try {
+      const skillsArr = f.skills.split(',').map(s => s.trim()).filter(Boolean)
+      const { data: saved, error } = await supabase.from('candidates').insert({
+        job_id:         activeJob.id,
+        full_name:      f.full_name.trim(),
+        email:          f.email.trim(),
+        phone:          f.phone.trim(),
+        candidate_role: f.candidate_role.trim(),
+        total_years:    parseInt(f.total_years) || 0,
+        skills:         skillsArr,
+        education:      f.education.trim(),
+        summary:        f.summary.trim(),
+        source:         'manually_added',
+      }).select().single()
+      if (error) throw new Error(error.message)
+      if (f.addToPool) {
+        await supabase.from('talent_pool').insert({
+          full_name:      f.full_name.trim(),
+          email:          f.email.trim(),
+          candidate_role: f.candidate_role.trim(),
+          total_years:    parseInt(f.total_years) || 0,
+          skills:         skillsArr,
+          education:      f.education.trim(),
+          summary:        f.summary.trim(),
+          availability:   'available',
+        })
+      }
+      setCandidates(p => [...p, { ...saved, _status: 'parsed' }])
+      addLog(`✓ ${f.full_name.trim()} added manually`, 'ok')
+      setAddManuallyModal(null)
+    } catch (err) {
+      setAddManuallyModal(m => ({ ...m, saving: false, error: err.message }))
+    }
   }
 
   // ── Feature 5: Offer letter ────────────────────────────────────────────────
@@ -560,6 +615,15 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
             <h3>{useTalentPool ? '2 · Talent Pool' : '2 · CV Upload'}</h3>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <span className="mono text-muted" style={{ fontSize: 11 }}>{candidates.length} candidates</span>
+              {!useTalentPool && (
+                <button
+                  className="btn btn-secondary"
+                  style={{ fontSize: 11, padding: '4px 10px' }}
+                  onClick={() => setAddManuallyModal({ ...EMPTY_MANUAL, saving: false, error: null })}
+                >
+                  + Add Manually
+                </button>
+              )}
               <button
                 className={`btn ${useTalentPool ? 'btn-primary' : 'btn-secondary'}`}
                 style={{ fontSize: 11, padding: '4px 10px' }}
@@ -647,7 +711,7 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
               <div key={c.id} className={`candidate-row${c.match_pass === false ? ' dimmed' : ''}`} style={{ cursor: 'default' }}>
                 <div className="c-rank">#{i + 1}</div>
                 <div className="c-info">
-                  <div className="c-name">{c.full_name}</div>
+                  <div className="c-name">{c.full_name}{c.source === 'manually_added' && <span className="badge badge-blue" style={{ fontSize: 9, marginLeft: 6 }}>Manual</span>}</div>
                   <div className="c-meta">{c.candidate_role} · {c.total_years}y</div>
                   {c.match_reason && <div style={{ fontSize: 11, color: 'var(--text-2)', marginTop: 3 }}>{c.match_reason}</div>}
                 </div>
@@ -669,6 +733,7 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
                   {outreachLog[c.id] && !outreachLog[c.id].responded && (
                     <button className="btn btn-secondary" style={{ fontSize: 10, padding: '2px 8px' }} onClick={() => openOutreachModal(c)}>↻ Resend</button>
                   )}
+                  {!isClient && <button className="btn btn-ghost" title="Remove candidate" style={{ padding: '2px 6px', fontSize: 14, color: 'var(--red)', opacity: 0.5 }} onClick={e => { e.stopPropagation(); setDeleteModal({ candidate: c }) }}>🗑</button>}
                 </div>
               </div>
             ))}
@@ -691,7 +756,7 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
               return (
                 <div key={c.id} className="candidate-row" style={{ cursor: 'default' }}>
                   <div className="c-info">
-                    <div className="c-name">{c.full_name}</div>
+                    <div className="c-name">{c.full_name}{c.source === 'manually_added' && <span className="badge badge-blue" style={{ fontSize: 9, marginLeft: 6 }}>Manual</span>}</div>
                     <div className="c-meta">{c.candidate_role} · {c.total_years}y</div>
                   </div>
                   <div className="c-score" style={{ gap: 6, flexWrap: 'wrap' }}>
@@ -720,6 +785,7 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
                         {hasVideo && <button className="btn btn-secondary" style={{ fontSize: 10, padding: '2px 8px' }} onClick={() => setVideoPlayerTarget(c)}>▶ Watch</button>}
                       </>
                     )}
+                    {!isClient && <button className="btn btn-ghost" title="Remove candidate" style={{ padding: '2px 6px', fontSize: 14, color: 'var(--red)', opacity: 0.5 }} onClick={e => { e.stopPropagation(); setDeleteModal({ candidate: c }) }}>🗑</button>}
                   </div>
                 </div>
               )
@@ -743,7 +809,7 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
               return (
                 <div key={c.id} className="candidate-row" style={{ cursor: 'default' }}>
                   <div className="c-info">
-                    <div className="c-name">{c.full_name}</div>
+                    <div className="c-name">{c.full_name}{c.source === 'manually_added' && <span className="badge badge-blue" style={{ fontSize: 9, marginLeft: 6 }}>Manual</span>}</div>
                     <div className="c-meta">{c.candidate_role} · {c.total_years}y</div>
                   </div>
                   <div className="c-score" style={{ gap: 6, flexWrap: 'wrap' }}>
@@ -761,6 +827,7 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
                       </>
                     )}
                     {completed && <span className="badge badge-green">Live Done</span>}
+                    {!isClient && <button className="btn btn-ghost" title="Remove candidate" style={{ padding: '2px 6px', fontSize: 14, color: 'var(--red)', opacity: 0.5 }} onClick={e => { e.stopPropagation(); setDeleteModal({ candidate: c }) }}>🗑</button>}
                   </div>
                 </div>
               )
@@ -783,7 +850,7 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
               return (
                 <div key={c.id} className="candidate-row" style={{ cursor: 'default' }}>
                   <div className="c-info">
-                    <div className="c-name">{c.full_name}</div>
+                    <div className="c-name">{c.full_name}{c.source === 'manually_added' && <span className="badge badge-blue" style={{ fontSize: 9, marginLeft: 6 }}>Manual</span>}</div>
                     <div className="c-meta">{c.candidate_role} · {c.total_years}y</div>
                     {c.decision_notes && <div style={{ fontSize: 11, color: 'var(--text-2)', marginTop: 3 }}>{c.decision_notes}</div>}
                   </div>
@@ -803,6 +870,7 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
                     )}
                     {decision === 'rejected' && <span className="badge badge-red" style={{ fontSize: 12 }}>✗ Rejected</span>}
                     {decision && <button className="btn btn-secondary" style={{ fontSize: 10, padding: '2px 8px' }} onClick={() => setDecisionModal({ candidate: c, notes: c.decision_notes ?? '' })}>Edit</button>}
+                    {!isClient && <button className="btn btn-ghost" title="Remove candidate" style={{ padding: '2px 6px', fontSize: 14, color: 'var(--red)', opacity: 0.5 }} onClick={e => { e.stopPropagation(); setDeleteModal({ candidate: c }) }}>🗑</button>}
                   </div>
                 </div>
               )
@@ -931,6 +999,65 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
               {!offerModal.sent && <button className="btn btn-primary" disabled={offerModal.generating || offerModal.sending || !offerModal.letterContent.trim()} onClick={sendOfferLetter}>
                 {offerModal.sending ? <><span className="spinner" style={{ width: 11, height: 11 }} /> Sending…</> : '📄 Send as PDF'}
               </button>}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Delete Candidate Modal ── */}
+      {deleteModal && (
+        <div style={MO}>
+          <div style={MB}>
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>Remove Candidate</div>
+              <div style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.6 }}>
+                Are you sure you want to remove <strong>{deleteModal.candidate.full_name}</strong> from this pipeline? This cannot be undone.
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button className="btn btn-secondary" onClick={() => setDeleteModal(null)}>Cancel</button>
+              <button
+                className="btn btn-primary"
+                style={{ background: 'var(--red)', borderColor: 'var(--red)' }}
+                disabled={deleteModal.deleting}
+                onClick={handleDeleteCandidate}
+              >
+                {deleteModal.deleting ? <><span className="spinner" style={{ width: 11, height: 11 }} /> Removing…</> : 'Remove'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Add Manually Modal ── */}
+      {addManuallyModal && (
+        <div style={MO}>
+          <div style={{ ...MB, width: 500 }}>
+            <div style={{ fontSize: 15, fontWeight: 600 }}>Add Candidate Manually</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div><label style={ML}>Full Name *</label><input autoFocus style={MI} value={addManuallyModal.full_name} onChange={e => setAddManuallyModal(m => ({ ...m, full_name: e.target.value }))} placeholder="Jane Smith" /></div>
+              <div><label style={ML}>Email</label><input style={MI} value={addManuallyModal.email} onChange={e => setAddManuallyModal(m => ({ ...m, email: e.target.value }))} placeholder="jane@example.com" /></div>
+              <div><label style={ML}>Phone (optional)</label><input style={MI} value={addManuallyModal.phone} onChange={e => setAddManuallyModal(m => ({ ...m, phone: e.target.value }))} placeholder="+91 9876543210" /></div>
+              <div><label style={ML}>Current Role</label><input style={MI} value={addManuallyModal.candidate_role} onChange={e => setAddManuallyModal(m => ({ ...m, candidate_role: e.target.value }))} placeholder="Senior Engineer" /></div>
+              <div><label style={ML}>Years of Experience</label><input type="number" min={0} style={MI} value={addManuallyModal.total_years} onChange={e => setAddManuallyModal(m => ({ ...m, total_years: e.target.value }))} placeholder="5" /></div>
+              <div><label style={ML}>Education (optional)</label><input style={MI} value={addManuallyModal.education} onChange={e => setAddManuallyModal(m => ({ ...m, education: e.target.value }))} placeholder="B.Tech Computer Science" /></div>
+              <div style={{ gridColumn: 'span 2' }}><label style={ML}>Skills (comma separated)</label><input style={MI} value={addManuallyModal.skills} onChange={e => setAddManuallyModal(m => ({ ...m, skills: e.target.value }))} placeholder="React, Node.js, TypeScript" /></div>
+              <div style={{ gridColumn: 'span 2' }}><label style={ML}>Summary (optional)</label><textarea style={{ ...MI, height: 70, resize: 'vertical' }} value={addManuallyModal.summary} onChange={e => setAddManuallyModal(m => ({ ...m, summary: e.target.value }))} placeholder="Brief professional summary…" /></div>
+            </div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-2)', cursor: 'pointer' }}>
+              <input type="checkbox" checked={addManuallyModal.addToPool} onChange={e => setAddManuallyModal(m => ({ ...m, addToPool: e.target.checked }))} />
+              Also add to master talent pool
+            </label>
+            {addManuallyModal.error && <div style={{ fontSize: 12, color: 'var(--red)' }}>⚠ {addManuallyModal.error}</div>}
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button className="btn btn-secondary" onClick={() => setAddManuallyModal(null)}>Cancel</button>
+              <button
+                className="btn btn-primary"
+                disabled={!addManuallyModal.full_name.trim() || addManuallyModal.saving}
+                onClick={handleAddManually}
+              >
+                {addManuallyModal.saving ? <><span className="spinner" style={{ width: 11, height: 11 }} /> Saving…</> : 'Add Candidate'}
+              </button>
             </div>
           </div>
         </div>
