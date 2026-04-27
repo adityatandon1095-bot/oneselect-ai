@@ -1,8 +1,11 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useLocation } from 'react-router-dom'
+import mammoth from 'mammoth'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../lib/AuthContext'
+import { callClaude } from '../../utils/api'
 import { mapMatchToCandidate } from '../../utils/talentPool'
+import { extractContent, isSupported, fileExt, ACCEPT_ATTR } from '../../utils/fileExtract'
 
 const REC_COLOR = { 'Strong Hire': 'var(--green)', 'Hire': 'var(--accent)', 'Borderline': 'var(--amber)', 'Reject': 'var(--red)' }
 const DIMS = [
@@ -15,6 +18,11 @@ const DIMS = [
 const INTERVIEW_COMPLETE = 'INTERVIEW_COMPLETE'
 const TABS = ['All', 'Interview Pending', 'Interview Done', 'Screened Out']
 const EMPTY_MANUAL = { full_name: '', email: '', phone: '', candidate_role: '', total_years: '', skills: '', education: '', summary: '', jobId: '', addToPool: false }
+
+const CV_PARSE_SYSTEM = `You are a CV parser. Return ONLY valid JSON — no markdown:
+{"name":"string","email":"string","currentRole":"string","totalYears":number,"skills":["..."],"education":"string","summary":"string","highlights":["..."]}`
+
+const FORMAT_ICON = { pdf: '📕', docx: '📝', txt: '📄', jpg: '🖼️', jpeg: '🖼️', png: '🖼️' }
 
 function dimColor(v) { return v >= 70 ? 'var(--green)' : v >= 50 ? 'var(--accent)' : 'var(--red)' }
 
@@ -178,6 +186,14 @@ export default function RecruiterCandidates() {
   const [addManuallyModal, setAddManuallyModal] = useState(null)
   const [allotJobModal, setAllotJobModal]       = useState(null)
 
+  // CV upload
+  const [showUpload, setShowUpload]   = useState(false)
+  const [files, setFiles]             = useState([])
+  const [dragging, setDragging]       = useState(false)
+  const [parsing, setParsing]         = useState(false)
+  const [uploadJobId, setUploadJobId] = useState('')
+  const fileInputRef = useRef()
+
   useEffect(() => { if (user) load() }, [user])
 
   useEffect(() => {
@@ -282,6 +298,64 @@ export default function RecruiterCandidates() {
     }
   }
 
+  const addFiles = useCallback((incoming) => {
+    const valid = Array.from(incoming).filter(isSupported)
+    if (!valid.length) return
+    setFiles(p => [...p, ...valid
+      .filter(f => !p.some(e => e.file.name === f.name))
+      .map(f => ({ id: crypto.randomUUID(), file: f, ext: fileExt(f), status: 'pending', parsed: null, error: '' }))])
+  }, [])
+
+  const onDrop = useCallback((e) => {
+    e.preventDefault(); setDragging(false); addFiles(e.dataTransfer.files)
+  }, [addFiles])
+
+  function patchFile(id, updates) {
+    setFiles(p => p.map(f => f.id === id ? { ...f, ...updates } : f))
+  }
+
+  async function parseAll() {
+    if (!uploadJobId) return
+    setParsing(true)
+    for (const entry of files.filter(f => f.status === 'pending')) {
+      patchFile(entry.id, { status: 'parsing' })
+      try {
+        let content
+        if (entry.ext === 'docx') {
+          const arrayBuffer = await entry.file.arrayBuffer()
+          const result = await mammoth.extractRawText({ arrayBuffer })
+          if (!result.value?.trim()) throw new Error('No text extracted from DOCX')
+          content = { kind: 'text', text: result.value }
+        } else {
+          content = await extractContent(entry.file)
+        }
+        const msgs = content.kind === 'image'
+          ? [{ role: 'user', content: [{ type: 'image', source: { type: 'base64', media_type: content.mediaType, data: content.base64 } }, { type: 'text', text: 'Parse this CV image.' }] }]
+          : [{ role: 'user', content: `Parse this CV:\n\n${content.text}` }]
+        const reply = await callClaude(msgs, CV_PARSE_SYSTEM, 1024)
+        const parsed = JSON.parse(reply.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, ''))
+        const { data: saved, error } = await supabase.from('candidates').insert({
+          job_id:         uploadJobId,
+          full_name:      parsed.name,
+          email:          parsed.email ?? '',
+          candidate_role: parsed.currentRole ?? '',
+          total_years:    parsed.totalYears ?? 0,
+          skills:         parsed.skills ?? [],
+          education:      parsed.education ?? '',
+          summary:        parsed.summary ?? '',
+          highlights:     parsed.highlights ?? [],
+          raw_text:       content.kind === 'text' ? content.text : '',
+        }).select().single()
+        if (error) throw new Error(error.message)
+        patchFile(entry.id, { status: 'done', parsed })
+        setCandidates(p => [saved, ...p])
+      } catch (err) {
+        patchFile(entry.id, { status: 'error', error: err.message })
+      }
+    }
+    setParsing(false)
+  }
+
   function getStatus(c) {
     if (c.scores) return 'Interview Done'
     if (c.match_pass === true) return 'Interview Pending'
@@ -327,6 +401,14 @@ export default function RecruiterCandidates() {
             {jobs.map(j => <option key={j.id} value={j.id}>{j.title}</option>)}
           </select>
           <button
+            className="btn btn-secondary"
+            style={{ whiteSpace: 'nowrap' }}
+            disabled={jobs.length === 0}
+            onClick={() => { setShowUpload(v => !v); setFiles([]) }}
+          >
+            {showUpload ? '✕ Close Upload' : '⬆ Upload CVs'}
+          </button>
+          <button
             className="btn btn-primary"
             style={{ whiteSpace: 'nowrap' }}
             disabled={jobs.length === 0}
@@ -336,6 +418,91 @@ export default function RecruiterCandidates() {
           </button>
         </div>
       </div>
+
+      {/* ── CV Upload Panel ── */}
+      {showUpload && (
+        <div className="section-card" style={{ marginBottom: 20 }}>
+          <div className="section-card-head">
+            <h3>Upload CVs</h3>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <select
+                value={uploadJobId}
+                onChange={e => setUploadJobId(e.target.value)}
+                style={{ fontSize: 12, padding: '5px 10px', minWidth: 200 }}
+              >
+                <option value="">— assign to job —</option>
+                {jobs.map(j => <option key={j.id} value={j.id}>{j.title}</option>)}
+              </select>
+              {files.filter(f => f.status === 'pending').length > 0 && (
+                <button
+                  className="btn btn-primary"
+                  style={{ fontSize: 12, padding: '5px 12px', whiteSpace: 'nowrap' }}
+                  disabled={parsing || !uploadJobId}
+                  onClick={parseAll}
+                >
+                  {parsing
+                    ? <><span className="spinner" style={{ width: 11, height: 11 }} /> Parsing…</>
+                    : 'Parse with AI'}
+                </button>
+              )}
+            </div>
+          </div>
+          <div className="section-card-body">
+            <div
+              className={`drop-zone${dragging ? ' drag-over' : ''}`}
+              onDrop={onDrop}
+              onDragOver={e => { e.preventDefault(); setDragging(true) }}
+              onDragLeave={() => setDragging(false)}
+              onClick={() => fileInputRef.current.click()}
+            >
+              <div className="drop-icon">⬆</div>
+              <p>Drop CVs here or <span className="link">browse files</span></p>
+              <div className="format-pills">
+                {['PDF', 'DOCX', 'TXT', 'JPG', 'PNG'].map(f => <span key={f} className="format-pill">{f}</span>)}
+              </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept={ACCEPT_ATTR}
+                multiple
+                style={{ display: 'none' }}
+                onChange={e => { addFiles(e.target.files); e.target.value = '' }}
+              />
+            </div>
+
+            {files.length > 0 && (
+              <div className="file-list" style={{ marginTop: 12 }}>
+                {files.map(f => (
+                  <div key={f.id} className="file-row">
+                    <div className="file-info">
+                      <span className="file-icon">{FORMAT_ICON[f.ext] ?? '📄'}</span>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                          <span className="file-name">{f.file.name}</span>
+                          <span className={`badge ${f.ext === 'pdf' ? 'badge-red' : f.ext === 'docx' ? 'badge-blue' : 'badge-amber'}`} style={{ fontSize: 9 }}>{f.ext?.toUpperCase()}</span>
+                        </div>
+                        {f.parsed && <div className="file-parsed"><strong>{f.parsed.name}</strong> · {f.parsed.currentRole}</div>}
+                        {f.status === 'error' && <div className="error-text">⚠ {f.error}</div>}
+                      </div>
+                    </div>
+                    <div className="file-status">
+                      {f.status === 'pending' && <span className="badge badge-amber">Pending</span>}
+                      {f.status === 'parsing' && <span className="spinner" />}
+                      {f.status === 'done'    && <span className="badge badge-green">Added</span>}
+                      {f.status === 'error'   && <span className="badge badge-red">Error</span>}
+                      <button
+                        className="btn btn-ghost"
+                        style={{ padding: '3px 7px', fontSize: 15 }}
+                        onClick={() => setFiles(p => p.filter(x => x.id !== f.id))}
+                      >×</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Source tabs */}
       <div style={{ display: 'flex', gap: 2, borderBottom: '1px solid var(--border)' }}>
