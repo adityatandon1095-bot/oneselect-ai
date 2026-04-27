@@ -2,6 +2,7 @@ import { Component } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './lib/AuthContext'
 import Login from './pages/Login'
+import Signup from './pages/Signup'
 import AdminLayout from './pages/admin/AdminLayout'
 import AdminDashboard from './pages/admin/AdminDashboard'
 import AdminClients from './pages/admin/AdminClients'
@@ -18,6 +19,7 @@ import RecruiterJobs from './pages/recruiter/RecruiterJobs'
 import RecruiterPipeline from './pages/recruiter/RecruiterPipeline'
 import RecruiterCandidates from './pages/recruiter/RecruiterCandidates'
 import RecruiterChat from './pages/recruiter/RecruiterChat'
+import RecruiterReports from './pages/recruiter/RecruiterReports'
 import RecruiterSettings from './pages/recruiter/RecruiterSettings'
 import ClientLayout from './pages/client/ClientLayout'
 import ClientDashboard from './pages/client/ClientDashboard'
@@ -100,6 +102,7 @@ export default function App() {
       <AuthProvider>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/signup" element={<Signup />} />
           <Route path="/interview/:token" element={<PublicVideoInterview />} />
           <Route path="/live/:token" element={<PublicLiveInterview />} />
           <Route path="/schedule/:token" element={<PublicScheduleConfirm />} />
@@ -125,6 +128,7 @@ export default function App() {
             <Route path="talent-pool" element={<AdminTalentPool />} />
             <Route path="candidates" element={<RecruiterCandidates />} />
             <Route path="pipeline" element={<RecruiterPipeline />} />
+            <Route path="reports" element={<RecruiterReports />} />
             <Route path="chat" element={<RecruiterChat />} />
             <Route path="settings" element={<RecruiterSettings />} />
           </Route>

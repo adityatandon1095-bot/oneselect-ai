@@ -309,6 +309,21 @@ Return the subject line first starting with "SUBJECT: ", then a blank line, then
     if (decision === 'hired') {
       openOfferModal({ ...candidate, final_decision: 'hired' })
     }
+    if (decision === 'rejected' && candidate.email) {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-rejection-email`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY}` },
+          body: JSON.stringify({
+            candidateName:  candidate.full_name,
+            candidateEmail: candidate.email,
+            jobTitle:       activeJob?.title,
+            companyName:    clients.find(c => c.id === clientId)?.company_name,
+            notes:          notes || '',
+          }),
+        }).catch(() => {})
+      }).catch(() => {})
+    }
   }
 
   async function markLiveComplete(candidate) {
@@ -528,6 +543,23 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
     setScreening(false)
     setScreeningDone(true)
     addLog(`Screening complete. ${passedThisRun.length} passed.`, 'info')
+
+    const clientProfile = clients.find(c => c.id === clientId)
+    if (clientProfile?.email && toScreen.length > 0) {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-screening-update`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY}` },
+          body: JSON.stringify({
+            clientEmail:    clientProfile.email,
+            clientName:     clientProfile.full_name || clientProfile.company_name,
+            jobTitle:       activeJob?.title,
+            totalScreened:  toScreen.length,
+            totalPassed:    passedThisRun.length,
+          }),
+        }).catch(() => {})
+      }).catch(() => {})
+    }
   }
 
   // ── Derived state ─────────────────────────────────────────────────────────

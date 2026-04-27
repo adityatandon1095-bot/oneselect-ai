@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 
 function sanitizeAuthError(msg) {
@@ -200,6 +200,10 @@ export default function Login() {
               >
                 Forgot password?
               </button>
+              <p style={{ marginTop: 20, fontSize: 13, color: 'var(--text-3)', textAlign: 'center' }}>
+                New client?{' '}
+                <Link to="/signup" style={{ color: 'var(--accent)', textDecoration: 'none' }}>Get started →</Link>
+              </p>
             </>
           )}
 
