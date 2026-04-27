@@ -10,6 +10,12 @@ function reqLabel(st) {
   return                        { label: 'Inactive', cls: '' }
 }
 
+function subLabel(st) {
+  if (st === 'active')    return { label: 'Active',    cls: 'badge-green' }
+  if (st === 'suspended') return { label: 'Suspended', cls: 'badge-red'   }
+  return                         { label: 'Trial',     cls: 'badge-amber' }
+}
+
 export default function AdminClients() {
   const navigate = useNavigate()
 
@@ -47,6 +53,14 @@ export default function AdminClients() {
   const [removing,     setRemoving]     = useState(false)
   const [removeError,  setRemoveError]  = useState('')
 
+  // ── Subscription modal ────────────────────────────────────────────────────────
+  const [plans,      setPlans]      = useState([])
+  const [subModal,   setSubModal]   = useState(null)
+  const [subPlanId,  setSubPlanId]  = useState('')
+  const [subStatus,  setSubStatus]  = useState('trial')
+  const [subSaving,  setSubSaving]  = useState(false)
+  const [subError,   setSubError]   = useState('')
+
   useEffect(() => { load() }, [])
   useEffect(() => { setPage(1) }, [search, statusFilter, sortBy])
 
@@ -57,12 +71,14 @@ export default function AdminClients() {
       { data: candData },
       { data: recData },
       { data: rcData },
+      { data: planData },
     ] = await Promise.all([
       supabase.from('profiles').select('*').eq('user_role', 'client').order('created_at', { ascending: false }),
       supabase.from('jobs').select('id, recruiter_id, status, created_at'),
       supabase.from('candidates').select('job_id'),
       supabase.from('profiles').select('id, full_name, email').eq('user_role', 'recruiter').order('full_name'),
       supabase.from('recruiter_clients').select('recruiter_id, client_id, profiles!recruiter_clients_recruiter_id_fkey(id, full_name, email)'),
+      supabase.from('plans').select('*').order('price_monthly', { ascending: true, nullsFirst: true }),
     ])
 
     const jm = {}
@@ -73,7 +89,6 @@ export default function AdminClients() {
     const cm = {}
     ;(candData ?? []).forEach(c => { cm[c.job_id] = (cm[c.job_id] ?? 0) + 1 })
 
-    // client_id → recruiter profiles[]
     const rm = {}
     ;(rcData ?? []).forEach(r => {
       if (!rm[r.client_id]) rm[r.client_id] = []
@@ -85,6 +100,7 @@ export default function AdminClients() {
     setCandMap(cm)
     setAllRecruiters(recData ?? [])
     setRcMap(rm)
+    setPlans(planData ?? [])
     setLoading(false)
   }
 
@@ -243,6 +259,29 @@ export default function AdminClients() {
     return allRecruiters.filter(r => !already.includes(r.id))
   }
 
+  // ── Subscription handlers ─────────────────────────────────────────────────────
+  function openSubModal(client) {
+    setSubModal(client)
+    setSubPlanId(client.plan_id ?? '')
+    setSubStatus(client.subscription_status ?? 'trial')
+    setSubError('')
+  }
+
+  async function handleSaveSub() {
+    if (!subModal) return
+    setSubSaving(true); setSubError('')
+    const { error } = await supabase.from('profiles').update({
+      plan_id:                 subPlanId || null,
+      subscription_status:     subStatus,
+      subscription_started_at: subStatus === 'active' && subModal.subscription_status !== 'active'
+        ? new Date().toISOString() : subModal.subscription_started_at,
+    }).eq('id', subModal.id)
+    setSubSaving(false)
+    if (error) { setSubError(error.message); return }
+    setSubModal(null)
+    await load()
+  }
+
   if (loading) return <div className="page"><span className="spinner" /></div>
 
   return (
@@ -322,6 +361,8 @@ export default function AdminClients() {
             const { active, jobs, cands } = clientStats(c)
             const st   = clientStatus(c)
             const scfg = reqLabel(st)
+            const sbcfg = subLabel(c.subscription_status ?? 'trial')
+            const planName = plans.find(p => p.id === c.plan_id)?.name
             const lastActive = c.last_seen_at ?? c.first_login_at ?? c.created_at
             const assignedRecs = rcMap[c.id] ?? []
             return (
@@ -338,6 +379,10 @@ export default function AdminClients() {
                       <span className={`badge ${scfg.cls}`} style={{ fontSize: 10, ...(st === 'inactive' ? { color: 'var(--text-3)', background: 'var(--surface2)' } : {}) }}>{scfg.label}</span>
                     </div>
                     <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-3)', marginTop: 2 }}>{c.email}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                      <span className={`badge ${sbcfg.cls}`} style={{ fontSize: 10 }}>{sbcfg.label}</span>
+                      {planName && <span style={{ fontSize: 11, color: 'var(--text-3)' }}>{planName}</span>}
+                    </div>
 
                     {/* Stats row */}
                     <div style={{ display: 'flex', gap: 16, marginTop: 6, flexWrap: 'wrap' }}>
@@ -390,6 +435,11 @@ export default function AdminClients() {
                       style={{ fontSize: 10, padding: '3px 8px', color: 'var(--accent)' }}
                       onClick={() => navigate(`/admin/pipeline?client=${c.id}`)}
                     >Pipeline</button>
+                    <button
+                      className="btn btn-secondary"
+                      style={{ fontSize: 10, padding: '3px 8px', color: 'var(--accent)' }}
+                      onClick={() => openSubModal(c)}
+                    >Subscription</button>
                     <button
                       className="btn btn-secondary"
                       style={{ fontSize: 10, padding: '3px 8px', color: 'var(--red)' }}
@@ -556,6 +606,53 @@ export default function AdminClients() {
               <div style={{ display: 'flex', gap: 10 }}>
                 <button className="btn btn-secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={copyDetails}>Copy Login Details</button>
                 <button className="btn btn-primary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setInvResult(null)}>Done</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Subscription Modal ── */}
+      {subModal && (
+        <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget && !subSaving) setSubModal(null) }}>
+          <div className="modal" style={{ maxWidth: 440 }}>
+            <div className="modal-head">
+              <h3>Subscription — {subModal.company_name || subModal.email}</h3>
+              <button className="modal-close" disabled={subSaving} onClick={() => setSubModal(null)}>×</button>
+            </div>
+            <div className="modal-body">
+              <div className="form-grid">
+                <div className="field span-2">
+                  <label>Plan</label>
+                  <select value={subPlanId} onChange={e => setSubPlanId(e.target.value)}>
+                    <option value="">— No plan assigned —</option>
+                    {plans.map(p => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}{p.price_monthly != null ? ` — £${Number(p.price_monthly).toFixed(0)}/mo` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="field span-2">
+                  <label>Subscription Status</label>
+                  <select value={subStatus} onChange={e => setSubStatus(e.target.value)}>
+                    <option value="trial">Trial</option>
+                    <option value="active">Active</option>
+                    <option value="suspended">Suspended</option>
+                  </select>
+                </div>
+              </div>
+              {subStatus === 'suspended' && (
+                <div style={{ marginTop: 12, padding: '10px 14px', background: 'var(--red-d, rgba(239,68,68,0.08))', border: '1px solid var(--red)', borderRadius: 'var(--r)', fontSize: 12, color: 'var(--red)', lineHeight: 1.6 }}>
+                  Suspended clients will see a blocked screen when they log in.
+                </div>
+              )}
+              {subError && <div className="error-banner" style={{ marginTop: 14 }}>{subError}</div>}
+              <div className="form-actions" style={{ marginTop: 20 }}>
+                <button className="btn btn-primary" disabled={subSaving} onClick={handleSaveSub}>
+                  {subSaving ? <><span className="spinner" style={{ width: 12, height: 12 }} /> Saving…</> : 'Save'}
+                </button>
+                <button className="btn btn-secondary" disabled={subSaving} onClick={() => setSubModal(null)}>Cancel</button>
               </div>
             </div>
           </div>

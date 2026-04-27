@@ -21,6 +21,19 @@ export default function ClientLayout() {
     navigate('/login', { replace: true })
   }
 
+  if (profile?.subscription_status === 'suspended') {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', gap: 16, background: 'var(--bg)', color: 'var(--text)', fontFamily: 'var(--font-body)', padding: 24, textAlign: 'center' }}>
+        <div style={{ fontSize: 32, opacity: 0.2 }}>◉</div>
+        <h2 style={{ fontFamily: 'var(--font-head)', fontWeight: 300, margin: 0 }}>Subscription Suspended</h2>
+        <p style={{ fontSize: 13, color: 'var(--text-3)', margin: 0, maxWidth: 400, lineHeight: 1.7 }}>
+          Your account access has been suspended. Please contact your One Select account manager to reinstate your subscription.
+        </p>
+        <button className="btn btn-secondary" onClick={handleSignOut}>Sign out</button>
+      </div>
+    )
+  }
+
   return (
     <div className="layout">
       <aside className="sidebar">
