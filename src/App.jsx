@@ -16,6 +16,7 @@ import RecruiterDashboard from './pages/recruiter/RecruiterDashboard'
 import RecruiterClients from './pages/recruiter/RecruiterClients'
 import RecruiterJobs from './pages/recruiter/RecruiterJobs'
 import RecruiterPipeline from './pages/recruiter/RecruiterPipeline'
+import RecruiterCandidates from './pages/recruiter/RecruiterCandidates'
 import RecruiterSettings from './pages/recruiter/RecruiterSettings'
 import ClientLayout from './pages/client/ClientLayout'
 import ClientDashboard from './pages/client/ClientDashboard'
@@ -121,6 +122,7 @@ export default function App() {
             <Route path="clients" element={<RecruiterClients />} />
             <Route path="jobs" element={<RecruiterJobs />} />
             <Route path="talent-pool" element={<AdminTalentPool />} />
+            <Route path="candidates" element={<RecruiterCandidates />} />
             <Route path="pipeline" element={<RecruiterPipeline />} />
             <Route path="settings" element={<RecruiterSettings />} />
           </Route>

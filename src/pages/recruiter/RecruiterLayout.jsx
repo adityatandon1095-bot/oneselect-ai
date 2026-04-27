@@ -5,6 +5,7 @@ const NAV = [
   { to: '/recruiter/dashboard',   label: 'Dashboard',   icon: '◈' },
   { to: '/recruiter/clients',     label: 'Clients',     icon: '◉' },
   { to: '/recruiter/jobs',        label: 'Jobs',        icon: '◫' },
+  { to: '/recruiter/candidates',  label: 'Candidates',  icon: '◑' },
   { to: '/recruiter/talent-pool', label: 'Talent Pool', icon: '◭' },
   { to: '/recruiter/pipeline',    label: 'Pipeline',    icon: '◐' },
   { to: '/recruiter/settings',    label: 'Settings',    icon: '◷' },

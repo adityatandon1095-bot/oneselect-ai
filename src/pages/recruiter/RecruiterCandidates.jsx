@@ -14,6 +14,7 @@ const DIMS = [
 ]
 const INTERVIEW_COMPLETE = 'INTERVIEW_COMPLETE'
 const TABS = ['All', 'Interview Pending', 'Interview Done', 'Screened Out']
+const EMPTY_MANUAL = { full_name: '', email: '', phone: '', candidate_role: '', total_years: '', skills: '', education: '', summary: '', jobId: '', addToPool: false }
 
 function dimColor(v) { return v >= 70 ? 'var(--green)' : v >= 50 ? 'var(--accent)' : 'var(--red)' }
 
@@ -42,7 +43,6 @@ function CandidateProfile({ candidate, onBack }) {
         ← Back to list
       </button>
 
-      {/* Hero */}
       <div className="profile-hero">
         <div className="profile-avatar">{(candidate.full_name ?? '?')[0].toUpperCase()}</div>
         <div className="profile-id" style={{ flex: 1 }}>
@@ -74,7 +74,6 @@ function CandidateProfile({ candidate, onBack }) {
         )}
       </div>
 
-      {/* Screening reason */}
       {candidate.match_reason && (
         <div style={{ marginBottom: 16, padding: '12px 16px', background: 'var(--surface)', border: '1px solid var(--border)', borderLeft: `2px solid ${candidate.match_pass ? 'var(--green)' : 'var(--red)'}`, fontSize: 13, color: 'var(--text-2)', fontWeight: 300 }}>
           <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-3)', display: 'block', marginBottom: 4 }}>Screening verdict</span>
@@ -82,7 +81,6 @@ function CandidateProfile({ candidate, onBack }) {
         </div>
       )}
 
-      {/* No interview yet */}
       {s.overallScore == null && candidate.match_pass && (
         <div style={{ padding: '32px 24px', textAlign: 'center', background: 'var(--surface)', border: '1px solid var(--border)', marginBottom: 16 }}>
           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--text-3)', marginBottom: 8 }}>Interview Status</div>
@@ -91,7 +89,6 @@ function CandidateProfile({ candidate, onBack }) {
         </div>
       )}
 
-      {/* Interview scores */}
       {s.overallScore != null && (
         <div className="profile-grid">
           <div className="profile-section">
@@ -161,21 +158,28 @@ function CandidateProfile({ candidate, onBack }) {
   )
 }
 
+const MO = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000 }
+const MB = { background: 'var(--surface)', borderRadius: 12, padding: 28, width: 460, display: 'flex', flexDirection: 'column', gap: 16, maxHeight: '90vh', overflowY: 'auto' }
+const ML = { fontSize: 11, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-3)', display: 'block', marginBottom: 6 }
+const MI = { width: '100%', padding: '9px 12px', borderRadius: 7, border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)', fontSize: 13, boxSizing: 'border-box' }
+
 export default function RecruiterCandidates() {
   const { user } = useAuth()
   const location = useLocation()
-  const [jobs, setJobs] = useState([])
-  const [candidates, setCandidates] = useState([])
-  const [poolCandidates, setPoolCandidates] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [source, setSource] = useState('uploaded') // 'uploaded' | 'pool'
-  const [jobFilter, setJobFilter] = useState('all')
-  const [tab, setTab] = useState('All')
-  const [selectedId, setSelectedId] = useState(null)
+  const [jobs, setJobs]                         = useState([])
+  const [candidates, setCandidates]             = useState([])
+  const [poolCandidates, setPoolCandidates]     = useState([])
+  const [loading, setLoading]                   = useState(true)
+  const [source, setSource]                     = useState('uploaded')
+  const [jobFilter, setJobFilter]               = useState('all')
+  const [tab, setTab]                           = useState('All')
+  const [selectedId, setSelectedId]             = useState(null)
+  const [deleteModal, setDeleteModal]           = useState(null)
+  const [addManuallyModal, setAddManuallyModal] = useState(null)
+  const [allotJobModal, setAllotJobModal]       = useState(null)
 
   useEffect(() => { if (user) load() }, [user])
 
-  // Support ?tab= nav from dashboard
   useEffect(() => {
     const params = new URLSearchParams(location.search)
     const t = params.get('tab')
@@ -183,13 +187,11 @@ export default function RecruiterCandidates() {
   }, [location.search])
 
   async function load() {
-    // Get client IDs assigned to this recruiter, then load their jobs
     const { data: rcData } = await supabase
       .from('recruiter_clients')
       .select('client_id')
       .eq('recruiter_id', user.id)
     const clientIds = (rcData ?? []).map(r => r.client_id)
-
     if (!clientIds.length) { setLoading(false); return }
 
     const { data: jobData } = await supabase.from('jobs').select('id, title').in('recruiter_id', clientIds)
@@ -206,6 +208,80 @@ export default function RecruiterCandidates() {
     setLoading(false)
   }
 
+  async function handleDelete() {
+    const { candidate } = deleteModal
+    setDeleteModal(m => ({ ...m, deleting: true }))
+    const table = candidate._fromPool ? 'job_matches' : 'candidates'
+    const { error } = await supabase.from(table).delete().eq('id', candidate.id)
+    if (!error) {
+      if (candidate._fromPool) setPoolCandidates(p => p.filter(c => c.id !== candidate.id))
+      else setCandidates(p => p.filter(c => c.id !== candidate.id))
+    }
+    setDeleteModal(null)
+  }
+
+  async function handleAddManually() {
+    const f = addManuallyModal
+    if (!f.full_name.trim() || !f.jobId) return
+    setAddManuallyModal(m => ({ ...m, saving: true, error: null }))
+    try {
+      const skillsArr = f.skills.split(',').map(s => s.trim()).filter(Boolean)
+      const { data: saved, error } = await supabase.from('candidates').insert({
+        job_id:         f.jobId,
+        full_name:      f.full_name.trim(),
+        email:          f.email.trim(),
+        phone:          f.phone.trim(),
+        candidate_role: f.candidate_role.trim(),
+        total_years:    parseInt(f.total_years) || 0,
+        skills:         skillsArr,
+        education:      f.education.trim(),
+        summary:        f.summary.trim(),
+        source:         'manually_added',
+      }).select().single()
+      if (error) throw new Error(error.message)
+      if (f.addToPool) {
+        await supabase.from('talent_pool').insert({
+          full_name:      f.full_name.trim(),
+          email:          f.email.trim(),
+          candidate_role: f.candidate_role.trim(),
+          total_years:    parseInt(f.total_years) || 0,
+          skills:         skillsArr,
+          education:      f.education.trim(),
+          summary:        f.summary.trim(),
+          availability:   'available',
+        })
+      }
+      setCandidates(p => [saved, ...p])
+      setAddManuallyModal(null)
+    } catch (err) {
+      setAddManuallyModal(m => ({ ...m, saving: false, error: err.message }))
+    }
+  }
+
+  async function handleAllotToJob() {
+    const { candidate, jobId } = allotJobModal
+    if (!jobId) return
+    setAllotJobModal(m => ({ ...m, alloting: true, error: null }))
+    try {
+      const { data: saved, error } = await supabase.from('candidates').insert({
+        job_id:         jobId,
+        full_name:      candidate.full_name,
+        email:          candidate.email ?? '',
+        candidate_role: candidate.candidate_role ?? '',
+        total_years:    candidate.total_years ?? 0,
+        skills:         Array.isArray(candidate.skills) ? candidate.skills : [],
+        education:      candidate.education ?? '',
+        summary:        candidate.summary ?? '',
+        source:         'manually_added',
+      }).select().single()
+      if (error) throw new Error(error.message)
+      setCandidates(p => [saved, ...p])
+      setAllotJobModal(null)
+    } catch (err) {
+      setAllotJobModal(m => ({ ...m, alloting: false, error: err.message }))
+    }
+  }
+
   function getStatus(c) {
     if (c.scores) return 'Interview Done'
     if (c.match_pass === true) return 'Interview Pending'
@@ -213,15 +289,12 @@ export default function RecruiterCandidates() {
     return 'Pending'
   }
 
+  const jobName = (id) => jobs.find(j => j.id === id)?.title ?? '—'
+
   const activeList = source === 'pool' ? poolCandidates : candidates
   const byJob = jobFilter === 'all' ? activeList : activeList.filter(c => c.job_id === jobFilter)
+  const tabFiltered = byJob.filter(c => tab === 'All' || getStatus(c) === tab)
 
-  const tabFiltered = byJob.filter(c => {
-    if (tab === 'All') return true
-    return getStatus(c) === tab
-  })
-
-  // Counts per tab
   const counts = {
     'All': byJob.length,
     'Interview Pending': byJob.filter(c => getStatus(c) === 'Interview Pending').length,
@@ -229,8 +302,7 @@ export default function RecruiterCandidates() {
     'Screened Out': byJob.filter(c => getStatus(c) === 'Screened Out').length,
   }
 
-  const allCandidates = [...candidates, ...poolCandidates]
-  const selected = allCandidates.find(c => c.id === selectedId)
+  const selected = [...candidates, ...poolCandidates].find(c => c.id === selectedId)
 
   if (loading) return <div className="page"><span className="spinner" /></div>
 
@@ -247,16 +319,26 @@ export default function RecruiterCandidates() {
       <div className="page-head">
         <div>
           <h2>Candidates</h2>
-          <p>{byJob.length} candidate{byJob.length !== 1 ? 's' : ''} total</p>
+          <p>{byJob.length} candidate{byJob.length !== 1 ? 's' : ''} across all jobs</p>
         </div>
-        <select value={jobFilter} onChange={e => setJobFilter(e.target.value)} style={{ width: 200 }}>
-          <option value="all">All Jobs</option>
-          {jobs.map(j => <option key={j.id} value={j.id}>{j.title}</option>)}
-        </select>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <select value={jobFilter} onChange={e => setJobFilter(e.target.value)} style={{ width: 200 }}>
+            <option value="all">All Jobs</option>
+            {jobs.map(j => <option key={j.id} value={j.id}>{j.title}</option>)}
+          </select>
+          <button
+            className="btn btn-primary"
+            style={{ whiteSpace: 'nowrap' }}
+            disabled={jobs.length === 0}
+            onClick={() => setAddManuallyModal({ ...EMPTY_MANUAL, saving: false, error: null })}
+          >
+            + Add Manually
+          </button>
+        </div>
       </div>
 
       {/* Source tabs */}
-      <div style={{ display: 'flex', gap: 2, marginBottom: 0, borderBottom: '1px solid var(--border)' }}>
+      <div style={{ display: 'flex', gap: 2, borderBottom: '1px solid var(--border)' }}>
         {[
           { key: 'uploaded', label: 'Uploaded CVs', count: (jobFilter === 'all' ? candidates : candidates.filter(c => c.job_id === jobFilter)).length },
           { key: 'pool',     label: 'Talent Pool',  count: (jobFilter === 'all' ? poolCandidates : poolCandidates.filter(c => c.job_id === jobFilter)).length },
@@ -279,7 +361,7 @@ export default function RecruiterCandidates() {
       </div>
 
       {/* Status tabs */}
-      <div style={{ display: 'flex', gap: 2, marginBottom: 20, borderBottom: '1px solid var(--border)', marginTop: 0 }}>
+      <div style={{ display: 'flex', gap: 2, marginBottom: 20, borderBottom: '1px solid var(--border)' }}>
         {TABS.map(t => (
           <button
             key={t}
@@ -293,11 +375,7 @@ export default function RecruiterCandidates() {
             }}
           >
             {t}
-            {counts[t] != null && (
-              <span style={{ marginLeft: 6, fontFamily: 'var(--font-mono)', fontSize: 10, color: tab === t ? 'var(--accent)' : 'var(--text-3)' }}>
-                {counts[t]}
-              </span>
-            )}
+            <span style={{ marginLeft: 6, fontSize: 10, color: tab === t ? 'var(--accent)' : 'var(--text-3)' }}>{counts[t]}</span>
           </button>
         ))}
       </div>
@@ -311,44 +389,160 @@ export default function RecruiterCandidates() {
             const rec = s?.recommendation
             const status = getStatus(c)
             return (
-              <div key={c.id} className="table-row clickable" onClick={() => setSelectedId(c.id)}>
-                <div className="col-main">
+              <div key={c.id} className="table-row" style={{ cursor: 'default' }}>
+                <div className="col-main" style={{ cursor: 'pointer' }} onClick={() => setSelectedId(c.id)}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     <div className="profile-avatar" style={{ width: 34, height: 34, fontSize: 14, borderRadius: 'var(--r)', flexShrink: 0 }}>
                       {(c.full_name ?? '?')[0].toUpperCase()}
                     </div>
                     <div>
-                      <div className="col-name">{c.full_name}</div>
-                      <div className="col-sub">{c.candidate_role} · {c.total_years}y exp</div>
+                      <div className="col-name">
+                        {c.full_name}
+                        {c.source === 'manually_added' && <span className="badge badge-blue" style={{ fontSize: 9, marginLeft: 6 }}>Manual</span>}
+                      </div>
+                      <div className="col-sub">{c.candidate_role} · {c.total_years}y exp · {jobName(c.job_id)}</div>
                     </div>
                   </div>
                 </div>
                 <div className="col-right">
                   {c.match_score != null && (
-                    <span className="mono" style={{ fontSize: 11, color: 'var(--text-3)' }}>
-                      Screen {c.match_score}
-                    </span>
+                    <span className="mono" style={{ fontSize: 11, color: 'var(--text-3)' }}>Screen {c.match_score}</span>
                   )}
                   {s?.overallScore != null && (
-                    <span className="mono" style={{ fontSize: 13, fontWeight: 700, color: dimColor(s.overallScore) }}>
-                      {s.overallScore}
-                    </span>
+                    <span className="mono" style={{ fontSize: 13, fontWeight: 700, color: dimColor(s.overallScore) }}>{s.overallScore}</span>
                   )}
                   {rec && (
-                    <span style={{ fontSize: 11, fontWeight: 600, color: REC_COLOR[rec], fontFamily: 'var(--font-mono)' }}>
-                      {rec}
-                    </span>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: REC_COLOR[rec], fontFamily: 'var(--font-mono)' }}>{rec}</span>
                   )}
-                  {status === 'Screened Out'       && !s && <span className="badge badge-red">Screened Out</span>}
-                  {status === 'Interview Pending'  && <span className="badge badge-amber">Interview Pending</span>}
-                  {status === 'Pending'            && <span className="badge" style={{ color: 'var(--text-3)', background: 'var(--surface2)' }}>Pending</span>}
+                  {status === 'Screened Out'      && !s && <span className="badge badge-red">Screened Out</span>}
+                  {status === 'Interview Pending' && <span className="badge badge-amber">Interview Pending</span>}
+                  {status === 'Pending'           && <span className="badge" style={{ color: 'var(--text-3)', background: 'var(--surface2)' }}>Pending</span>}
                   {c._fromPool && <span className="badge badge-green" style={{ fontSize: 9 }}>Pool</span>}
+                  {!c._fromPool && (
+                    <button
+                      className="btn btn-secondary"
+                      style={{ fontSize: 10, padding: '2px 8px', whiteSpace: 'nowrap' }}
+                      onClick={e => { e.stopPropagation(); setAllotJobModal({ candidate: c, jobId: '', alloting: false, error: null }) }}
+                    >
+                      Allot to Job
+                    </button>
+                  )}
+                  <button
+                    className="btn btn-ghost"
+                    title="Delete candidate"
+                    style={{ padding: '2px 6px', fontSize: 14, color: 'var(--red)', opacity: 0.5 }}
+                    onClick={e => { e.stopPropagation(); setDeleteModal({ candidate: c }) }}
+                  >🗑</button>
                 </div>
               </div>
             )
           })
         )}
       </div>
+
+      {/* ── Delete Modal ── */}
+      {deleteModal && (
+        <div style={MO}>
+          <div style={MB}>
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>Remove Candidate</div>
+              <div style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.6 }}>
+                Are you sure you want to remove <strong>{deleteModal.candidate.full_name}</strong>? This cannot be undone.
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button className="btn btn-secondary" onClick={() => setDeleteModal(null)}>Cancel</button>
+              <button
+                className="btn btn-primary"
+                style={{ background: 'var(--red)', borderColor: 'var(--red)' }}
+                disabled={deleteModal.deleting}
+                onClick={handleDelete}
+              >
+                {deleteModal.deleting ? <><span className="spinner" style={{ width: 11, height: 11 }} /> Removing…</> : 'Remove'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Add Manually Modal ── */}
+      {addManuallyModal && (
+        <div style={MO}>
+          <div style={{ ...MB, width: 500 }}>
+            <div style={{ fontSize: 15, fontWeight: 600 }}>Add Candidate Manually</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div><label style={ML}>Full Name *</label><input autoFocus style={MI} value={addManuallyModal.full_name} onChange={e => setAddManuallyModal(m => ({ ...m, full_name: e.target.value }))} placeholder="Jane Smith" /></div>
+              <div><label style={ML}>Email</label><input style={MI} value={addManuallyModal.email} onChange={e => setAddManuallyModal(m => ({ ...m, email: e.target.value }))} placeholder="jane@example.com" /></div>
+              <div><label style={ML}>Phone (optional)</label><input style={MI} value={addManuallyModal.phone} onChange={e => setAddManuallyModal(m => ({ ...m, phone: e.target.value }))} placeholder="+91 9876543210" /></div>
+              <div><label style={ML}>Current Role</label><input style={MI} value={addManuallyModal.candidate_role} onChange={e => setAddManuallyModal(m => ({ ...m, candidate_role: e.target.value }))} placeholder="Senior Engineer" /></div>
+              <div><label style={ML}>Years of Experience</label><input type="number" min={0} style={MI} value={addManuallyModal.total_years} onChange={e => setAddManuallyModal(m => ({ ...m, total_years: e.target.value }))} placeholder="5" /></div>
+              <div><label style={ML}>Education (optional)</label><input style={MI} value={addManuallyModal.education} onChange={e => setAddManuallyModal(m => ({ ...m, education: e.target.value }))} placeholder="B.Tech Computer Science" /></div>
+              <div style={{ gridColumn: 'span 2' }}><label style={ML}>Skills (comma separated)</label><input style={MI} value={addManuallyModal.skills} onChange={e => setAddManuallyModal(m => ({ ...m, skills: e.target.value }))} placeholder="React, Node.js, TypeScript" /></div>
+              <div style={{ gridColumn: 'span 2' }}><label style={ML}>Summary (optional)</label><textarea style={{ ...MI, height: 70, resize: 'vertical' }} value={addManuallyModal.summary} onChange={e => setAddManuallyModal(m => ({ ...m, summary: e.target.value }))} placeholder="Brief professional summary…" /></div>
+              <div style={{ gridColumn: 'span 2' }}>
+                <label style={ML}>Assign to Job *</label>
+                <select style={MI} value={addManuallyModal.jobId} onChange={e => setAddManuallyModal(m => ({ ...m, jobId: e.target.value }))}>
+                  <option value="">— select a job —</option>
+                  {jobs.map(j => <option key={j.id} value={j.id}>{j.title}</option>)}
+                </select>
+              </div>
+            </div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-2)', cursor: 'pointer' }}>
+              <input type="checkbox" checked={addManuallyModal.addToPool} onChange={e => setAddManuallyModal(m => ({ ...m, addToPool: e.target.checked }))} />
+              Also add to master talent pool
+            </label>
+            {addManuallyModal.error && <div style={{ fontSize: 12, color: 'var(--red)' }}>⚠ {addManuallyModal.error}</div>}
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button className="btn btn-secondary" onClick={() => setAddManuallyModal(null)}>Cancel</button>
+              <button
+                className="btn btn-primary"
+                disabled={!addManuallyModal.full_name.trim() || !addManuallyModal.jobId || addManuallyModal.saving}
+                onClick={handleAddManually}
+              >
+                {addManuallyModal.saving ? <><span className="spinner" style={{ width: 11, height: 11 }} /> Saving…</> : 'Add Candidate'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Allot to Job Modal ── */}
+      {allotJobModal && (
+        <div style={MO}>
+          <div style={MB}>
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>Allot to Job</div>
+              <div style={{ fontSize: 13, color: 'var(--text-3)' }}>
+                {allotJobModal.candidate.full_name} · currently in: <em>{jobName(allotJobModal.candidate.job_id)}</em>
+              </div>
+            </div>
+            <div>
+              <label style={ML}>Select Job</label>
+              <select
+                style={MI}
+                value={allotJobModal.jobId}
+                onChange={e => setAllotJobModal(m => ({ ...m, jobId: e.target.value }))}
+              >
+                <option value="">— select a job —</option>
+                {jobs.filter(j => j.id !== allotJobModal.candidate.job_id).map(j => (
+                  <option key={j.id} value={j.id}>{j.title}</option>
+                ))}
+              </select>
+            </div>
+            {allotJobModal.error && <div style={{ fontSize: 12, color: 'var(--red)' }}>⚠ {allotJobModal.error}</div>}
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button className="btn btn-secondary" onClick={() => setAllotJobModal(null)}>Cancel</button>
+              <button
+                className="btn btn-primary"
+                disabled={!allotJobModal.jobId || allotJobModal.alloting}
+                onClick={handleAllotToJob}
+              >
+                {allotJobModal.alloting ? <><span className="spinner" style={{ width: 11, height: 11 }} /> Allotting…</> : 'Allot to Job'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
