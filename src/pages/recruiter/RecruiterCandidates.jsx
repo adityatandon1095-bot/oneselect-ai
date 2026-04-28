@@ -221,6 +221,12 @@ export default function RecruiterCandidates() {
   const [deleteModal, setDeleteModal]           = useState(null)
   const [addManuallyModal, setAddManuallyModal] = useState(null)
   const [allotJobModal, setAllotJobModal]       = useState(null)
+  const [selectedIds, setSelectedIds]           = useState(new Set())
+  const [bulkDeleteModal, setBulkDeleteModal]   = useState(false)
+  const [bulkDeleteing, setBulkDeleting]        = useState(false)
+  const [bulkAllotModal, setBulkAllotModal]     = useState(false)
+  const [bulkAllotJobId, setBulkAllotJobId]     = useState('')
+  const [bulkAlloting, setBulkAlloting]         = useState(false)
 
   // CV upload
   const [showUpload, setShowUpload]   = useState(false)
@@ -334,6 +340,60 @@ export default function RecruiterCandidates() {
     }
   }
 
+  function toggleSelect(id) {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  function toggleSelectAll() {
+    if (tabFiltered.every(c => selectedIds.has(c.id))) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(tabFiltered.map(c => c.id)))
+    }
+  }
+
+  async function handleBulkDelete() {
+    setBulkDeleting(true)
+    const poolIds     = [...selectedIds].filter(id => [...poolCandidates].some(c => c.id === id))
+    const regularIds  = [...selectedIds].filter(id => !poolIds.includes(id))
+    if (regularIds.length)  await supabase.from('candidates').delete().in('id', regularIds)
+    if (poolIds.length)     await supabase.from('job_matches').delete().in('id', poolIds)
+    setCandidates(p => p.filter(c => !regularIds.includes(c.id)))
+    setPoolCandidates(p => p.filter(c => !poolIds.includes(c.id)))
+    setSelectedIds(new Set())
+    setBulkDeleting(false)
+    setBulkDeleteModal(false)
+  }
+
+  async function handleBulkAllot() {
+    if (!bulkAllotJobId) return
+    setBulkAlloting(true)
+    const toAllot = [...candidates, ...poolCandidates].filter(c => selectedIds.has(c.id) && !c._fromPool)
+    const inserts = toAllot.map(c => ({
+      job_id:         bulkAllotJobId,
+      full_name:      c.full_name,
+      email:          c.email ?? '',
+      candidate_role: c.candidate_role ?? '',
+      total_years:    c.total_years ?? 0,
+      skills:         Array.isArray(c.skills) ? c.skills : [],
+      education:      c.education ?? '',
+      summary:        c.summary ?? '',
+      source:         'manually_added',
+    }))
+    if (inserts.length) {
+      const { data: saved } = await supabase.from('candidates').insert(inserts).select()
+      if (saved) setCandidates(p => [...saved, ...p])
+    }
+    setSelectedIds(new Set())
+    setBulkAllotJobId('')
+    setBulkAlloting(false)
+    setBulkAllotModal(false)
+  }
+
   const addFiles = useCallback((incoming) => {
     const valid = Array.from(incoming).filter(isSupported)
     if (!valid.length) return
@@ -401,9 +461,12 @@ export default function RecruiterCandidates() {
 
   const jobName = (id) => jobs.find(j => j.id === id)?.title ?? '—'
 
+  useEffect(() => { setSelectedIds(new Set()) }, [source, jobFilter, tab])
+
   const activeList = source === 'pool' ? poolCandidates : candidates
   const byJob = jobFilter === 'all' ? activeList : activeList.filter(c => c.job_id === jobFilter)
   const tabFiltered = byJob.filter(c => tab === 'All' || getStatus(c) === tab)
+  const allVisibleSelected = tabFiltered.length > 0 && tabFiltered.every(c => selectedIds.has(c.id))
 
   const counts = {
     'All': byJob.length,
@@ -583,63 +646,113 @@ export default function RecruiterCandidates() {
         ))}
       </div>
 
+      {/* ── Bulk action bar ── */}
+      {selectedIds.size > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', marginBottom: 8, background: 'var(--accent)', borderRadius: 'var(--r)', color: '#fff' }}>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 600 }}>{selectedIds.size} selected</span>
+          <div style={{ flex: 1 }} />
+          <button
+            className="btn btn-secondary"
+            style={{ fontSize: 11, padding: '4px 12px', background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: '#fff' }}
+            onClick={() => setBulkAllotModal(true)}
+          >
+            Allot to Job
+          </button>
+          <button
+            className="btn btn-secondary"
+            style={{ fontSize: 11, padding: '4px 12px', background: 'rgba(239,68,68,0.25)', border: '1px solid rgba(239,68,68,0.5)', color: '#fff' }}
+            onClick={() => setBulkDeleteModal(true)}
+          >
+            Delete Selected
+          </button>
+          <button
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.7)', fontSize: 18, lineHeight: 1, padding: '0 4px' }}
+            onClick={() => setSelectedIds(new Set())}
+            title="Clear selection"
+          >×</button>
+        </div>
+      )}
+
       <div className="section-card">
         {tabFiltered.length === 0 ? (
           <div className="empty-state">No candidates in this category</div>
         ) : (
-          tabFiltered.map(c => {
-            const s = c.scores
-            const rec = s?.recommendation
-            const status = getStatus(c)
-            return (
-              <div key={c.id} className="table-row" style={{ cursor: 'default' }}>
-                <div className="col-main" style={{ cursor: 'pointer' }} onClick={() => setSelectedId(c.id)}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <div className="profile-avatar" style={{ width: 34, height: 34, fontSize: 14, borderRadius: 'var(--r)', flexShrink: 0 }}>
-                      {(c.full_name ?? '?')[0].toUpperCase()}
-                    </div>
-                    <div>
-                      <div className="col-name">
-                        {c.full_name}
-                        {c.source === 'manually_added' && <span className="badge badge-blue" style={{ fontSize: 9, marginLeft: 6 }}>Manual</span>}
+          <>
+            {/* Select-all row */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 16px', borderBottom: '1px solid var(--border)', background: 'var(--surface2)' }}>
+              <input
+                type="checkbox"
+                checked={allVisibleSelected}
+                onChange={toggleSelectAll}
+                style={{ width: 15, height: 15, cursor: 'pointer', accentColor: 'var(--accent)' }}
+              />
+              <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                {allVisibleSelected ? 'Deselect all' : `Select all ${tabFiltered.length}`}
+              </span>
+            </div>
+
+            {tabFiltered.map(c => {
+              const s = c.scores
+              const rec = s?.recommendation
+              const status = getStatus(c)
+              const isChecked = selectedIds.has(c.id)
+              return (
+                <div key={c.id} className="table-row" style={{ cursor: 'default', background: isChecked ? 'var(--accent-d)' : undefined }}>
+                  <input
+                    type="checkbox"
+                    checked={isChecked}
+                    onChange={() => toggleSelect(c.id)}
+                    onClick={e => e.stopPropagation()}
+                    style={{ width: 15, height: 15, flexShrink: 0, cursor: 'pointer', accentColor: 'var(--accent)' }}
+                  />
+                  <div className="col-main" style={{ cursor: 'pointer' }} onClick={() => setSelectedId(c.id)}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div className="profile-avatar" style={{ width: 34, height: 34, fontSize: 14, borderRadius: 'var(--r)', flexShrink: 0 }}>
+                        {(c.full_name ?? '?')[0].toUpperCase()}
                       </div>
-                      <div className="col-sub">{c.candidate_role} · {c.total_years}y exp · {jobName(c.job_id)}</div>
+                      <div>
+                        <div className="col-name">
+                          {c.full_name}
+                          {c.source === 'manually_added' && <span className="badge badge-blue" style={{ fontSize: 9, marginLeft: 6 }}>Manual</span>}
+                        </div>
+                        <div className="col-sub">{c.candidate_role} · {c.total_years}y exp · {jobName(c.job_id)}</div>
+                      </div>
                     </div>
                   </div>
-                </div>
-                <div className="col-right">
-                  {c.match_score != null && (
-                    <span className="mono" style={{ fontSize: 11, color: 'var(--text-3)' }}>Screen {c.match_score}</span>
-                  )}
-                  {s?.overallScore != null && (
-                    <span className="mono" style={{ fontSize: 13, fontWeight: 700, color: dimColor(s.overallScore) }}>{s.overallScore}</span>
-                  )}
-                  {rec && (
-                    <span style={{ fontSize: 11, fontWeight: 600, color: REC_COLOR[rec], fontFamily: 'var(--font-mono)' }}>{rec}</span>
-                  )}
-                  {status === 'Screened Out'      && !s && <span className="badge badge-red">Screened Out</span>}
-                  {status === 'Interview Pending' && <span className="badge badge-amber">Interview Pending</span>}
-                  {status === 'Pending'           && <span className="badge" style={{ color: 'var(--text-3)', background: 'var(--surface2)' }}>Pending</span>}
-                  {c._fromPool && <span className="badge badge-green" style={{ fontSize: 9 }}>Pool</span>}
-                  {!c._fromPool && (
+                  <div className="col-right">
+                    {c.match_score != null && (
+                      <span className="mono" style={{ fontSize: 11, color: 'var(--text-3)' }}>Screen {c.match_score}</span>
+                    )}
+                    {s?.overallScore != null && (
+                      <span className="mono" style={{ fontSize: 13, fontWeight: 700, color: dimColor(s.overallScore) }}>{s.overallScore}</span>
+                    )}
+                    {rec && (
+                      <span style={{ fontSize: 11, fontWeight: 600, color: REC_COLOR[rec], fontFamily: 'var(--font-mono)' }}>{rec}</span>
+                    )}
+                    {status === 'Screened Out'      && !s && <span className="badge badge-red">Screened Out</span>}
+                    {status === 'Interview Pending' && <span className="badge badge-amber">Interview Pending</span>}
+                    {status === 'Pending'           && <span className="badge" style={{ color: 'var(--text-3)', background: 'var(--surface2)' }}>Pending</span>}
+                    {c._fromPool && <span className="badge badge-green" style={{ fontSize: 9 }}>Pool</span>}
+                    {!c._fromPool && (
+                      <button
+                        className="btn btn-secondary"
+                        style={{ fontSize: 10, padding: '2px 8px', whiteSpace: 'nowrap' }}
+                        onClick={e => { e.stopPropagation(); setAllotJobModal({ candidate: c, jobId: '', alloting: false, error: null }) }}
+                      >
+                        Allot to Job
+                      </button>
+                    )}
                     <button
-                      className="btn btn-secondary"
-                      style={{ fontSize: 10, padding: '2px 8px', whiteSpace: 'nowrap' }}
-                      onClick={e => { e.stopPropagation(); setAllotJobModal({ candidate: c, jobId: '', alloting: false, error: null }) }}
-                    >
-                      Allot to Job
-                    </button>
-                  )}
-                  <button
-                    className="btn btn-ghost"
-                    title="Delete candidate"
-                    style={{ padding: '2px 6px', fontSize: 14, color: 'var(--red)', opacity: 0.5 }}
-                    onClick={e => { e.stopPropagation(); setDeleteModal({ candidate: c }) }}
-                  >🗑</button>
+                      className="btn btn-ghost"
+                      title="Delete candidate"
+                      style={{ padding: '2px 6px', fontSize: 14, color: 'var(--red)', opacity: 0.5 }}
+                      onClick={e => { e.stopPropagation(); setDeleteModal({ candidate: c }) }}
+                    >🗑</button>
+                  </div>
                 </div>
-              </div>
-            )
-          })
+              )
+            })}
+          </>
         )}
       </div>
 
@@ -703,6 +816,62 @@ export default function RecruiterCandidates() {
                 onClick={handleAddManually}
               >
                 {addManuallyModal.saving ? <><span className="spinner" style={{ width: 11, height: 11 }} /> Saving…</> : 'Add Candidate'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Bulk Delete Modal ── */}
+      {bulkDeleteModal && (
+        <div style={MO}>
+          <div style={MB}>
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>Delete {selectedIds.size} Candidate{selectedIds.size !== 1 ? 's' : ''}?</div>
+              <div style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.6 }}>
+                This will permanently remove all {selectedIds.size} selected candidate{selectedIds.size !== 1 ? 's' : ''}. This cannot be undone.
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button className="btn btn-secondary" disabled={bulkDeleteing} onClick={() => setBulkDeleteModal(false)}>Cancel</button>
+              <button
+                className="btn btn-primary"
+                style={{ background: 'var(--red)', borderColor: 'var(--red)' }}
+                disabled={bulkDeleteing}
+                onClick={handleBulkDelete}
+              >
+                {bulkDeleteing ? <><span className="spinner" style={{ width: 11, height: 11 }} /> Deleting…</> : `Delete ${selectedIds.size}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Bulk Allot Modal ── */}
+      {bulkAllotModal && (
+        <div style={MO}>
+          <div style={MB}>
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>Allot {selectedIds.size} Candidate{selectedIds.size !== 1 ? 's' : ''} to Job</div>
+              <div style={{ fontSize: 13, color: 'var(--text-3)', lineHeight: 1.6 }}>
+                A copy of each selected candidate will be added to the chosen job.
+              </div>
+            </div>
+            <div>
+              <label style={ML}>Select Job</label>
+              <select style={MI} value={bulkAllotJobId} onChange={e => setBulkAllotJobId(e.target.value)}>
+                <option value="">— select a job —</option>
+                {jobs.map(j => <option key={j.id} value={j.id}>{j.title}</option>)}
+              </select>
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button className="btn btn-secondary" disabled={bulkAlloting} onClick={() => { setBulkAllotModal(false); setBulkAllotJobId('') }}>Cancel</button>
+              <button
+                className="btn btn-primary"
+                disabled={!bulkAllotJobId || bulkAlloting}
+                onClick={handleBulkAllot}
+              >
+                {bulkAlloting ? <><span className="spinner" style={{ width: 11, height: 11 }} /> Allotting…</> : `Allot ${selectedIds.size}`}
               </button>
             </div>
           </div>
