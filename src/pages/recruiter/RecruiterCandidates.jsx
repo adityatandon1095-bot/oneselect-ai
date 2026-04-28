@@ -411,7 +411,6 @@ export default function RecruiterCandidates() {
   }
 
   async function parseAll() {
-    if (!uploadJobId) return
     setParsing(true)
     for (const entry of files.filter(f => f.status === 'pending')) {
       patchFile(entry.id, { status: 'parsing' })
@@ -431,7 +430,7 @@ export default function RecruiterCandidates() {
         const reply = await callClaude(msgs, CV_PARSE_SYSTEM, 1024)
         const parsed = JSON.parse(reply.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, ''))
         const { data: saved, error } = await supabase.from('candidates').insert({
-          job_id:         uploadJobId,
+          job_id:         uploadJobId || null,
           full_name:      parsed.name,
           email:          parsed.email ?? '',
           candidate_role: parsed.currentRole ?? '',
@@ -536,7 +535,7 @@ export default function RecruiterCandidates() {
                 <button
                   className="btn btn-primary"
                   style={{ fontSize: 12, padding: '5px 12px', whiteSpace: 'nowrap' }}
-                  disabled={parsing || !uploadJobId}
+                  disabled={parsing}
                   onClick={parseAll}
                 >
                   {parsing
