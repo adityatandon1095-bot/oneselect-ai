@@ -69,19 +69,19 @@ export default function AdminDashboard() {
       </div>
 
       <div className="metrics-row">
-        <div className="metric-card blue">
+        <div className="metric-card blue" style={{ cursor: 'pointer' }} onClick={() => navigate('/admin/clients')}>
           <span className="metric-val">{stats.clients}</span>
           <span className="metric-label">Total Clients</span>
         </div>
-        <div className="metric-card">
+        <div className="metric-card" style={{ cursor: 'pointer' }} onClick={() => navigate('/admin/jobs')}>
           <span className="metric-val">{stats.jobs}</span>
           <span className="metric-label">Active Jobs</span>
         </div>
-        <div className="metric-card amber">
+        <div className="metric-card amber" style={{ cursor: 'pointer' }} onClick={() => navigate('/admin/pipeline')}>
           <span className="metric-val">{stats.candidates}</span>
           <span className="metric-label">Candidates Processed</span>
         </div>
-        <div className="metric-card green">
+        <div className="metric-card green" style={{ cursor: 'pointer' }} onClick={() => navigate('/admin/analytics')}>
           <span className="metric-val">{stats.interviews}</span>
           <span className="metric-label">Interviews Done</span>
         </div>

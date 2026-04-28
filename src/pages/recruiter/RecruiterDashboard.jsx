@@ -187,19 +187,19 @@ export default function RecruiterDashboard() {
       </div>
 
       <div className="metrics-row">
-        <div className="metric-card blue">
+        <div className="metric-card blue" style={{ cursor: 'pointer' }} onClick={() => navigate('/recruiter/clients')}>
           <span className="metric-val">{stats.clients}</span>
           <span className="metric-label">Assigned Clients</span>
         </div>
-        <div className="metric-card">
+        <div className="metric-card" style={{ cursor: 'pointer' }} onClick={() => navigate('/recruiter/jobs')}>
           <span className="metric-val">{stats.jobs}</span>
           <span className="metric-label">Active Jobs</span>
         </div>
-        <div className="metric-card amber">
+        <div className="metric-card amber" style={{ cursor: 'pointer' }} onClick={() => navigate('/recruiter/candidates')}>
           <span className="metric-val">{stats.candidates}</span>
           <span className="metric-label">CVs Submitted</span>
         </div>
-        <div className="metric-card green">
+        <div className="metric-card green" style={{ cursor: 'pointer' }} onClick={() => navigate('/recruiter/reports')}>
           <span className="metric-val">{stats.interviewed}</span>
           <span className="metric-label">Interviews Done</span>
         </div>
