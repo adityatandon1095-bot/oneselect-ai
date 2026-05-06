@@ -82,7 +82,7 @@ do $$ begin
       on public.job_matches for select
       to authenticated
       using (
-        talent_pool_id in (
+        talent_id in (
           select id from talent_pool where candidate_user_id = auth.uid()
         )
       );
@@ -103,7 +103,7 @@ do $$ begin
         auth.uid() in (
           select tp.candidate_user_id
           from talent_pool tp
-          join job_matches jm on jm.talent_pool_id = tp.id
+          join job_matches jm on jm.talent_id = tp.id
           where jm.job_id = id
         )
         or status = 'active'

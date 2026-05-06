@@ -47,7 +47,7 @@ export default function CandidateMatches() {
       const { data: matchData } = await supabase
         .from('job_matches')
         .select('*, jobs(id, title, experience_years, required_skills, description)')
-        .eq('talent_pool_id', pool.id)
+        .eq('talent_id', pool.id)
         .order('match_score', { ascending: false })
       setMatches(matchData ?? [])
     }
