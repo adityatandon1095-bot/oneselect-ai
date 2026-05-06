@@ -104,9 +104,9 @@ do $$ begin
           select tp.candidate_user_id
           from talent_pool tp
           join job_matches jm on jm.talent_id = tp.id
-          where jm.job_id = id
+          where jm.job_id = jobs.id
         )
-        or status = 'active'
+        or jobs.status = 'active'
       );
   end if;
 end $$;
