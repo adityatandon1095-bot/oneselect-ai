@@ -6,6 +6,20 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// In-memory rate limiter: 30 calls per user per minute
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>()
+function checkRateLimit(userId: string): boolean {
+  const now = Date.now()
+  const entry = rateLimitMap.get(userId)
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(userId, { count: 1, resetAt: now + 60_000 })
+    return true
+  }
+  if (entry.count >= 30) return false
+  entry.count++
+  return true
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
@@ -29,6 +43,12 @@ serve(async (req) => {
     if (authError || !user) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    if (!checkRateLimit(user.id)) {
+      return new Response(JSON.stringify({ error: 'Rate limit exceeded. Please wait a moment.' }), {
+        status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
 

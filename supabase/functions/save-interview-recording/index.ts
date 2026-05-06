@@ -31,9 +31,10 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: 'Token not found' }), { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
+    // Nullify the token after use so it cannot be replayed
     const { error: updateErr } = await admin
       .from(table)
-      .update({ video_urls, integrity_score, integrity_flags })
+      .update({ video_urls, integrity_score, integrity_flags, interview_invite_token: null })
       .eq('id', row.id)
 
     if (updateErr) throw new Error(updateErr.message)

@@ -9,6 +9,14 @@ const corsHeaders = {
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
+  const expectedKey = Deno.env.get('SUPABASE_ANON_KEY') ?? ''
+  const suppliedKey = req.headers.get('apikey') || req.headers.get('Authorization')?.replace('Bearer ', '')
+  if (!suppliedKey || suppliedKey !== expectedKey) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    })
+  }
+
   try {
     const { email, password, company_name, contact_name } = await req.json()
 

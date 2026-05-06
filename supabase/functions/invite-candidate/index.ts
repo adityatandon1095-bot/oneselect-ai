@@ -26,7 +26,7 @@ serve(async (req) => {
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
     const resendKey   = Deno.env.get('RESEND_API_KEY') ?? ''
-    const appUrl      = 'https://oneselect-ai-t6uo-phi.vercel.app'
+    const appUrl      = Deno.env.get('APP_URL') ?? 'https://oneselect.ai'
 
     const admin = createClient(supabaseUrl, serviceKey)
 

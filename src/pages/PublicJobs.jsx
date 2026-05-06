@@ -1,28 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
-import { extractContent, isSupported, fileExt, ACCEPT_ATTR } from '../utils/fileExtract'
+import { extractContent, isSupported, ACCEPT_ATTR } from '../utils/fileExtract'
 import { parseExperience } from '../utils/parseExperience'
-
-const ANONKEY = import.meta.env.VITE_SUPABASE_ANON_KEY
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
-
-const CV_PARSE_SYSTEM = `You are a CV parser. Return ONLY valid JSON — no markdown:
-{"name":"string","email":"string","currentRole":"string","totalYears":number,"skills":["..."],"education":"string","summary":"string","highlights":["..."],"linkedinUrl":"string or null","githubUrl":"string or null","portfolioUrl":"string or null"}`
-
-async function callClaudePublic(messages, systemPrompt, maxTokens = 1024) {
-  const res = await fetch(`${SUPABASE_URL}/functions/v1/call-claude`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${ANONKEY}`,
-      'apikey': ANONKEY,
-    },
-    body: JSON.stringify({ messages, systemPrompt, maxTokens }),
-  })
-  const data = await res.json()
-  if (!res.ok || data.error) throw new Error(data.error || `API error ${res.status}`)
-  return data.text
-}
 
 const mono = { fontFamily: 'var(--font-mono)' }
 
@@ -90,34 +69,16 @@ function ApplyModal({ job, onClose }) {
       }
 
       const rawText = content.kind === 'text' ? content.text : ''
-      let parsed = {}
-
-      if (rawText.trim()) {
-        const msgs = [{ role: 'user', content: `Parse this CV:\n\n${rawText.slice(0, 8000)}` }]
-        const reply = await callClaudePublic(msgs, CV_PARSE_SYSTEM, 1024)
-        try {
-          parsed = JSON.parse(reply.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, ''))
-        } catch {
-          parsed = {}
-        }
-      }
 
       const { error } = await supabase.from('candidates').insert({
-        job_id:         job.id,
-        full_name:      form.name.trim() || parsed.name || '',
-        email:          form.email.trim() || parsed.email || '',
-        phone:          form.phone.trim() || '',
-        candidate_role: parsed.currentRole ?? '',
-        total_years:    parseExperience(parsed.totalYears) ?? 0,
-        skills:         parsed.skills ?? [],
-        education:      parsed.education ?? '',
-        summary:        parsed.summary ?? '',
-        highlights:     parsed.highlights ?? [],
-        raw_text:       rawText,
-        linkedin_url:   form.linkedin_url.trim() || parsed.linkedinUrl || null,
-        github_url:     form.github_url.trim() || parsed.githubUrl || null,
-        portfolio_url:  parsed.portfolioUrl || null,
-        source:         'applied',
+        job_id:       job.id,
+        full_name:    form.name.trim(),
+        email:        form.email.trim(),
+        phone:        form.phone.trim() || '',
+        raw_text:     rawText,
+        linkedin_url: form.linkedin_url.trim() || null,
+        github_url:   form.github_url.trim() || null,
+        source:       'applied',
       })
 
       if (error) throw new Error(error.message)

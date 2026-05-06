@@ -2,26 +2,12 @@ import { useState, useCallback, useRef } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import mammoth from 'mammoth'
 import { supabase } from '../../lib/supabase'
+import { callClaude } from '../../utils/api'
 import { extractContent, isSupported, fileExt, ACCEPT_ATTR } from '../../utils/fileExtract'
 import TagInput from '../../components/TagInput'
 
 const CV_PARSE_SYSTEM = `You are a CV parser. Return ONLY valid JSON — no markdown:
 {"name":"string","email":"string","currentRole":"string","totalYears":number,"skills":["..."],"education":"string","summary":"string","highlights":["..."],"linkedinUrl":"string or null"}`
-
-async function callClaudePublic(messages, systemPrompt, maxTokens = 1000) {
-  const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/call-claude`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-      'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-    },
-    body: JSON.stringify({ messages, systemPrompt, maxTokens }),
-  })
-  const d = await res.json()
-  if (!res.ok || d.error) throw new Error(d.error || 'API error')
-  return d.text
-}
 
 export default function CandidateRegister() {
   const navigate = useNavigate()
@@ -37,6 +23,7 @@ export default function CandidateRegister() {
   const [password,    setPassword]    = useState('')
   const [confirmPw,   setConfirmPw]   = useState('')
   const [cvFile,      setCvFile]      = useState(null)
+  const [consent,     setConsent]     = useState(false)
   const [step,        setStep]        = useState('form') // 'form' | 'processing' | 'done' | 'confirm_email'
   const [statusMsg,   setStatusMsg]   = useState('')
   const [error,       setError]       = useState('')
@@ -54,6 +41,7 @@ export default function CandidateRegister() {
     if (!email.trim())    { setError('Email is required'); return }
     if (password.length < 8) { setError('Password must be at least 8 characters'); return }
     if (password !== confirmPw) { setError('Passwords do not match'); return }
+    if (!consent) { setError('Please accept the privacy policy to continue'); return }
 
     setStep('processing')
     setStatusMsg('Creating your account…')
@@ -82,7 +70,7 @@ export default function CandidateRegister() {
         console.warn('Profile insert warning:', profileErr.message)
       }
 
-      // Step 3: Parse CV if uploaded
+      // Step 3: Parse CV if uploaded and user has an active session
       let parsed = null
       let rawText = ''
       if (cvFile) {
@@ -97,13 +85,17 @@ export default function CandidateRegister() {
             content = await extractContent(cvFile)
           }
           rawText = content.kind === 'text' ? content.text : ''
-          const msgs = content.kind === 'image'
-            ? [{ role: 'user', content: [{ type: 'image', source: { type: 'base64', media_type: content.mediaType, data: content.base64 } }, { type: 'text', text: 'Parse this CV image.' }] }]
-            : [{ role: 'user', content: `Parse this CV:\n\n${content.text}` }]
-          const reply = await callClaudePublic(msgs, CV_PARSE_SYSTEM, 1024)
-          parsed = JSON.parse(reply.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, ''))
+          // Only call Claude if we have a real user session (not just anon key)
+          const { data: sess } = await supabase.auth.getSession()
+          if (sess?.session?.access_token) {
+            const msgs = content.kind === 'image'
+              ? [{ role: 'user', content: [{ type: 'image', source: { type: 'base64', media_type: content.mediaType, data: content.base64 } }, { type: 'text', text: 'Parse this CV image.' }] }]
+              : [{ role: 'user', content: `Parse this CV:\n\n${content.text}` }]
+            const reply = await callClaude(msgs, CV_PARSE_SYSTEM, 1024)
+            parsed = JSON.parse(reply.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, ''))
+          }
         } catch (cvErr) {
-          console.warn('CV parse error (non-fatal):', cvErr.message)
+          // Non-fatal — user can complete profile after logging in
         }
       }
 
@@ -285,7 +277,21 @@ export default function CandidateRegister() {
               <input type="password" required autoComplete="new-password" value={confirmPw} onChange={e => setConfirmPw(e.target.value)} placeholder="Repeat your password" />
             </div>
 
-            <button type="submit" className="btn btn-primary" style={{ marginTop: 4 }}>
+            <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer', marginTop: 4 }}>
+              <input
+                type="checkbox"
+                checked={consent}
+                onChange={e => setConsent(e.target.checked)}
+                style={{ marginTop: 3, flexShrink: 0 }}
+              />
+              <span style={{ fontSize: 12, color: 'var(--text-3)', lineHeight: 1.6 }}>
+                I agree to the{' '}
+                <Link to="/privacy" target="_blank" style={{ color: 'var(--accent)', textDecoration: 'none' }}>Privacy Policy</Link>
+                {' '}and consent to my personal data and CV being processed for job matching purposes under the Digital Personal Data Protection Act 2023.
+              </span>
+            </label>
+
+            <button type="submit" className="btn btn-primary" style={{ marginTop: 4 }} disabled={!consent}>
               Create Profile
             </button>
           </form>

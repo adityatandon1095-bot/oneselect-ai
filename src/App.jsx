@@ -43,6 +43,7 @@ import AdminSourcing from './pages/admin/AdminSourcing'
 import AdminCompliance from './pages/admin/AdminCompliance'
 import AdminBoard from './pages/admin/AdminBoard'
 import AdminBilling from './pages/admin/AdminBilling'
+import Privacy from './pages/Privacy'
 import './App.css'
 
 class ErrorBoundary extends Component {
@@ -115,6 +116,7 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
+          <Route path="/privacy" element={<Privacy />} />
           <Route path="/interview/:token" element={<PublicVideoInterview />} />
           <Route path="/live/:token" element={<PublicLiveInterview />} />
           <Route path="/schedule/:token" element={<PublicScheduleConfirm />} />
