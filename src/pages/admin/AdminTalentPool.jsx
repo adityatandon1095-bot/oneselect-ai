@@ -584,7 +584,7 @@ export default function AdminTalentPool() {
               {sorted.map((r, i) => (
                 <div key={i} style={{
                   background: 'var(--surface)',
-                  border: `1px solid ${r.pass ? 'var(--gold)' : 'var(--border)'}`,
+                  border: `1px solid ${r.pass ? 'var(--accent)' : 'var(--border)'}`,
                   borderRadius: 'var(--r)',
                   padding: 16,
                   display: 'flex',
@@ -593,19 +593,19 @@ export default function AdminTalentPool() {
                 }}>
                   {/* Header: avatar + name + badge */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <div className="profile-avatar" style={{ width: 36, height: 36, fontSize: 14, borderRadius: 'var(--r)', flexShrink: 0, background: r.pass ? 'var(--gold-d)' : 'var(--surface2)', color: r.pass ? 'var(--gold)' : 'var(--text-3)', border: `1px solid ${r.pass ? 'var(--gold)' : 'var(--border)'}` }}>
+                    <div className="profile-avatar" style={{ width: 36, height: 36, fontSize: 14, borderRadius: 'var(--r)', flexShrink: 0, background: r.pass ? 'var(--accent-d)' : 'var(--surface2)', color: r.pass ? 'var(--accent)' : 'var(--text-3)', border: `1px solid ${r.pass ? 'var(--accent)' : 'var(--border)'}` }}>
                       {r.name[0]?.toUpperCase()}
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-1)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.name}</div>
+                      <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.name}</div>
                       <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{r.rank}</div>
                     </div>
                     <span style={{
                       fontSize: 10, fontFamily: 'var(--font-mono)', fontWeight: 700,
                       padding: '3px 8px', borderRadius: 'var(--r)', whiteSpace: 'nowrap',
-                      background: r.pass ? 'var(--gold-d)' : 'rgba(239,68,68,0.12)',
-                      color: r.pass ? 'var(--gold)' : '#ef4444',
-                      border: `1px solid ${r.pass ? 'var(--gold)' : '#ef4444'}`,
+                      background: r.pass ? 'var(--accent-d)' : 'var(--red-d)',
+                      color: r.pass ? 'var(--accent)' : 'var(--red)',
+                      border: `1px solid ${r.pass ? 'var(--accent)' : 'var(--red)'}`,
                     }}>
                       {r.pass ? 'PASS' : 'FAIL'}
                     </span>
@@ -615,10 +615,10 @@ export default function AdminTalentPool() {
                   <div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
                       <span style={{ fontSize: 10, color: 'var(--text-3)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Match Score</span>
-                      <span style={{ fontSize: 18, fontWeight: 700, fontFamily: 'var(--font-mono)', color: r.pass ? 'var(--gold)' : '#ef4444' }}>{r.score}<span style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 400 }}>/100</span></span>
+                      <span style={{ fontSize: 18, fontWeight: 700, fontFamily: 'var(--font-mono)', color: r.pass ? 'var(--accent)' : 'var(--red)' }}>{r.score}<span style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 400 }}>/100</span></span>
                     </div>
                     <div style={{ height: 4, background: 'var(--surface2)', borderRadius: 2, overflow: 'hidden' }}>
-                      <div style={{ height: '100%', width: `${r.score}%`, background: r.pass ? 'var(--gold)' : '#ef4444', borderRadius: 2, transition: 'width 0.4s ease' }} />
+                      <div style={{ height: '100%', width: `${r.score}%`, background: r.pass ? 'var(--accent)' : 'var(--red)', borderRadius: 2, transition: 'width 0.4s ease' }} />
                     </div>
                   </div>
 
@@ -723,7 +723,7 @@ export default function AdminTalentPool() {
                             {(c.full_name ?? '?')[0].toUpperCase()}
                           </div>
                           <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.full_name}</div>
+                            <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.full_name}</div>
                             <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--text-3)' }}>{c.candidate_role} · {c.total_years}y</div>
                           </div>
                           <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--accent)', flexShrink: 0 }}>{c.nlpScore}</span>
@@ -907,9 +907,9 @@ export default function AdminTalentPool() {
         <div style={{
           position: 'fixed', bottom: 24, right: 24, zIndex: 9999,
           padding: '12px 18px', borderRadius: 'var(--r)',
-          background: toast.ok ? 'var(--green-d)' : 'rgba(239,68,68,0.12)',
-          border: `1px solid ${toast.ok ? 'var(--green)' : '#ef4444'}`,
-          color: toast.ok ? 'var(--green)' : '#ef4444',
+          background: toast.ok ? 'var(--green-d)' : 'var(--red-d)',
+          border: `1px solid ${toast.ok ? 'var(--green)' : 'var(--red)'}`,
+          color: toast.ok ? 'var(--green)' : 'var(--red)',
           fontSize: 13, fontFamily: 'var(--font-mono)',
           display: 'flex', alignItems: 'center', gap: 8,
           boxShadow: '0 4px 20px rgba(0,0,0,0.3)',

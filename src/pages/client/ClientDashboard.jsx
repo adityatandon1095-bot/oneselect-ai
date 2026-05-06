@@ -226,7 +226,7 @@ export default function ClientDashboard() {
                 action: stats.jobs > 0 ? { label: 'View pipeline →', path: '/client/pipeline' } : null,
               },
             ].map(step => (
-              <div key={step.num} style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+              <div key={step.num} style={{ display: 'flex', gap: 14, alignItems: step.done ? 'center' : 'flex-start' }}>
                 <div style={{
                   width: 24, height: 24, borderRadius: '50%', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
                   background: step.done ? 'var(--green)' : 'var(--surface2)',
@@ -260,18 +260,22 @@ export default function ClientDashboard() {
 
       <div className="metrics-row">
         <div className="metric-card blue" style={{ cursor: 'pointer' }} onClick={() => navigate('/client/jobs')}>
+          <span style={{ fontSize: 15, opacity: 0.22, lineHeight: 1, marginBottom: 8 }}>◫</span>
           <span className="metric-val">{stats.jobs}</span>
           <span className="metric-label">Active Jobs</span>
         </div>
         <div className="metric-card" style={{ cursor: 'pointer' }} onClick={() => navigate('/client/candidates')}>
+          <span style={{ fontSize: 15, opacity: 0.22, lineHeight: 1, marginBottom: 8 }}>◌</span>
           <span className="metric-val">{stats.candidates}</span>
           <span className="metric-label">CVs Submitted</span>
         </div>
         <div className="metric-card amber" style={{ cursor: 'pointer' }} onClick={() => navigate('/client/candidates?tab=Awaiting+Interview')}>
+          <span style={{ fontSize: 15, opacity: 0.22, lineHeight: 1, marginBottom: 8 }}>◐</span>
           <span className="metric-val">{stats.passed}</span>
           <span className="metric-label">Awaiting Interview</span>
         </div>
         <div className="metric-card green" style={{ cursor: 'pointer' }} onClick={() => navigate('/client/reports')}>
+          <span style={{ fontSize: 15, opacity: 0.22, lineHeight: 1, marginBottom: 8 }}>◱</span>
           <span className="metric-val">{stats.interviewed}</span>
           <span className="metric-label">Interviews Done</span>
         </div>
@@ -316,7 +320,7 @@ export default function ClientDashboard() {
             <div className="empty-state">
               <div style={{ fontSize: 28, marginBottom: 10, opacity: 0.3 }}>◎</div>
               <div style={{ fontWeight: 400, color: 'var(--text-2)', marginBottom: 6 }}>No candidates yet</div>
-              <div style={{ fontSize: 12, marginBottom: 16 }}>Your One Select recruiter will upload CVs shortly.</div>
+              <div style={{ fontSize: 12 }}>Your One Select recruiter will upload CVs shortly.</div>
             </div>
           ) : (
             recentCandidates.map(c => {

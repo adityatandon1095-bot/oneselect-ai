@@ -36,7 +36,8 @@
 }
 .nav-item:hover  { color: var(--text); background: var(--surface2); }
 .nav-item.active { color: var(--accent); border-left-color: var(--accent); background: var(--accent-d); }
-.nav-icon { width: 16px; text-align: center; font-size: 13px; flex-shrink: 0; opacity: 0.7; }
+.nav-icon { width: 16px; text-align: center; font-size: 13px; flex-shrink: 0; opacity: 0.45; transition: opacity 0.12s; }
+.nav-item.active .nav-icon { opacity: 1; }
 .sidebar-footer {
   padding: 14px 20px; border-top: 1px solid var(--border);
 }
@@ -443,12 +444,14 @@ select option { background: var(--surface); color: var(--text); }
 .hchat-bubble {
   position: fixed; bottom: 28px; right: 28px; z-index: 900;
   width: 52px; height: 52px; border-radius: 50%;
-  background: var(--accent); border: none; cursor: pointer;
-  box-shadow: 0 4px 20px rgba(184,146,74,0.45);
+  background: var(--accent);
+  border: 1.5px solid rgba(255,255,255,0.18);
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12), 0 2px 8px rgba(184,146,74,0.28), inset 0 1px 0 rgba(255,255,255,0.1);
   display: flex; align-items: center; justify-content: center;
   transition: transform 0.2s, box-shadow 0.2s; color: #fff;
 }
-.hchat-bubble:hover { transform: scale(1.08); box-shadow: 0 6px 28px rgba(184,146,74,0.6); }
+.hchat-bubble:hover { transform: scale(1.06); box-shadow: 0 6px 24px rgba(0,0,0,0.14), 0 4px 16px rgba(184,146,74,0.4), inset 0 1px 0 rgba(255,255,255,0.1); }
 .hchat-bubble-pulse {
   position: absolute; inset: -3px; border-radius: 50%;
   border: 2px solid var(--accent); opacity: 0; pointer-events: none;
