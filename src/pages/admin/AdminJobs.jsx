@@ -41,6 +41,7 @@ export default function AdminJobs() {
   const [closing,    setClosing]    = useState(null)
   const [showWizard, setShowWizard] = useState(false)
   const [recruiters, setRecruiters] = useState([])
+  const [error,      setError]      = useState('')
 
   useEffect(() => { load(); loadRecruiters() }, [])
 
@@ -55,15 +56,17 @@ export default function AdminJobs() {
 
   async function handleWizardSave(jobData) {
     setShowWizard(false)
+    setError('')
     const { assigned_to, work_mode, ...rest } = jobData
     const recruiterId = assigned_to ?? null
-    if (!recruiterId) return   // require assignment in admin flow
-    await supabase.from('jobs').insert({
+    if (!recruiterId) { setError('No recruiter assigned — job not saved'); return }
+    const { error: err } = await supabase.from('jobs').insert({
       recruiter_id: recruiterId,
       status: 'active',
       work_mode,
       ...rest,
     })
+    if (err) { setError(err.message); return }
     load()
   }
 
@@ -159,6 +162,8 @@ export default function AdminJobs() {
           >✨ Create with AI</button>
         </div>
       </div>
+
+      {error && <div className="error-banner" style={{ marginBottom: 16 }}>{error}</div>}
 
       {/* ── Stats bar (all-client view only) ── */}
       {!clientId && (
@@ -291,7 +296,7 @@ export default function AdminJobs() {
                     <button
                       className="btn btn-secondary"
                       style={{ fontSize: 10, padding: '3px 7px', whiteSpace: 'nowrap' }}
-                      onClick={() => navigate(`/admin/pipeline?client=${j.recruiter_id}`)}
+                      onClick={() => navigate(`/admin/pipeline?client=${j.recruiter_id}&job=${j.id}`)}
                     >Pipeline</button>
                     <button
                       className="btn btn-secondary"

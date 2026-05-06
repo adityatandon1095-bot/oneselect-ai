@@ -51,8 +51,8 @@ export default function AdminBilling() {
       { data: candData },
     ] = await Promise.all([
       supabase.from('profiles').select('*').eq('user_role', 'client').order('company_name'),
-      supabase.from('jobs').select('id, recruiter_id, created_at'),
-      supabase.from('candidates').select('job_id, created_at, scores'),
+      supabase.from('jobs').select('id, recruiter_id, created_at').limit(2000),
+      supabase.from('candidates').select('job_id, created_at, scores').limit(2000),
     ])
 
     const allClients = clientData ?? []

@@ -375,7 +375,7 @@ export default function RecruiterJobs() {
                       <button
                         className="btn btn-secondary"
                         style={{ fontSize: 10, padding: '3px 8px' }}
-                        onClick={() => navigate(`/recruiter/pipeline?client=${j.recruiter_id}`)}
+                        onClick={() => navigate(`/recruiter/candidates?job=${j.id}`)}
                       >Pipeline</button>
                       <button
                         className="btn btn-secondary"

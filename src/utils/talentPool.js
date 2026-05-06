@@ -3,6 +3,7 @@ import { callClaude } from './api'
 
 const screeningSystem = (job) =>
   `You are an expert recruiter. Evaluate this candidate against the job.
+The CV may be in any language. Translate internally before scoring. Always return your JSON response in English regardless of CV language.
 Job: ${job.title} | ${job.experience_years}+ years | Required: ${(job.required_skills ?? []).join(', ')}
 Description: ${job.description ?? ''}
 Return ONLY valid JSON: {"matchScore":number,"pass":boolean,"reason":"string","rank":"top10|strong|moderate|weak"}`

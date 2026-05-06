@@ -264,6 +264,8 @@ export default function RecruiterCandidates() {
     const params = new URLSearchParams(location.search)
     const t = params.get('tab')
     if (t && TABS.includes(t)) setTab(t)
+    const j = params.get('job')
+    if (j) setJobFilter(j)
   }, [location.search])
 
   async function load() {
@@ -280,8 +282,8 @@ export default function RecruiterCandidates() {
     if (!ids.length) { setLoading(false); return }
 
     const [{ data: cData }, { data: mData }] = await Promise.all([
-      supabase.from('candidates').select('*').in('job_id', ids).order('match_score', { ascending: false, nullsFirst: false }),
-      supabase.from('job_matches').select('*, talent_pool(*)').in('job_id', ids).order('match_score', { ascending: false, nullsFirst: false }),
+      supabase.from('candidates').select('*').in('job_id', ids).order('match_score', { ascending: false, nullsFirst: false }).limit(1000),
+      supabase.from('job_matches').select('*, talent_pool(*)').in('job_id', ids).order('match_score', { ascending: false, nullsFirst: false }).limit(1000),
     ])
     setCandidates(cData ?? [])
     setPoolCandidates((mData ?? []).map(mapMatchToCandidate))
@@ -371,10 +373,10 @@ export default function RecruiterCandidates() {
   }
 
   function toggleSelectAll() {
-    if (tabFiltered.every(c => selectedIds.has(c.id))) {
+    if (tabPage.every(c => selectedIds.has(c.id))) {
       setSelectedIds(new Set())
     } else {
-      setSelectedIds(new Set(tabFiltered.map(c => c.id)))
+      setSelectedIds(new Set(tabPage.map(c => c.id)))
     }
   }
 
@@ -485,7 +487,11 @@ export default function RecruiterCandidates() {
 
   const jobName = (id) => jobs.find(j => j.id === id)?.title ?? '—'
 
-  useEffect(() => { setSelectedIds(new Set()) }, [source, jobFilter, tab])
+  const [candPage, setCandPage] = useState(0)
+  const CAND_PAGE_SIZE = 50
+
+  useEffect(() => { setSelectedIds(new Set()); setCandPage(0) }, [source, jobFilter, tab])
+  useEffect(() => { setCandPage(0) }, [searchQuery])
 
   const activeList = source === 'pool' ? poolCandidates : candidates
   const byJob = jobFilter === 'all' ? activeList : activeList.filter(c => c.job_id === jobFilter)
@@ -495,8 +501,10 @@ export default function RecruiterCandidates() {
     const hay = [c.full_name, c.candidate_role, c.email, c.summary, ...(c.skills ?? [])].join(' ').toLowerCase()
     return words.every(w => hay.includes(w))
   })
-  const tabFiltered = searchFiltered.filter(c => tab === 'All' || getStatus(c) === tab)
-  const allVisibleSelected = tabFiltered.length > 0 && tabFiltered.every(c => selectedIds.has(c.id))
+  const tabFiltered     = searchFiltered.filter(c => tab === 'All' || getStatus(c) === tab)
+  const tabTotal        = tabFiltered.length
+  const tabPage         = tabFiltered.slice(candPage * CAND_PAGE_SIZE, (candPage + 1) * CAND_PAGE_SIZE)
+  const allVisibleSelected = tabPage.length > 0 && tabPage.every(c => selectedIds.has(c.id))
 
   const counts = {
     'All': searchFiltered.length,
@@ -724,11 +732,11 @@ export default function RecruiterCandidates() {
                 style={{ width: 15, height: 15, cursor: 'pointer', accentColor: 'var(--accent)' }}
               />
               <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                {allVisibleSelected ? 'Deselect all' : `Select all ${tabFiltered.length}`}
+                {allVisibleSelected ? 'Deselect all' : `Select page (${tabPage.length})`}
               </span>
             </div>
 
-            {tabFiltered.map(c => {
+            {tabPage.map(c => {
               const s = c.scores
               const rec = s?.recommendation
               const status = getStatus(c)
@@ -789,6 +797,19 @@ export default function RecruiterCandidates() {
                 </div>
               )
             })}
+
+            {/* Pagination */}
+            {tabTotal > CAND_PAGE_SIZE && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderTop: '1px solid var(--border)' }}>
+                <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-3)' }}>
+                  {candPage * CAND_PAGE_SIZE + 1}–{Math.min((candPage + 1) * CAND_PAGE_SIZE, tabTotal)} of {tabTotal}
+                </span>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button className="btn btn-secondary" style={{ fontSize: 10, padding: '3px 10px' }} disabled={candPage === 0} onClick={() => setCandPage(p => p - 1)}>← Prev</button>
+                  <button className="btn btn-secondary" style={{ fontSize: 10, padding: '3px 10px' }} disabled={(candPage + 1) * CAND_PAGE_SIZE >= tabTotal} onClick={() => setCandPage(p => p + 1)}>Next →</button>
+                </div>
+              </div>
+            )}
           </>
         )}
       </div>

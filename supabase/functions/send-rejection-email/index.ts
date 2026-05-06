@@ -5,6 +5,34 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+async function sendEmail(resendKey: string, payload: Record<string, unknown>, fnName: string, recipient: string) {
+  const call = () => fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${resendKey}` },
+    body: JSON.stringify(payload),
+  })
+  try {
+    const res = await call()
+    if (res.ok) return { ok: true, data: await res.json() }
+    await new Promise(r => setTimeout(r, 1000))
+    const retry = await call()
+    if (retry.ok) return { ok: true, data: await retry.json() }
+    console.error(`[${fnName}] email failed after retry for ${recipient}`)
+    return { ok: false, data: await retry.json().catch(() => null) }
+  } catch {
+    await new Promise(r => setTimeout(r, 1000))
+    try {
+      const retry = await call()
+      if (retry.ok) return { ok: true, data: await retry.json() }
+      console.error(`[${fnName}] email retry threw for ${recipient}`)
+      return { ok: false, data: null }
+    } catch (e) {
+      console.error(`[${fnName}] email both attempts threw for ${recipient}:`, e)
+      return { ok: false, data: null }
+    }
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
@@ -50,19 +78,12 @@ serve(async (req) => {
       </div>
     `
 
-    const emailRes = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${resendKey}` },
-      body: JSON.stringify({
-        from:    `${displayName} <${fromEmail}>`,
-        to:      [candidateEmail],
-        subject: `Your application for ${jobTitle ?? 'the position'}`,
-        html:    body,
-      }),
-    })
-
-    const emailResult = await emailRes.json()
-    const sent = emailRes.ok
+    const { ok: sent, data: emailResult } = await sendEmail(resendKey, {
+      from:    `${displayName} <${fromEmail}>`,
+      to:      [candidateEmail],
+      subject: `Your application for ${jobTitle ?? 'the position'}`,
+      html:    body,
+    }, 'send-rejection-email', candidateEmail)
 
     return new Response(JSON.stringify({ sent, detail: emailResult }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

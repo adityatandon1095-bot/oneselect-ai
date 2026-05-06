@@ -50,18 +50,27 @@ export default function AdminTalentPool() {
   const [allocating, setAllocating]               = useState(false)
   const [allocations, setAllocations]             = useState({})
   const [toast, setToast]                         = useState(null)
+  const [page, setPage]                           = useState(0)
+  const [total, setTotal]                         = useState(0)
   const fileInputRef = useRef()
   const logRef       = useRef()
 
-  useEffect(() => { load() }, [])
+  const PAGE_SIZE = 50
+
+  useEffect(() => { load(0) }, [])
   useEffect(() => { logRef.current?.scrollTo(0, logRef.current.scrollHeight) }, [log])
 
-  async function load() {
-    const [{ data: pool }, { data: jobList }] = await Promise.all([
-      supabase.from('talent_pool').select('*').order('created_at', { ascending: false }),
-      supabase.from('jobs').select('id, title, profiles(company_name)').eq('status', 'active').order('created_at', { ascending: false }),
+  async function load(p = 0) {
+    setLoading(true)
+    const from = p * PAGE_SIZE
+    const to   = from + PAGE_SIZE - 1
+    const [{ data: pool, count }, { data: jobList }] = await Promise.all([
+      supabase.from('talent_pool').select('*', { count: 'exact' }).order('created_at', { ascending: false }).range(from, to),
+      supabase.from('jobs').select('id, title, profiles(company_name)').eq('status', 'active').order('created_at', { ascending: false }).limit(500),
     ])
     setCandidates(pool ?? [])
+    setTotal(count ?? 0)
+    setPage(p)
     setJobs(jobList ?? [])
     setLoading(false)
   }
@@ -473,6 +482,19 @@ export default function AdminTalentPool() {
               </div>
             </div>
           ))
+        )}
+
+        {/* Pagination */}
+        {total > PAGE_SIZE && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', borderTop: '1px solid var(--border)' }}>
+            <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-3)' }}>
+              {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)} of {total}
+            </span>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button className="btn btn-secondary" style={{ fontSize: 10, padding: '3px 10px' }} disabled={page === 0} onClick={() => load(page - 1)}>← Prev</button>
+              <button className="btn btn-secondary" style={{ fontSize: 10, padding: '3px 10px' }} disabled={(page + 1) * PAGE_SIZE >= total} onClick={() => load(page + 1)}>Next →</button>
+            </div>
+          </div>
         )}
       </div>
 

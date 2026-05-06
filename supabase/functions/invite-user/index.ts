@@ -8,6 +8,34 @@ const corsHeaders = {
 
 const APP_URL = 'https://oneselect-ai-t6uo-phi.vercel.app'
 
+async function sendEmail(resendKey: string, payload: Record<string, unknown>, fnName: string, recipient: string) {
+  const call = () => fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${resendKey}` },
+    body: JSON.stringify(payload),
+  })
+  try {
+    const res = await call()
+    if (res.ok) return { ok: true, data: await res.json() }
+    await new Promise(r => setTimeout(r, 1000))
+    const retry = await call()
+    if (retry.ok) return { ok: true, data: await retry.json() }
+    console.error(`[${fnName}] email failed after retry for ${recipient}`)
+    return { ok: false, data: await retry.json().catch(() => null) }
+  } catch {
+    await new Promise(r => setTimeout(r, 1000))
+    try {
+      const retry = await call()
+      if (retry.ok) return { ok: true, data: await retry.json() }
+      console.error(`[${fnName}] email retry threw for ${recipient}`)
+      return { ok: false, data: null }
+    } catch (e) {
+      console.error(`[${fnName}] email both attempts threw for ${recipient}:`, e)
+      return { ok: false, data: null }
+    }
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -154,29 +182,18 @@ serve(async (req) => {
       </div>
     `
 
-    const emailRes = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + resendKey },
-      body: JSON.stringify({ from: 'One Select <noreply@oneselect.ai>', to: [email], subject, html: emailHtml }),
-    })
-
-    const emailResult = await emailRes.json()
-    console.log('Email result:', emailResult)
+    const { ok: emailSent } = await sendEmail(resendKey, { from: 'One Select <noreply@oneselect.ai>', to: [email], subject, html: emailHtml }, 'invite-user', email)
 
     // Admin notification
-    await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + resendKey },
-      body: JSON.stringify({
-        from: 'One Select <noreply@oneselect.ai>',
-        to: ['aditya.tandon1095@gmail.com'],
-        subject: `New ${role} invited — ${company_name || contact_name}`,
-        html: `<p>You have successfully invited <strong>${contact_name}</strong> (${email}) as a <strong>${role}</strong>${company_name ? ` for ${company_name}` : ''}.</p>`,
-      })
-    })
+    await sendEmail(resendKey, {
+      from: 'One Select <noreply@oneselect.ai>',
+      to: ['aditya.tandon1095@gmail.com'],
+      subject: `New ${role} invited — ${company_name || contact_name}`,
+      html: `<p>You have successfully invited <strong>${contact_name}</strong> (${email}) as a <strong>${role}</strong>${company_name ? ` for ${company_name}` : ''}.</p>`,
+    }, 'invite-user-admin', 'aditya.tandon1095@gmail.com')
 
     return new Response(
-      JSON.stringify({ success: true, userId, emailSent: emailRes.ok, tempPassword }),
+      JSON.stringify({ success: true, userId, emailSent, tempPassword }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
 

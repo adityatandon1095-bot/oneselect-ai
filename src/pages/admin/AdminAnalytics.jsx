@@ -45,7 +45,7 @@ export default function AdminAnalytics() {
     ] = await Promise.all([
       supabase.from('profiles').select('id, full_name, company_name').eq('user_role', 'client').order('company_name'),
       supabase.from('jobs').select('id, title, recruiter_id').eq('status', 'active').order('title'),
-      supabase.from('candidates').select('id, job_id, match_score, match_pass, scores, video_urls, live_interview_status, final_decision'),
+      supabase.from('candidates').select('id, job_id, match_score, match_pass, scores, video_urls, live_interview_status, final_decision').limit(2000),
       supabase.from('job_matches').select('id, job_id, match_score, match_pass, scores, video_urls, live_interview_status, final_decision'),
       supabase.from('recruiter_clients').select('recruiter_id, client_id'),
       supabase.from('profiles').select('id, full_name, email').eq('user_role', 'recruiter'),
@@ -132,7 +132,7 @@ export default function AdminAnalytics() {
       { data: recruiterData },
     ] = await Promise.all([
       supabase.from('jobs').select('id, title, recruiter_id').eq('status', 'active'),
-      supabase.from('candidates').select('id, job_id, match_score, match_pass, scores, video_urls, live_interview_status, final_decision'),
+      supabase.from('candidates').select('id, job_id, match_score, match_pass, scores, video_urls, live_interview_status, final_decision').limit(2000),
       supabase.from('job_matches').select('id, job_id, match_score, match_pass, scores, video_urls, live_interview_status, final_decision'),
       supabase.from('recruiter_clients').select('recruiter_id, client_id'),
       supabase.from('profiles').select('id, full_name, email').eq('user_role', 'recruiter'),

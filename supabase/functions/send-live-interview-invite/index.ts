@@ -5,6 +5,34 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+async function sendEmail(resendKey: string, payload: Record<string, unknown>, fnName: string, recipient: string) {
+  const call = () => fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${resendKey}` },
+    body: JSON.stringify(payload),
+  })
+  try {
+    const res = await call()
+    if (res.ok) return { ok: true, data: await res.json() }
+    await new Promise(r => setTimeout(r, 1000))
+    const retry = await call()
+    if (retry.ok) return { ok: true, data: await retry.json() }
+    console.error(`[${fnName}] email failed after retry for ${recipient}`)
+    return { ok: false, data: await retry.json().catch(() => null) }
+  } catch {
+    await new Promise(r => setTimeout(r, 1000))
+    try {
+      const retry = await call()
+      if (retry.ok) return { ok: true, data: await retry.json() }
+      console.error(`[${fnName}] email retry threw for ${recipient}`)
+      return { ok: false, data: null }
+    } catch (e) {
+      console.error(`[${fnName}] email both attempts threw for ${recipient}:`, e)
+      return { ok: false, data: null }
+    }
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
@@ -14,14 +42,11 @@ serve(async (req) => {
     const appUrl    = 'https://oneselect-ai-t6uo-phi.vercel.app'
     const link      = `${appUrl}/live/${token}`
 
-    const emailRes = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + resendKey },
-      body: JSON.stringify({
-        from: 'One Select <noreply@oneselect.ai>',
-        to: [email],
-        subject: `Live interview invitation — ${job_title}`,
-        html: `
+    const { ok: emailSent } = await sendEmail(resendKey, {
+      from: 'One Select <noreply@oneselect.ai>',
+      to: [email],
+      subject: `Live interview invitation — ${job_title}`,
+      html: `
           <div style="font-family:Georgia,serif;max-width:600px;margin:0 auto;background:#F8F7F4;padding:40px;">
             <div style="text-align:center;padding:32px 0;border-bottom:1px solid #E8E4DC;margin-bottom:32px;">
               <h1 style="font-family:Georgia,serif;color:#B8924A;font-weight:300;letter-spacing:0.15em;font-size:28px;margin:0;">ONE SELECT</h1>
@@ -51,12 +76,8 @@ serve(async (req) => {
             <p style="text-align:center;color:#9CA3AF;font-size:11px;margin-top:24px;letter-spacing:0.08em;">ONE SELECT — STRATEGIC TALENT SOLUTIONS</p>
           </div>
         `,
-      }),
-    })
-
-    const result = await emailRes.json()
-    console.log('send-live-interview-invite result:', result)
-    return new Response(JSON.stringify({ success: emailRes.ok }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }, 'send-live-interview-invite', email)
+    return new Response(JSON.stringify({ success: emailSent }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
   } catch (err) {
     console.error('send-live-interview-invite error:', err)
     return new Response(JSON.stringify({ error: err.message }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })

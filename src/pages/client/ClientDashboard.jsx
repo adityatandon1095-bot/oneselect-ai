@@ -221,9 +221,9 @@ export default function ClientDashboard() {
               {
                 num: 3,
                 done: stats.candidates > 0,
-                label: 'Review your pipeline',
-                desc:  'Once your recruiter uploads and screens CVs, shortlisted candidates appear here.',
-                action: stats.jobs > 0 ? { label: 'View pipeline →', path: '/client/pipeline' } : null,
+                label: 'Review shortlisted candidates',
+                desc:  'Once your recruiter screens CVs, shortlisted candidates and their interview scores appear here.',
+                action: stats.jobs > 0 ? { label: 'View candidates →', path: '/client/candidates' } : null,
               },
             ].map(step => (
               <div key={step.num} style={{ display: 'flex', gap: 14, alignItems: step.done ? 'center' : 'flex-start' }}>
@@ -263,21 +263,25 @@ export default function ClientDashboard() {
           <span style={{ fontSize: 15, opacity: 0.22, lineHeight: 1, marginBottom: 8 }}>◫</span>
           <span className="metric-val">{stats.jobs}</span>
           <span className="metric-label">Active Jobs</span>
+          {stats.jobs === 0 && <span style={{ fontSize: 11, color: 'var(--accent)', marginTop: 6, fontFamily: 'var(--font-mono)', letterSpacing: '0.04em' }}>+ Create a job to start</span>}
         </div>
         <div className="metric-card" style={{ cursor: 'pointer' }} onClick={() => navigate('/client/candidates')}>
           <span style={{ fontSize: 15, opacity: 0.22, lineHeight: 1, marginBottom: 8 }}>◌</span>
           <span className="metric-val">{stats.candidates}</span>
           <span className="metric-label">CVs Submitted</span>
+          {stats.candidates === 0 && stats.jobs > 0 && <span style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 6, fontFamily: 'var(--font-mono)', letterSpacing: '0.04em' }}>Your recruiter will upload CVs</span>}
         </div>
         <div className="metric-card amber" style={{ cursor: 'pointer' }} onClick={() => navigate('/client/candidates?tab=Awaiting+Interview')}>
           <span style={{ fontSize: 15, opacity: 0.22, lineHeight: 1, marginBottom: 8 }}>◐</span>
           <span className="metric-val">{stats.passed}</span>
           <span className="metric-label">Awaiting Interview</span>
+          {stats.passed === 0 && stats.candidates > 0 && <span style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 6, fontFamily: 'var(--font-mono)', letterSpacing: '0.04em' }}>Screening in progress</span>}
         </div>
         <div className="metric-card green" style={{ cursor: 'pointer' }} onClick={() => navigate('/client/reports')}>
           <span style={{ fontSize: 15, opacity: 0.22, lineHeight: 1, marginBottom: 8 }}>◱</span>
           <span className="metric-val">{stats.interviewed}</span>
           <span className="metric-label">Interviews Done</span>
+          {stats.interviewed === 0 && stats.passed > 0 && <span style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 6, fontFamily: 'var(--font-mono)', letterSpacing: '0.04em' }}>Interviews not yet started</span>}
         </div>
       </div>
 

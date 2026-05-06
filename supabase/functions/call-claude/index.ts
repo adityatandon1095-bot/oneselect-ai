@@ -6,27 +6,44 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-// In-memory rate limiter: 30 calls per user per minute
-const rateLimitMap = new Map<string, { count: number; resetAt: number }>()
-function checkRateLimit(userId: string): boolean {
-  const now = Date.now()
-  const entry = rateLimitMap.get(userId)
-  if (!entry || now > entry.resetAt) {
-    rateLimitMap.set(userId, { count: 1, resetAt: now + 60_000 })
+const RATE_LIMIT    = 30     // max requests
+const WINDOW_MS     = 60_000 // per 60 seconds
+
+// DB-backed rate limiter. Uses the rate_limits table so the counter survives
+// cold starts and scales across multiple function instances.
+async function checkRateLimit(adminClient: ReturnType<typeof createClient>, userId: string): Promise<boolean> {
+  const now      = Date.now()
+  const windowTs = new Date(Math.floor(now / WINDOW_MS) * WINDOW_MS).toISOString()
+
+  // Prune rows older than 2 windows to keep the table small
+  await adminClient
+    .from('rate_limits')
+    .delete()
+    .lt('window_start', new Date(now - WINDOW_MS * 2).toISOString())
+
+  // Upsert: increment counter if row exists, else insert count=1
+  const { data, error } = await adminClient.rpc('increment_rate_limit', {
+    p_user_id:      userId,
+    p_window_start: windowTs,
+    p_limit:        RATE_LIMIT,
+  })
+
+  if (error) {
+    // If the RPC doesn't exist yet (migration not applied) fall through and allow.
+    console.warn('rate_limit rpc error (allowing request):', error.message)
     return true
   }
-  if (entry.count >= 30) return false
-  entry.count++
-  return true
+  return data === true
 }
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
   try {
-    const supabaseUrl  = Deno.env.get('SUPABASE_URL') ?? ''
-    const anonKey      = Deno.env.get('SUPABASE_ANON_KEY') ?? ''
-    const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY') ?? ''
+    const supabaseUrl   = Deno.env.get('SUPABASE_URL') ?? ''
+    const anonKey       = Deno.env.get('SUPABASE_ANON_KEY') ?? ''
+    const serviceKey    = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    const anthropicKey  = Deno.env.get('ANTHROPIC_API_KEY') ?? ''
 
     if (!anthropicKey) {
       return new Response(JSON.stringify({ error: 'Service unavailable' }), {
@@ -46,7 +63,10 @@ serve(async (req) => {
       })
     }
 
-    if (!checkRateLimit(user.id)) {
+    // DB-backed rate check (service role to bypass RLS on rate_limits)
+    const adminClient = createClient(supabaseUrl, serviceKey)
+    const allowed = await checkRateLimit(adminClient, user.id)
+    if (!allowed) {
       return new Response(JSON.stringify({ error: 'Rate limit exceeded. Please wait a moment.' }), {
         status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })

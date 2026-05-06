@@ -174,8 +174,8 @@ export default function RecruiterReports() {
       { data: matchInterviewed },
       { data: matchAwaiting },
     ] = await Promise.all([
-      supabase.from('candidates').select('*').in('job_id', ids).not('scores', 'is', null).order('match_score', { ascending: false }),
-      supabase.from('candidates').select('id, full_name, candidate_role, match_score, match_pass, job_id').in('job_id', ids).eq('match_pass', true).is('scores', null),
+      supabase.from('candidates').select('*').in('job_id', ids).not('scores', 'is', null).order('match_score', { ascending: false }).limit(500),
+      supabase.from('candidates').select('id, full_name, candidate_role, match_score, match_pass, job_id').in('job_id', ids).eq('match_pass', true).is('scores', null).limit(500),
       supabase.from('job_matches').select('*, talent_pool(full_name, candidate_role)').in('job_id', ids).not('scores', 'is', null),
       supabase.from('job_matches').select('id, job_id, match_score, match_pass, talent_pool(full_name, candidate_role)').in('job_id', ids).eq('match_pass', true).is('scores', null),
     ])

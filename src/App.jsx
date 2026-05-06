@@ -1,6 +1,8 @@
 import { Component } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './lib/AuthContext'
+import ErrorBoundary from './components/ErrorBoundary'
+import CookieBanner from './components/CookieBanner'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
 import AdminLayout from './pages/admin/AdminLayout'
@@ -24,7 +26,6 @@ import RecruiterSettings from './pages/recruiter/RecruiterSettings'
 import ClientLayout from './pages/client/ClientLayout'
 import ClientDashboard from './pages/client/ClientDashboard'
 import ClientJobs from './pages/client/ClientJobs'
-import ClientPipeline from './pages/client/ClientPipeline'
 import ClientCandidates from './pages/client/ClientCandidates'
 import ClientReports from './pages/client/ClientReports'
 import ClientSettings from './pages/client/ClientSettings'
@@ -44,6 +45,7 @@ import AdminCompliance from './pages/admin/AdminCompliance'
 import AdminBoard from './pages/admin/AdminBoard'
 import AdminBilling from './pages/admin/AdminBilling'
 import Privacy from './pages/Privacy'
+import Terms from './pages/Terms'
 import './App.css'
 
 class ErrorBoundary extends Component {
@@ -117,6 +119,7 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/privacy" element={<Privacy />} />
+          <Route path="/terms"   element={<Terms />} />
           <Route path="/interview/:token" element={<PublicVideoInterview />} />
           <Route path="/live/:token" element={<PublicLiveInterview />} />
           <Route path="/schedule/:token" element={<PublicScheduleConfirm />} />
@@ -125,55 +128,55 @@ export default function App() {
           <Route path="/candidate/register" element={<CandidateRegister />} />
           <Route path="/" element={<RootRedirect />} />
 
-          <Route path="/admin" element={<ProtectedRoute role="admin"><AdminLayout /></ProtectedRoute>}>
-            <Route index element={<AdminDashboard />} />
-            <Route path="dashboard"   element={<AdminDashboard />} />
-            <Route path="clients"     element={<AdminClients />} />
-            <Route path="recruiters"  element={<AdminRecruiters />} />
-            <Route path="jobs"        element={<AdminJobs />} />
-            <Route path="pipeline"    element={<AdminPipeline />} />
-            <Route path="talent-pool" element={<AdminTalentPool />} />
-            <Route path="sourcing"    element={<AdminSourcing />} />
-            <Route path="board"       element={<AdminBoard />} />
-            <Route path="compliance"  element={<AdminCompliance />} />
-            <Route path="billing"     element={<AdminBilling />} />
-            <Route path="analytics"   element={<AdminAnalytics />} />
-            <Route path="settings"    element={<AdminSettings />} />
+          <Route path="/admin" element={<ProtectedRoute role="admin"><ErrorBoundary><AdminLayout /></ErrorBoundary></ProtectedRoute>}>
+            <Route index element={<ErrorBoundary><AdminDashboard /></ErrorBoundary>} />
+            <Route path="dashboard"   element={<ErrorBoundary><AdminDashboard /></ErrorBoundary>} />
+            <Route path="clients"     element={<ErrorBoundary><AdminClients /></ErrorBoundary>} />
+            <Route path="recruiters"  element={<ErrorBoundary><AdminRecruiters /></ErrorBoundary>} />
+            <Route path="jobs"        element={<ErrorBoundary><AdminJobs /></ErrorBoundary>} />
+            <Route path="pipeline"    element={<ErrorBoundary><AdminPipeline /></ErrorBoundary>} />
+            <Route path="talent-pool" element={<ErrorBoundary><AdminTalentPool /></ErrorBoundary>} />
+            <Route path="sourcing"    element={<ErrorBoundary><AdminSourcing /></ErrorBoundary>} />
+            <Route path="board"       element={<ErrorBoundary><AdminBoard /></ErrorBoundary>} />
+            <Route path="compliance"  element={<ErrorBoundary><AdminCompliance /></ErrorBoundary>} />
+            <Route path="billing"     element={<ErrorBoundary><AdminBilling /></ErrorBoundary>} />
+            <Route path="analytics"   element={<ErrorBoundary><AdminAnalytics /></ErrorBoundary>} />
+            <Route path="settings"    element={<ErrorBoundary><AdminSettings /></ErrorBoundary>} />
           </Route>
 
-          <Route path="/recruiter" element={<ProtectedRoute role="recruiter"><RecruiterLayout /></ProtectedRoute>}>
-            <Route index element={<RecruiterDashboard />} />
-            <Route path="dashboard" element={<RecruiterDashboard />} />
-            <Route path="clients" element={<RecruiterClients />} />
-            <Route path="jobs" element={<RecruiterJobs />} />
-            <Route path="talent-pool" element={<AdminTalentPool />} />
-            <Route path="candidates" element={<RecruiterCandidates />} />
-            <Route path="pipeline" element={<RecruiterPipeline />} />
-            <Route path="reports" element={<RecruiterReports />} />
-            <Route path="chat" element={<RecruiterChat />} />
-            <Route path="settings" element={<RecruiterSettings />} />
+          <Route path="/recruiter" element={<ProtectedRoute role="recruiter"><ErrorBoundary><RecruiterLayout /></ErrorBoundary></ProtectedRoute>}>
+            <Route index element={<ErrorBoundary><RecruiterDashboard /></ErrorBoundary>} />
+            <Route path="dashboard" element={<ErrorBoundary><RecruiterDashboard /></ErrorBoundary>} />
+            <Route path="clients"   element={<ErrorBoundary><RecruiterClients /></ErrorBoundary>} />
+            <Route path="jobs"      element={<ErrorBoundary><RecruiterJobs /></ErrorBoundary>} />
+            <Route path="talent-pool" element={<ErrorBoundary><AdminTalentPool /></ErrorBoundary>} />
+            <Route path="candidates" element={<ErrorBoundary><RecruiterCandidates /></ErrorBoundary>} />
+            <Route path="pipeline"  element={<ErrorBoundary><RecruiterPipeline /></ErrorBoundary>} />
+            <Route path="reports"   element={<ErrorBoundary><RecruiterReports /></ErrorBoundary>} />
+            <Route path="chat"      element={<ErrorBoundary><RecruiterChat /></ErrorBoundary>} />
+            <Route path="settings"  element={<ErrorBoundary><RecruiterSettings /></ErrorBoundary>} />
           </Route>
 
-          <Route path="/client" element={<ProtectedRoute role="client"><ClientLayout /></ProtectedRoute>}>
-            <Route index element={<ClientDashboard />} />
-            <Route path="dashboard" element={<ClientDashboard />} />
-            <Route path="jobs" element={<ClientJobs />} />
-            <Route path="pipeline" element={<ClientPipeline />} />
-            <Route path="candidates" element={<ClientCandidates />} />
-            <Route path="reports" element={<ClientReports />} />
-            <Route path="settings" element={<ClientSettings />} />
-            <Route path="chat"     element={<ClientChat />} />
+          <Route path="/client" element={<ProtectedRoute role="client"><ErrorBoundary><ClientLayout /></ErrorBoundary></ProtectedRoute>}>
+            <Route index element={<ErrorBoundary><ClientDashboard /></ErrorBoundary>} />
+            <Route path="dashboard" element={<ErrorBoundary><ClientDashboard /></ErrorBoundary>} />
+            <Route path="jobs"      element={<ErrorBoundary><ClientJobs /></ErrorBoundary>} />
+            <Route path="candidates" element={<ErrorBoundary><ClientCandidates /></ErrorBoundary>} />
+            <Route path="reports"   element={<ErrorBoundary><ClientReports /></ErrorBoundary>} />
+            <Route path="settings"  element={<ErrorBoundary><ClientSettings /></ErrorBoundary>} />
+            <Route path="chat"      element={<ErrorBoundary><ClientChat /></ErrorBoundary>} />
           </Route>
 
-          <Route path="/candidate" element={<ProtectedRoute role="candidate"><CandidateLayout /></ProtectedRoute>}>
-            <Route index element={<CandidateDashboard />} />
-            <Route path="dashboard" element={<CandidateDashboard />} />
-            <Route path="matches"   element={<CandidateMatches />} />
-            <Route path="profile"   element={<CandidateProfile />} />
+          <Route path="/candidate" element={<ProtectedRoute role="candidate"><ErrorBoundary><CandidateLayout /></ErrorBoundary></ProtectedRoute>}>
+            <Route index element={<ErrorBoundary><CandidateDashboard /></ErrorBoundary>} />
+            <Route path="dashboard" element={<ErrorBoundary><CandidateDashboard /></ErrorBoundary>} />
+            <Route path="matches"   element={<ErrorBoundary><CandidateMatches /></ErrorBoundary>} />
+            <Route path="profile"   element={<ErrorBoundary><CandidateProfile /></ErrorBoundary>} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        <CookieBanner />
       </AuthProvider>
     </BrowserRouter>
     </ErrorBoundary>

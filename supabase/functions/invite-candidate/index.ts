@@ -6,6 +6,34 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+async function sendEmail(resendKey: string, payload: Record<string, unknown>, fnName: string, recipient: string) {
+  const call = () => fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${resendKey}` },
+    body: JSON.stringify(payload),
+  })
+  try {
+    const res = await call()
+    if (res.ok) return { ok: true, data: await res.json() }
+    await new Promise(r => setTimeout(r, 1000))
+    const retry = await call()
+    if (retry.ok) return { ok: true, data: await retry.json() }
+    console.error(`[${fnName}] email failed after retry for ${recipient}`)
+    return { ok: false, data: await retry.json().catch(() => null) }
+  } catch {
+    await new Promise(r => setTimeout(r, 1000))
+    try {
+      const retry = await call()
+      if (retry.ok) return { ok: true, data: await retry.json() }
+      console.error(`[${fnName}] email retry threw for ${recipient}`)
+      return { ok: false, data: null }
+    } catch (e) {
+      console.error(`[${fnName}] email both attempts threw for ${recipient}:`, e)
+      return { ok: false, data: null }
+    }
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -77,17 +105,11 @@ serve(async (req) => {
     if (profileError) throw new Error('Profile insert failed: ' + profileError.message)
 
     // Send candidate invite email
-    const emailRes = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + resendKey,
-      },
-      body: JSON.stringify({
-        from: 'One Select <noreply@oneselect.ai>',
-        to: [email],
-        subject: `You've been shortlisted — ${job_title}`,
-        html: `
+    const { ok: emailSent } = await sendEmail(resendKey, {
+      from: 'One Select <noreply@oneselect.ai>',
+      to: [email],
+      subject: `You've been shortlisted — ${job_title}`,
+      html: `
           <div style="font-family:Georgia,serif;max-width:600px;margin:0 auto;background:#F8F7F4;padding:40px;">
             <div style="text-align:center;padding:32px 0;border-bottom:1px solid #E8E4DC;margin-bottom:32px;">
               <h1 style="font-family:Georgia,serif;color:#B8924A;font-weight:300;letter-spacing:0.15em;font-size:28px;margin:0;">ONE SELECT</h1>
@@ -133,14 +155,10 @@ serve(async (req) => {
             <p style="text-align:center;color:#9CA3AF;font-size:11px;margin-top:24px;letter-spacing:0.08em;">ONE SELECT — STRATEGIC TALENT SOLUTIONS</p>
           </div>
         `,
-      }),
-    })
-
-    const emailResult = await emailRes.json()
-    console.log('Candidate invite email result:', emailResult)
+    }, 'invite-candidate', email)
 
     return new Response(
-      JSON.stringify({ success: true, userId, emailSent: emailRes.ok, tempPassword }),
+      JSON.stringify({ success: true, userId, emailSent, tempPassword }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
 

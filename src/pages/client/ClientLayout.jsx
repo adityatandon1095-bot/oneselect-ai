@@ -3,13 +3,12 @@ import { useAuth } from '../../lib/AuthContext'
 import ChatBubble from '../../components/ChatBubble'
 
 const NAV = [
-  { to: '/client/dashboard',  label: 'Dashboard',  icon: '◈' },
-  { to: '/client/jobs',       label: 'My Jobs',    icon: '◫' },
-  { to: '/client/pipeline',   label: 'Pipeline',   icon: '◐' },
-  { to: '/client/candidates', label: 'Candidates', icon: '◉' },
-  { to: '/client/reports',    label: 'Reports',    icon: '◧' },
+  { to: '/client/dashboard',  label: 'Dashboard',    icon: '◈' },
+  { to: '/client/jobs',       label: 'My Jobs',      icon: '◫' },
+  { to: '/client/candidates', label: 'Candidates',   icon: '◉' },
+  { to: '/client/reports',    label: 'Reports',      icon: '◧' },
   { to: '/client/chat',       label: 'AI Assistant', icon: '◎' },
-  { to: '/client/settings',   label: 'Settings',   icon: '◷' },
+  { to: '/client/settings',   label: 'Settings',     icon: '◷' },
 ]
 
 export default function ClientLayout() {
