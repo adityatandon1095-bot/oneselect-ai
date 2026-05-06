@@ -32,6 +32,7 @@ import ClientChat from './pages/client/ClientChat'
 import PublicVideoInterview from './pages/PublicVideoInterview'
 import PublicLiveInterview from './pages/PublicLiveInterview'
 import PublicScheduleConfirm from './pages/PublicScheduleConfirm'
+import PublicJobs from './pages/PublicJobs'
 import './App.css'
 
 class ErrorBoundary extends Component {
@@ -106,6 +107,7 @@ export default function App() {
           <Route path="/interview/:token" element={<PublicVideoInterview />} />
           <Route path="/live/:token" element={<PublicLiveInterview />} />
           <Route path="/schedule/:token" element={<PublicScheduleConfirm />} />
+          <Route path="/jobs" element={<PublicJobs />} />
           <Route path="/" element={<RootRedirect />} />
 
           <Route path="/admin" element={<ProtectedRoute role="admin"><AdminLayout /></ProtectedRoute>}>

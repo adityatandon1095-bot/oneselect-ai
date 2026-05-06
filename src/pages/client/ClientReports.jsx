@@ -14,6 +14,107 @@ const DIMS       = [
 
 function dimColor(v) { return v >= 70 ? 'var(--green)' : v >= 50 ? 'var(--accent)' : 'var(--red)' }
 
+function CandidateDetailModal({ candidate, onClose }) {
+  const s = candidate.scores ?? {}
+  const rec = s.recommendation
+  const mono = { fontFamily: 'var(--font-mono)' }
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000, padding: 20 }}
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', width: '100%', maxWidth: 620, maxHeight: '88vh', display: 'flex', flexDirection: 'column', borderRadius: 'var(--r)', overflow: 'hidden' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '20px 24px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+          <div>
+            <div style={{ fontSize: 17, fontWeight: 500, color: 'var(--text)', marginBottom: 2 }}>{candidate.full_name}</div>
+            <div style={{ fontSize: 12, color: 'var(--text-3)', ...mono }}>{candidate.candidate_role}{candidate.total_years ? ` · ${candidate.total_years}y exp` : ''}</div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            {s.overallScore != null && (
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: 28, fontWeight: 700, color: dimColor(s.overallScore), lineHeight: 1 }}>{s.overallScore}</div>
+                {rec && <div style={{ fontSize: 10, ...mono, textTransform: 'uppercase', letterSpacing: '0.06em', color: REC_COLOR[rec] }}>{rec}</div>}
+              </div>
+            )}
+            <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: 'var(--text-3)', lineHeight: 1, padding: '4px 8px' }}>✕</button>
+          </div>
+        </div>
+        <div style={{ flex: 1, overflow: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 18 }}>
+          {s.overallScore != null && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 12 }}>
+              {DIMS.map(([key, label]) => (
+                <div key={key}>
+                  <div style={{ fontSize: 10, ...mono, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-3)', marginBottom: 4 }}>{label}</div>
+                  <div style={{ height: 3, background: 'var(--border)', overflow: 'hidden', borderRadius: 2 }}>
+                    <div style={{ height: '100%', width: `${s[key] ?? 0}%`, background: dimColor(s[key] ?? 0), transition: 'width 0.4s' }} />
+                  </div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: dimColor(s[key] ?? 0), marginTop: 3, ...mono }}>{s[key] ?? '—'}</div>
+                </div>
+              ))}
+            </div>
+          )}
+          {candidate.summary && (
+            <div style={{ borderTop: '1px solid var(--border)', paddingTop: 14 }}>
+              <div style={{ fontSize: 10, ...mono, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-3)', marginBottom: 6 }}>Summary</div>
+              <p style={{ margin: 0, fontSize: 13, color: 'var(--text-2)', lineHeight: 1.7 }}>{candidate.summary}</p>
+            </div>
+          )}
+          {s.insight && (
+            <div style={{ borderTop: '1px solid var(--border)', paddingTop: 14 }}>
+              <div style={{ fontSize: 10, ...mono, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-3)', marginBottom: 6 }}>AI Insight</div>
+              <p style={{ margin: 0, fontSize: 13, color: 'var(--text-2)', lineHeight: 1.7, fontStyle: 'italic' }}>{s.insight}</p>
+            </div>
+          )}
+          {candidate.match_reason && (
+            <div style={{ borderTop: '1px solid var(--border)', paddingTop: 14 }}>
+              <div style={{ fontSize: 10, ...mono, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-3)', marginBottom: 6 }}>Screening Verdict</div>
+              <p style={{ margin: 0, fontSize: 13, color: 'var(--text-2)', lineHeight: 1.7 }}>{candidate.match_reason}</p>
+            </div>
+          )}
+          {(s.strengths?.length > 0 || s.flags?.length > 0) && (
+            <div style={{ borderTop: '1px solid var(--border)', paddingTop: 14, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              {s.strengths?.length > 0 && (
+                <div>
+                  <div style={{ fontSize: 10, ...mono, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-3)', marginBottom: 8 }}>Strengths</div>
+                  {s.strengths.map((str, i) => (
+                    <div key={i} style={{ fontSize: 12, marginBottom: 5, display: 'flex', gap: 6 }}>
+                      <span style={{ color: 'var(--green)' }}>✓</span><span style={{ color: 'var(--text-2)' }}>{str}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {s.flags?.length > 0 && (
+                <div>
+                  <div style={{ fontSize: 10, ...mono, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-3)', marginBottom: 8 }}>Red Flags</div>
+                  {s.flags.map((f, i) => (
+                    <div key={i} style={{ fontSize: 12, marginBottom: 5, display: 'flex', gap: 6 }}>
+                      <span style={{ color: 'var(--red)' }}>✗</span><span style={{ color: 'var(--text-2)' }}>{f}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          {s.bestAnswer && (
+            <div style={{ borderTop: '1px solid var(--border)', paddingTop: 14 }}>
+              <div style={{ fontSize: 10, ...mono, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-3)', marginBottom: 8 }}>Best Answer</div>
+              <blockquote style={{ margin: 0, paddingLeft: 12, borderLeft: '2px solid var(--accent)', fontSize: 13, color: 'var(--text-2)', lineHeight: 1.7, fontStyle: 'italic' }}>{s.bestAnswer}</blockquote>
+            </div>
+          )}
+          {candidate.skills?.length > 0 && (
+            <div style={{ borderTop: '1px solid var(--border)', paddingTop: 14 }}>
+              <div style={{ fontSize: 10, ...mono, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-3)', marginBottom: 8 }}>Skills</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {candidate.skills.map(sk => (
+                  <span key={sk} style={{ fontSize: 11, ...mono, padding: '2px 8px', background: 'var(--surface2)', border: '1px solid var(--border)', color: 'var(--text-2)' }}>{sk}</span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function Bar({ value }) {
   return (
     <div style={{ height: 4, background: 'var(--border)', borderRadius: 2, overflow: 'hidden', marginTop: 3 }}>
@@ -30,6 +131,7 @@ export default function ClientReports() {
   const [selectedJobId, setSelectedJobId] = useState('all')
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState('ranked')
+  const [detailCandidate, setDetailCandidate] = useState(null)
 
   useEffect(() => { if (user) load() }, [user])
 
@@ -148,7 +250,7 @@ export default function ClientReports() {
                         <div key={c.id} style={{ display: 'grid', gridTemplateColumns: '28px 1fr 80px 80px 80px 80px 80px 80px 120px', gap: 8, padding: '12px 20px', borderBottom: '1px solid var(--border)', alignItems: 'center', background: i === 0 ? 'rgba(45,125,78,0.03)' : 'transparent' }}>
                           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: i === 0 ? 'var(--green)' : 'var(--text-3)', fontWeight: i === 0 ? 700 : 400 }}>#{i + 1}</div>
                           <div>
-                            <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)' }}>{c.full_name}</div>
+                            <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--accent)', cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: 3 }} onClick={() => setDetailCandidate(c)}>{c.full_name}</div>
                             <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 1 }}>{c.candidate_role}</div>
                           </div>
                           {DIMS.map(([key]) => (
@@ -190,7 +292,7 @@ export default function ClientReports() {
                         <div key={c.id} style={{ display: 'grid', gridTemplateColumns: '28px 1fr 80px 80px 80px 80px 80px 80px 120px', gap: 8, padding: '12px 20px', borderBottom: '1px solid var(--border)', alignItems: 'center', opacity: 0.7 }}>
                           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-3)' }}>#{hires.length + i + 1}</div>
                           <div>
-                            <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)' }}>{c.full_name}</div>
+                            <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--accent)', cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: 3 }} onClick={() => setDetailCandidate(c)}>{c.full_name}</div>
                             <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 1 }}>{c.candidate_role}</div>
                           </div>
                           {DIMS.map(([key]) => (
@@ -226,7 +328,7 @@ export default function ClientReports() {
                       {i + 1}
                     </div>
                     <div style={{ marginBottom: 12 }}>
-                      <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text)', marginBottom: 2, paddingRight: 30 }}>{c.full_name}</div>
+                      <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--accent)', marginBottom: 2, paddingRight: 30, cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: 3 }} onClick={() => setDetailCandidate(c)}>{c.full_name}</div>
                       <div style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 300 }}>{c.candidate_role}</div>
                     </div>
                     {s.overallScore != null && (
@@ -265,6 +367,8 @@ export default function ClientReports() {
           )}
         </>
       )}
+
+      {detailCandidate && <CandidateDetailModal candidate={detailCandidate} onClose={() => setDetailCandidate(null)} />}
     </div>
   )
 }

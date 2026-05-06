@@ -43,7 +43,18 @@ export async function triggerTalentPoolMatch(jobId, { onProgress, onLog, onResul
       }, { onConflict: 'talent_id,job_id' })
       if (s.pass) passCount++
       if (onLog) onLog(`✓ ${c.full_name}: ${s.matchScore}/100 → ${s.pass ? 'PASS' : 'FAIL'}`, s.pass ? 'ok' : '')
-      if (onResult) onResult({ name: c.full_name, score: s.matchScore, pass: s.pass, reason: s.reason, rank: s.rank })
+      if (onResult) onResult({
+        talent_id:      c.id,
+        name:           c.full_name,
+        email:          c.email,
+        candidate_role: c.candidate_role,
+        total_years:    c.total_years,
+        skills:         c.skills,
+        summary:        c.summary,
+        highlights:     c.highlights,
+        raw_text:       c.raw_text,
+        score: s.matchScore, pass: s.pass, reason: s.reason, rank: s.rank,
+      })
     } catch (err) {
       if (onLog) onLog(`✗ ${c.full_name}: ${err.message}`, 'err')
     }

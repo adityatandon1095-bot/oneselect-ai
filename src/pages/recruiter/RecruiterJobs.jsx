@@ -359,6 +359,11 @@ export default function RecruiterJobs() {
                     </div>
                     <div className="col-right">
                       <span className={`badge ${REQ_CFG[rq].cls}`} style={{ fontSize: 9 }}>{REQ_CFG[rq].label}</span>
+                      {j.pipeline_status && j.pipeline_status !== 'awaiting_cvs' && (
+                        <span className={`badge ${j.pipeline_status === 'notified' ? 'badge-green' : j.pipeline_status === 'complete' ? 'badge-blue' : j.pipeline_status === 'processing' ? 'badge-amber' : ''}`} style={{ fontSize: 9 }}>
+                          {j.pipeline_status === 'processing' ? '⟳ running' : j.pipeline_status === 'complete' ? '✓ done' : j.pipeline_status === 'notified' ? '✉ notified' : j.pipeline_status}
+                        </span>
+                      )}
                       <span className="mono" style={{ fontSize: 11, color: 'var(--text-3)' }}>
                         {cands.filter(c => c.match_score != null).length} screened ·{' '}
                         {cands.filter(c => c.scores != null).length} iv ·{' '}

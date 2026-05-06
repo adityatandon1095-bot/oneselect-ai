@@ -44,6 +44,12 @@ export default function AdminTalentPool() {
   const [addedToJob, setAddedToJob] = useState({})
   const [addingCandidateId, setAddingCandidateId] = useState(null)
   const [deletePoolModal, setDeletePoolModal]     = useState(null)
+  const [allocModal, setAllocModal]               = useState(null)
+  const [allocModalJobId, setAllocModalJobId]     = useState('')
+  const [allocModalStage, setAllocModalStage]     = useState('sourced')
+  const [allocating, setAllocating]               = useState(false)
+  const [allocations, setAllocations]             = useState({})
+  const [toast, setToast]                         = useState(null)
   const fileInputRef = useRef()
   const logRef       = useRef()
 
@@ -127,6 +133,10 @@ export default function AdminTalentPool() {
       }
     }
     setParsing(false)
+    if (matchJobId) {
+      addLog('Auto-matching new candidates against selected job…', 'info')
+      runMatch()
+    }
   }
 
   async function updateAvailability(id, availability) {
@@ -190,6 +200,42 @@ export default function AdminTalentPool() {
       setNlpResults([])
     }
     setNlpSearching(false)
+  }
+
+  function showToast(msg, ok = true) {
+    setToast({ msg, ok })
+    setTimeout(() => setToast(null), 3000)
+  }
+
+  async function handleAllocate() {
+    const r = allocModal.result
+    setAllocating(true)
+    const job = jobs.find(j => j.id === allocModalJobId)
+    const { error } = await supabase.from('candidates').insert({
+      job_id:         allocModalJobId,
+      full_name:      r.name,
+      email:          r.email ?? '',
+      candidate_role: r.candidate_role ?? '',
+      total_years:    r.total_years ?? 0,
+      skills:         r.skills ?? [],
+      summary:        r.summary ?? '',
+      highlights:     r.highlights ?? [],
+      raw_text:       r.raw_text ?? '',
+      source:         'talent_pool',
+      pipeline_stage: allocModalStage,
+      ...(allocModalStage === 'shortlisted' ? { match_pass: true, match_score: r.score } : {}),
+    })
+    setAllocating(false)
+    if (!error) {
+      setAllocations(prev => ({
+        ...prev,
+        [r.talent_id]: [...(prev[r.talent_id] ?? []), { jobId: allocModalJobId, jobTitle: job?.title ?? 'Job' }],
+      }))
+      showToast(`${r.name} added to "${job?.title ?? 'job'}" · ${allocModalStage}`)
+      setAllocModal(null)
+    } else {
+      showToast(error.message, false)
+    }
   }
 
   async function handleDeletePoolCandidate() {
@@ -580,6 +626,26 @@ export default function AdminTalentPool() {
                   {r.reason && (
                     <p style={{ fontSize: 12, color: 'var(--text-2)', margin: 0, lineHeight: 1.5 }}>{r.reason}</p>
                   )}
+
+                  {/* Allocation tags */}
+                  {(allocations[r.talent_id] ?? []).length > 0 && (
+                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                      {allocations[r.talent_id].map(a => (
+                        <span key={a.jobId} style={{ fontSize: 9, padding: '2px 7px', background: 'rgba(184,146,74,0.1)', border: '1px solid rgba(184,146,74,0.3)', borderRadius: 'var(--r)', fontFamily: 'var(--font-mono)', color: 'var(--accent)' }}>
+                          ✓ {a.jobTitle}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Allocate button */}
+                  <button
+                    className="btn btn-secondary"
+                    style={{ fontSize: 11, padding: '5px 10px', width: '100%', justifyContent: 'center' }}
+                    onClick={() => { setAllocModal({ result: r }); setAllocModalJobId(''); setAllocModalStage('sourced') }}
+                  >
+                    + Allocate to Job
+                  </button>
                 </div>
               ))}
             </div>
@@ -787,6 +853,68 @@ export default function AdminTalentPool() {
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ── Allocate to Job Modal ── */}
+      {allocModal && (
+        <div className="modal-overlay" onClick={() => setAllocModal(null)}>
+          <div className="modal" style={{ maxWidth: 420 }} onClick={e => e.stopPropagation()}>
+            <div className="modal-head">
+              <div>
+                <h3>Allocate to Job</h3>
+                <p style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>{allocModal.result.name}</p>
+              </div>
+              <button className="modal-close" onClick={() => setAllocModal(null)}>✕</button>
+            </div>
+            <div className="modal-body">
+              <div className="field" style={{ marginBottom: 14 }}>
+                <label>Job</label>
+                <select value={allocModalJobId} onChange={e => setAllocModalJobId(e.target.value)}>
+                  <option value="">— select active job —</option>
+                  {jobs.map(j => (
+                    <option key={j.id} value={j.id}>
+                      {j.title}{j.profiles?.company_name ? ` · ${j.profiles.company_name}` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="field" style={{ marginBottom: 24 }}>
+                <label>Pipeline Stage</label>
+                <select value={allocModalStage} onChange={e => setAllocModalStage(e.target.value)}>
+                  <option value="sourced">Sourced</option>
+                  <option value="screening">Screening</option>
+                  <option value="shortlisted">Shortlisted</option>
+                </select>
+              </div>
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                <button className="btn btn-secondary" onClick={() => setAllocModal(null)}>Cancel</button>
+                <button
+                  className="btn btn-primary"
+                  disabled={!allocModalJobId || allocating}
+                  onClick={handleAllocate}
+                >
+                  {allocating ? <><span className="spinner" style={{ width: 11, height: 11 }} /> Allocating…</> : 'Allocate'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Toast ── */}
+      {toast && (
+        <div style={{
+          position: 'fixed', bottom: 24, right: 24, zIndex: 9999,
+          padding: '12px 18px', borderRadius: 'var(--r)',
+          background: toast.ok ? 'var(--green-d)' : 'rgba(239,68,68,0.12)',
+          border: `1px solid ${toast.ok ? 'var(--green)' : '#ef4444'}`,
+          color: toast.ok ? 'var(--green)' : '#ef4444',
+          fontSize: 13, fontFamily: 'var(--font-mono)',
+          display: 'flex', alignItems: 'center', gap: 8,
+          boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+        }}>
+          {toast.ok ? '✓' : '✗'} {toast.msg}
         </div>
       )}
     </div>

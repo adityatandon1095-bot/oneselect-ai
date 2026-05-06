@@ -2,15 +2,16 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useLocation } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../lib/AuthContext'
-import { callClaude } from '../../utils/api'
+import { callClaude, runAutomatedInterview } from '../../utils/api'
 import mammoth from 'mammoth'
 import { extractContent, isSupported, fileExt, ACCEPT_ATTR } from '../../utils/fileExtract'
+import { parseExperience } from '../../utils/parseExperience'
 import { triggerTalentPoolMatch, mapMatchToCandidate } from '../../utils/talentPool'
 import TagInput from '../../components/TagInput'
 import VideoPlayer from '../../components/VideoPlayer'
 
 const CV_PARSE_SYSTEM = `You are a CV parser. Return ONLY valid JSON — no markdown:
-{"name":"string","email":"string","currentRole":"string","totalYears":number,"skills":["..."],"education":"string","summary":"string","highlights":["..."]}`
+{"name":"string","email":"string","currentRole":"string","totalYears":number,"skills":["..."],"education":"string","summary":"string","highlights":["..."],"linkedinUrl":"string or null","githubUrl":"string or null","portfolioUrl":"string or null"}`
 
 const screeningSystem = (job) =>
   `You are an expert recruiter. Evaluate this candidate against the job.
@@ -39,7 +40,7 @@ function ScoreRing({ score, size = 48 }) {
 }
 
 const DEFAULT_JOB_FORM = { title:'', experience_years:3, required_skills:[], preferred_skills:[], description:'', tech_weight:60, comm_weight:40 }
-const EMPTY_MANUAL = { full_name:'', email:'', phone:'', candidate_role:'', total_years:'', skills:'', education:'', summary:'', addToPool:false }
+const EMPTY_MANUAL = { full_name:'', email:'', phone:'', candidate_role:'', total_years:'', skills:'', education:'', summary:'', linkedin_url:'', github_url:'', portfolio_url:'', addToPool:false }
 const appUrl = 'https://oneselect-ai-t6uo-phi.vercel.app'
 
 export default function AdminPipeline({ allowedClientIds } = {}) {
@@ -56,9 +57,7 @@ export default function AdminPipeline({ allowedClientIds } = {}) {
   const [candidates, setCandidates]   = useState([])
   const [files, setFiles]             = useState([])
   const [dragging, setDragging]       = useState(false)
-  const [parsing, setParsing]         = useState(false)
-  const [screening, setScreening]     = useState(false)
-  const [screeningDone, setScreeningDone] = useState(false)
+  const [pipelineRunning, setPipelineRunning] = useState(false)
   const [log, setLog]                 = useState([])
   const [useTalentPool, setUseTalentPool] = useState(false)
   const [poolMatchLoading, setPoolMatchLoading] = useState(false)
@@ -88,7 +87,7 @@ export default function AdminPipeline({ allowedClientIds } = {}) {
   const [deleteModal, setDeleteModal]           = useState(null)
   const [addManuallyModal, setAddManuallyModal] = useState(null)
 
-  const running = parsing || screening || poolMatchLoading
+  const running = pipelineRunning || poolMatchLoading
   const fileInputRef = useRef()
   const logRef = useRef()
 
@@ -111,7 +110,6 @@ export default function AdminPipeline({ allowedClientIds } = {}) {
 
   async function loadClientJobs(cid) {
     setJobId(''); setActiveJob(null); setCandidates([]); setFiles([])
-    setScreeningDone(false)
     const { data } = await supabase.from('jobs').select('*').eq('recruiter_id', cid).order('created_at', { ascending: false })
     setClientJobs(data ?? [])
   }
@@ -136,7 +134,6 @@ export default function AdminPipeline({ allowedClientIds } = {}) {
     }
 
     setCandidates(loaded)
-    setScreeningDone(loaded.some(c => c.match_score != null))
 
     // Load outreach log for this job
     const { data: outData } = await supabase.from('outreach_log').select('id, candidate_id, sent_at, responded').eq('job_id', id)
@@ -168,7 +165,11 @@ export default function AdminPipeline({ allowedClientIds } = {}) {
     setPoolMatchLoading(false)
   }
 
-  const addLog = (msg, type = '') => setLog(p => [...p, { id: Date.now() + Math.random(), msg, type }])
+  const addLog  = (msg, type = '') => setLog(p => [...p, { id: Date.now() + Math.random(), msg, type }])
+  const tsLog   = (msg, type = '') => {
+    const ts = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    addLog(`[${ts}] ${msg}`, type)
+  }
 
   // ── Feature 1: Outreach ───────────────────────────────────────────────────
   async function openOutreachModal(candidate) {
@@ -237,9 +238,18 @@ Return the subject line first starting with "SUBJECT: ", then a blank line, then
     const { candidate, email } = aiInviteModal
     if (!email.trim()) return
     setAiInviteModal(m => ({ ...m, sending: true, error: null }))
+
+    let token = candidate.interview_invite_token
+    if (!token) {
+      token = crypto.randomUUID()
+      const table = candidate._fromPool ? 'job_matches' : 'candidates'
+      await supabase.from(table).update({ interview_invite_token: token }).eq('id', candidate.id)
+      setCandidates(p => p.map(c => c.id === candidate.id ? { ...c, interview_invite_token: token } : c))
+    }
+
     const companyName = clients.find(c => c.id === clientId)?.company_name ?? ''
     const { error } = await supabase.functions.invoke('send-ai-interview-invite', {
-      body: { email: email.trim(), name: candidate.full_name, job_title: activeJob?.title ?? '', company_name: companyName, token: candidate.interview_invite_token },
+      body: { email: email.trim(), name: candidate.full_name, job_title: activeJob?.title ?? '', company_name: companyName, token },
     })
     if (error) {
       setAiInviteModal(m => ({ ...m, sending: false, error: error.message }))
@@ -360,6 +370,9 @@ Return the subject line first starting with "SUBJECT: ", then a blank line, then
         skills:         skillsArr,
         education:      f.education.trim(),
         summary:        f.summary.trim(),
+        linkedin_url:   f.linkedin_url.trim() || null,
+        github_url:     f.github_url.trim() || null,
+        portfolio_url:  f.portfolio_url.trim() || null,
         source:         'manually_added',
       }).select().single()
       if (error) throw new Error(error.message)
@@ -471,12 +484,21 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
   const onDrop = useCallback((e) => { e.preventDefault(); setDragging(false); addFiles(e.dataTransfer.files) }, [addFiles])
   function patchFile(id, updates) { setFiles(p => p.map(f => f.id === id ? { ...f, ...updates } : f)) }
 
-  async function parseAll() {
-    if (!activeJob) return
-    setParsing(true)
+  async function runFullPipeline() {
+    if (!activeJob || !files.filter(f => f.status === 'pending').length) return
+    setPipelineRunning(true)
+    setLog([])
+
+    // Mark job as processing
+    await supabase.from('jobs').update({ pipeline_status: 'processing' }).eq('id', activeJob.id)
+
+    tsLog('Pipeline started — parsing CVs…', 'info')
+    const parsedCandidates = []
+
+    // ── Phase 1: Parse ────────────────────────────────────────────────────
     for (const entry of files.filter(f => f.status === 'pending')) {
       patchFile(entry.id, { status: 'parsing' })
-      addLog(`Parsing ${entry.file.name}…`, 'info')
+      tsLog(`Parsing ${entry.file.name}…`, 'info')
       try {
         let content
         if (entry.ext === 'docx') {
@@ -494,75 +516,124 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
         const parsed = JSON.parse(reply.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, ''))
 
         const { data: saved, error } = await supabase.from('candidates').insert({
-          job_id: activeJob.id,
-          full_name: parsed.name,
-          email: parsed.email ?? '',
-          candidate_role: parsed.currentRole ?? '',
-          total_years: parsed.totalYears ?? 0,
-          skills: parsed.skills ?? [],
-          education: parsed.education ?? '',
-          summary: parsed.summary ?? '',
-          highlights: parsed.highlights ?? [],
-          raw_text: content.kind === 'text' ? content.text : '',
+          job_id:        activeJob.id,
+          full_name:     parsed.name,
+          email:         parsed.email ?? '',
+          candidate_role:parsed.currentRole ?? '',
+          total_years:   parseExperience(parsed.totalYears) ?? 0,
+          skills:        parsed.skills ?? [],
+          education:     parsed.education ?? '',
+          summary:       parsed.summary ?? '',
+          highlights:    parsed.highlights ?? [],
+          raw_text:      content.kind === 'text' ? content.text : '',
+          linkedin_url:  parsed.linkedinUrl ?? null,
+          github_url:    parsed.githubUrl ?? null,
+          portfolio_url: parsed.portfolioUrl ?? null,
         }).select().single()
 
         if (error) throw new Error(error.message)
-        addLog(`✓ Saved ${parsed.name}`, 'ok')
+        tsLog(`✓ ${parsed.name} — CV parsed`, 'ok')
         patchFile(entry.id, { status: 'done', parsed })
-        setCandidates(p => [...p, { ...saved, _status: 'parsed' }])
+        const candidate = { ...saved, _status: 'parsed' }
+        parsedCandidates.push(candidate)
+        setCandidates(p => [...p, candidate])
       } catch (err) {
-        addLog(`✗ ${entry.file.name}: ${err.message}`, 'err')
+        tsLog(`✗ ${entry.file.name}: ${err.message}`, 'err')
         patchFile(entry.id, { status: 'error', error: err.message })
       }
     }
-    setParsing(false)
-  }
 
-  async function runScreening() {
-    if (!activeJob) return
-    setScreening(true)
+    // ── Phase 2: Screen ───────────────────────────────────────────────────
+    tsLog(`Screening ${parsedCandidates.length} candidate${parsedCandidates.length !== 1 ? 's' : ''}…`, 'info')
     const system = screeningSystem(activeJob)
-    const toScreen = candidates.filter(c => c._status === 'parsed')
-    const passedThisRun = []
-    for (const c of toScreen) {
+    const passedCandidates = []
+
+    for (const c of parsedCandidates) {
       setCandidates(p => p.map(x => x.id === c.id ? { ...x, _status: 'screening' } : x))
-      addLog(`Screening ${c.full_name}…`, 'info')
+      tsLog(`Screening ${c.full_name}…`, 'info')
       try {
         const msg = `Name: ${c.full_name}\nRole: ${c.candidate_role}\nYears: ${c.total_years}\nSkills: ${(c.skills ?? []).join(', ')}\nSummary: ${c.summary}`
         const reply = await callClaude([{ role: 'user', content: msg }], system, 512)
         const s = JSON.parse(reply.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, ''))
         await supabase.from('candidates').update({ match_score: s.matchScore, match_pass: s.pass, match_reason: s.reason, match_rank: s.rank }).eq('id', c.id)
-        setCandidates(p => p.map(x => x.id === c.id ? { ...x, _status: 'screened', match_score: s.matchScore, match_pass: s.pass, match_reason: s.reason, match_rank: s.rank } : x))
-        if (s.pass) passedThisRun.push(c)
-        addLog(`✓ ${c.full_name}: ${s.matchScore}/100 → ${s.pass ? 'PASS' : 'FAIL'}`, s.pass ? 'ok' : '')
+        const updated = { ...c, _status: 'screened', match_score: s.matchScore, match_pass: s.pass, match_reason: s.reason, match_rank: s.rank }
+        setCandidates(p => p.map(x => x.id === c.id ? updated : x))
+        if (s.pass) passedCandidates.push(updated)
+        tsLog(`✓ ${c.full_name}: ${s.matchScore}/100 → ${s.pass ? 'PASS ✓' : 'FAIL'}`, s.pass ? 'ok' : '')
       } catch (err) {
-        addLog(`✗ ${c.full_name}: ${err.message}`, 'err')
+        tsLog(`✗ ${c.full_name} screen error: ${err.message}`, 'err')
         setCandidates(p => p.map(x => x.id === c.id ? { ...x, _status: 'screened', match_score: 0, match_pass: false } : x))
       }
     }
-    setScreening(false)
-    setScreeningDone(true)
-    addLog(`Screening complete. ${passedThisRun.length} passed.`, 'info')
+
+    // ── Phase 3: Auto-interview all passing candidates ─────────────────────
+    tsLog(`Auto-interviewing ${passedCandidates.length} passing candidate${passedCandidates.length !== 1 ? 's' : ''}…`, 'info')
+
+    for (const c of passedCandidates) {
+      tsLog(`Interviewing ${c.full_name}…`, 'info')
+      try {
+        const result = await runAutomatedInterview(c, activeJob)
+        await supabase.from('candidates').update({
+          interview_transcript: result.transcript,
+          scores: result.scores,
+        }).eq('id', c.id)
+        setCandidates(p => p.map(x => x.id === c.id ? { ...x, interview_transcript: result.transcript, scores: result.scores } : x))
+        tsLog(`✓ ${c.full_name}: ${result.scores.overallScore}/100 — ${result.scores.recommendation}`, 'ok')
+      } catch (err) {
+        tsLog(`✗ ${c.full_name} interview error: ${err.message}`, 'err')
+      }
+    }
+
+    // ── Phase 4: Mark complete + notify client ─────────────────────────────
+    await supabase.from('jobs').update({ pipeline_status: 'complete' }).eq('id', activeJob.id)
+    tsLog(`Pipeline complete — ${parsedCandidates.length} processed, ${passedCandidates.length} passed`, 'ok')
 
     const clientProfile = clients.find(c => c.id === clientId)
-    if (clientProfile?.email && toScreen.length > 0) {
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-screening-update`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY}` },
-          body: JSON.stringify({
-            clientEmail:    clientProfile.email,
-            clientName:     clientProfile.full_name || clientProfile.company_name,
-            jobTitle:       activeJob?.title,
-            totalScreened:  toScreen.length,
-            totalPassed:    passedThisRun.length,
-          }),
-        }).catch(() => {})
-      }).catch(() => {})
+    if (clientProfile?.email) {
+      try {
+        const topCandidates = [...passedCandidates]
+          .sort((a, b) => (b.scores?.overallScore ?? 0) - (a.scores?.overallScore ?? 0))
+          .slice(0, 3)
+          .map(c => ({
+            name:           c.full_name,
+            role:           c.candidate_role,
+            overallScore:   c.scores?.overallScore ?? 0,
+            recommendation: c.scores?.recommendation ?? '',
+            matchScore:     c.match_score ?? 0,
+          }))
+
+        const { error: emailErr } = await supabase.functions.invoke('send-pipeline-complete', {
+          body: {
+            clientEmail:     clientProfile.email,
+            clientName:      clientProfile.full_name || clientProfile.company_name,
+            jobTitle:        activeJob.title,
+            totalProcessed:  parsedCandidates.length,
+            totalPassed:     passedCandidates.length,
+            topCandidates,
+          },
+        })
+        if (emailErr) throw new Error(emailErr.message)
+        await supabase.from('jobs').update({ pipeline_status: 'notified' }).eq('id', activeJob.id)
+        tsLog(`✉ Client notified — ${clientProfile.email}`, 'ok')
+      } catch (err) {
+        tsLog(`⚠ Email notification failed: ${err.message}`, 'err')
+      }
     }
+
+    await refreshCandidates()
+    setPipelineRunning(false)
   }
 
   // ── Derived state ─────────────────────────────────────────────────────────
+  const [candidateSearch, setCandidateSearch] = useState('')
+  function srch(list) {
+    if (!candidateSearch.trim()) return list
+    const words = candidateSearch.toLowerCase().split(/\s+/)
+    return list.filter(c => {
+      const hay = [c.full_name, c.candidate_role, c.email, c.summary, ...(c.skills ?? [])].join(' ').toLowerCase()
+      return words.every(w => hay.includes(w))
+    })
+  }
   const passedCandidates = candidates.filter(c => c.match_pass)
   const doneCount      = files.filter(f => f.status === 'done').length
   const pendingCount   = files.filter(f => f.status === 'pending').length
@@ -570,7 +641,7 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
   const parseProgress  = files.length ? (doneCount / files.length) * 100 : 0
   const screenProgress = candidates.length ? (screenedCount / candidates.length) * 100 : 0
   const liveInterviewCandidates = passedCandidates.filter(c => c.scores?.overallScore != null)
-  const decisionCandidates = passedCandidates.filter(c => c.live_interview_status === 'completed')
+  const decisionCandidates      = passedCandidates.filter(c => c.live_interview_status === 'completed')
   const clientLabel = (c) => c.company_name || c.full_name || c.email
 
   function outreachBadge(cId) {
@@ -584,6 +655,15 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
     <div className="page">
       <div className="page-head">
         <div><h2>Pipeline</h2><p>Run the full AI hiring pipeline for a client</p></div>
+        {candidates.length > 0 && (
+          <input
+            type="search"
+            placeholder="Filter candidates…"
+            value={candidateSearch}
+            onChange={e => setCandidateSearch(e.target.value)}
+            style={{ width: 220, padding: '7px 12px', border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: 12, fontFamily: 'var(--font-body)' }}
+          />
+        )}
       </div>
 
       {/* ── 1 Job Setup ── */}
@@ -696,9 +776,9 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
                   <div className="file-list">
                     <div className="file-list-header">
                       <span>{files.length} file{files.length !== 1 ? 's' : ''}</span>
-                      {parsing && <div style={{ flex: 1 }}><div className="progress-track"><div className="progress-fill" style={{ width: `${parseProgress}%` }} /></div></div>}
-                      <button className="btn btn-primary" style={{ padding: '5px 12px', fontSize: 12 }} disabled={!pendingCount || parsing || !activeJob} onClick={parseAll}>
-                        {parsing ? <><span className="spinner" style={{ width: 11, height: 11 }} /> Parsing…</> : 'Parse with AI'}
+                      {pipelineRunning && <div style={{ flex: 1 }}><div className="progress-track"><div className="progress-fill" style={{ width: `${parseProgress}%` }} /></div></div>}
+                      <button className="btn btn-primary" style={{ padding: '5px 12px', fontSize: 12 }} disabled={!pendingCount || pipelineRunning || !activeJob} onClick={runFullPipeline}>
+                        {pipelineRunning ? <><span className="spinner" style={{ width: 11, height: 11 }} /> Running Pipeline…</> : '▶ Upload & Run Full Pipeline'}
                       </button>
                     </div>
                     {files.map(f => (
@@ -735,11 +815,13 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
         <div className="section-card">
           <div className="section-card-head">
             <h3>3 · AI Screening</h3>
-            {screening && <div style={{ flex: 1, margin: '0 16px' }}><div className="progress-track"><div className="progress-fill" style={{ width: `${screenProgress}%` }} /></div></div>}
-            {!screeningDone && <button className="btn btn-primary" style={{ padding: '5px 12px', fontSize: 12 }} disabled={screening || candidates.length === 0} onClick={runScreening}>Run Screening</button>}
+            {pipelineRunning && screenedCount < candidates.length && (
+              <div style={{ flex: 1, margin: '0 16px' }}><div className="progress-track"><div className="progress-fill" style={{ width: `${screenProgress}%` }} /></div></div>
+            )}
+            <span className="mono text-muted" style={{ fontSize: 11 }}>{screenedCount}/{candidates.length} screened</span>
           </div>
           <div className="candidate-list">
-            {[...candidates].sort((a, b) => (b.match_score ?? -1) - (a.match_score ?? -1)).map((c, i) => (
+            {srch([...candidates].sort((a, b) => (b.match_score ?? -1) - (a.match_score ?? -1))).map((c, i) => (
               <div key={c.id} className={`candidate-row${c.match_pass === false ? ' dimmed' : ''}`} style={{ cursor: 'default' }}>
                 <div className="c-rank">#{i + 1}</div>
                 <div className="c-info">
@@ -774,14 +856,14 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
       )}
 
       {/* ── 4 AI Video Interview ── */}
-      {(screeningDone || (isClient && activeJob)) && passedCandidates.length > 0 && (
+      {passedCandidates.length > 0 && (
         <div className="section-card">
           <div className="section-card-head">
             <h3>4 · AI Video Interview</h3>
             <span className="mono text-muted" style={{ fontSize: 11 }}>{passedCandidates.length} passed screening</span>
           </div>
           <div className="candidate-list">
-            {passedCandidates.map(c => {
+            {srch(passedCandidates).map(c => {
               const hasVideo  = c.video_urls?.length > 0
               const hasScores = !!c.scores?.overallScore
               const rec       = c.scores?.recommendation
@@ -834,7 +916,7 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
             <span className="mono text-muted" style={{ fontSize: 11 }}>{liveInterviewCandidates.length} candidates</span>
           </div>
           <div className="candidate-list">
-            {liveInterviewCandidates.map(c => {
+            {srch(liveInterviewCandidates).map(c => {
               const liveStatus = c.live_interview_status ?? 'none'
               const scheduled  = liveStatus === 'scheduled'
               const completed  = liveStatus === 'completed'
@@ -876,7 +958,7 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
             <span className="mono text-muted" style={{ fontSize: 11 }}>{decisionCandidates.length} candidates</span>
           </div>
           <div className="candidate-list">
-            {decisionCandidates.map(c => {
+            {srch(decisionCandidates).map(c => {
               const decision = c.final_decision
               const offerSent = c.offer_status === 'sent'
               return (
@@ -1075,6 +1157,9 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
               <div><label style={ML}>Education (optional)</label><input style={MI} value={addManuallyModal.education} onChange={e => setAddManuallyModal(m => ({ ...m, education: e.target.value }))} placeholder="B.Tech Computer Science" /></div>
               <div style={{ gridColumn: 'span 2' }}><label style={ML}>Skills (comma separated)</label><input style={MI} value={addManuallyModal.skills} onChange={e => setAddManuallyModal(m => ({ ...m, skills: e.target.value }))} placeholder="React, Node.js, TypeScript" /></div>
               <div style={{ gridColumn: 'span 2' }}><label style={ML}>Summary (optional)</label><textarea style={{ ...MI, height: 70, resize: 'vertical' }} value={addManuallyModal.summary} onChange={e => setAddManuallyModal(m => ({ ...m, summary: e.target.value }))} placeholder="Brief professional summary…" /></div>
+              <div><label style={ML}>LinkedIn URL (optional)</label><input style={MI} value={addManuallyModal.linkedin_url} onChange={e => setAddManuallyModal(m => ({ ...m, linkedin_url: e.target.value }))} placeholder="https://linkedin.com/in/…" /></div>
+              <div><label style={ML}>GitHub URL (optional)</label><input style={MI} value={addManuallyModal.github_url} onChange={e => setAddManuallyModal(m => ({ ...m, github_url: e.target.value }))} placeholder="https://github.com/…" /></div>
+              <div style={{ gridColumn: 'span 2' }}><label style={ML}>Portfolio / Website (optional)</label><input style={MI} value={addManuallyModal.portfolio_url} onChange={e => setAddManuallyModal(m => ({ ...m, portfolio_url: e.target.value }))} placeholder="https://…" /></div>
             </div>
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-2)', cursor: 'pointer' }}>
               <input type="checkbox" checked={addManuallyModal.addToPool} onChange={e => setAddManuallyModal(m => ({ ...m, addToPool: e.target.checked }))} />

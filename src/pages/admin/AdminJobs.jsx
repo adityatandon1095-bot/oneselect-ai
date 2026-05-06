@@ -248,10 +248,15 @@ export default function AdminJobs() {
                   </div>
 
                   {/* Status */}
-                  <div>
+                  <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                     <span className={`badge ${j.status === 'active' ? 'badge-green' : j.status === 'closed' ? 'badge-red' : 'badge-amber'}`} style={{ fontSize: 9 }}>
                       {j.status ?? 'active'}
                     </span>
+                    {j.pipeline_status && j.pipeline_status !== 'awaiting_cvs' && (
+                      <span className={`badge ${j.pipeline_status === 'notified' ? 'badge-green' : j.pipeline_status === 'complete' ? 'badge-blue' : j.pipeline_status === 'processing' ? 'badge-amber' : ''}`} style={{ fontSize: 9 }}>
+                        {j.pipeline_status === 'processing' ? '⟳ running' : j.pipeline_status === 'complete' ? '✓ done' : j.pipeline_status === 'notified' ? '✉ notified' : j.pipeline_status}
+                      </span>
+                    )}
                   </div>
 
                   {/* Requirements met */}

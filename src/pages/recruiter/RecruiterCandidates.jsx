@@ -6,6 +6,7 @@ import { useAuth } from '../../lib/AuthContext'
 import { callClaude } from '../../utils/api'
 import { mapMatchToCandidate } from '../../utils/talentPool'
 import { extractContent, isSupported, fileExt, ACCEPT_ATTR } from '../../utils/fileExtract'
+import { parseExperience } from '../../utils/parseExperience'
 
 const REC_COLOR = { 'Strong Hire': 'var(--green)', 'Hire': 'var(--accent)', 'Borderline': 'var(--amber)', 'Reject': 'var(--red)' }
 const DIMS = [
@@ -19,8 +20,27 @@ const INTERVIEW_COMPLETE = 'INTERVIEW_COMPLETE'
 const TABS = ['All', 'Interview Pending', 'Interview Done', 'Screened Out']
 const EMPTY_MANUAL = { full_name: '', email: '', phone: '', candidate_role: '', total_years: '', skills: '', education: '', summary: '', jobId: '', addToPool: false }
 
+function ProfileLinks({ c }) {
+  const links = [
+    c.linkedin_url  && { href: c.linkedin_url,  label: 'LinkedIn' },
+    c.github_url    && { href: c.github_url,     label: 'GitHub' },
+    c.portfolio_url && { href: c.portfolio_url,  label: 'Portfolio' },
+  ].filter(Boolean)
+  if (!links.length) return null
+  return (
+    <div style={{ display: 'flex', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
+      {links.map(({ href, label }) => (
+        <a key={label} href={href} target="_blank" rel="noopener noreferrer"
+          style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--accent)', textDecoration: 'none', padding: '2px 8px', border: '1px solid var(--accent)', opacity: 0.8 }}>
+          ↗ {label}
+        </a>
+      ))}
+    </div>
+  )
+}
+
 const CV_PARSE_SYSTEM = `You are a CV parser. Return ONLY valid JSON — no markdown:
-{"name":"string","email":"string","currentRole":"string","totalYears":number,"skills":["..."],"education":"string","summary":"string","highlights":["..."]}`
+{"name":"string","email":"string","currentRole":"string","totalYears":number,"skills":["..."],"education":"string","summary":"string","highlights":["..."],"linkedinUrl":"string or null","githubUrl":"string or null","portfolioUrl":"string or null"}`
 
 const FORMAT_ICON = { pdf: '📕', docx: '📝', txt: '📄', jpg: '🖼️', jpeg: '🖼️', png: '🖼️' }
 
@@ -57,6 +77,7 @@ function CandidateProfile({ candidate, onBack }) {
           <h3>{candidate.full_name}</h3>
           <p>{candidate.candidate_role} · {candidate.total_years}y exp</p>
           {candidate.email && <p className="email">{candidate.email}</p>}
+          <ProfileLinks c={candidate} />
           {candidate.match_score != null && (
             <div style={{ marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
               <span className={`badge ${candidate.match_pass ? 'badge-green' : 'badge-red'}`}>
@@ -227,6 +248,7 @@ export default function RecruiterCandidates() {
   const [bulkAllotModal, setBulkAllotModal]     = useState(false)
   const [bulkAllotJobId, setBulkAllotJobId]     = useState('')
   const [bulkAlloting, setBulkAlloting]         = useState(false)
+  const [searchQuery, setSearchQuery]           = useState('')
 
   // CV upload
   const [showUpload, setShowUpload]   = useState(false)
@@ -434,12 +456,15 @@ export default function RecruiterCandidates() {
           full_name:      parsed.name,
           email:          parsed.email ?? '',
           candidate_role: parsed.currentRole ?? '',
-          total_years:    parsed.totalYears ?? 0,
+          total_years:    parseExperience(parsed.totalYears) ?? 0,
           skills:         parsed.skills ?? [],
           education:      parsed.education ?? '',
           summary:        parsed.summary ?? '',
           highlights:     parsed.highlights ?? [],
           raw_text:       content.kind === 'text' ? content.text : '',
+          linkedin_url:   parsed.linkedinUrl ?? null,
+          github_url:     parsed.githubUrl ?? null,
+          portfolio_url:  parsed.portfolioUrl ?? null,
         }).select().single()
         if (error) throw new Error(error.message)
         patchFile(entry.id, { status: 'done', parsed })
@@ -452,7 +477,7 @@ export default function RecruiterCandidates() {
   }
 
   function getStatus(c) {
-    if (c.scores) return 'Interview Done'
+    if (c.scores?.overallScore != null) return 'Interview Done'
     if (c.match_pass === true) return 'Interview Pending'
     if (c.match_pass === false) return 'Screened Out'
     return 'Pending'
@@ -464,14 +489,20 @@ export default function RecruiterCandidates() {
 
   const activeList = source === 'pool' ? poolCandidates : candidates
   const byJob = jobFilter === 'all' ? activeList : activeList.filter(c => c.job_id === jobFilter)
-  const tabFiltered = byJob.filter(c => tab === 'All' || getStatus(c) === tab)
+  const searchFiltered = byJob.filter(c => {
+    if (!searchQuery.trim()) return true
+    const words = searchQuery.toLowerCase().split(/\s+/)
+    const hay = [c.full_name, c.candidate_role, c.email, c.summary, ...(c.skills ?? [])].join(' ').toLowerCase()
+    return words.every(w => hay.includes(w))
+  })
+  const tabFiltered = searchFiltered.filter(c => tab === 'All' || getStatus(c) === tab)
   const allVisibleSelected = tabFiltered.length > 0 && tabFiltered.every(c => selectedIds.has(c.id))
 
   const counts = {
-    'All': byJob.length,
-    'Interview Pending': byJob.filter(c => getStatus(c) === 'Interview Pending').length,
-    'Interview Done': byJob.filter(c => getStatus(c) === 'Interview Done').length,
-    'Screened Out': byJob.filter(c => getStatus(c) === 'Screened Out').length,
+    'All': searchFiltered.length,
+    'Interview Pending': searchFiltered.filter(c => getStatus(c) === 'Interview Pending').length,
+    'Interview Done': searchFiltered.filter(c => getStatus(c) === 'Interview Done').length,
+    'Screened Out': searchFiltered.filter(c => getStatus(c) === 'Screened Out').length,
   }
 
   const selected = [...candidates, ...poolCandidates].find(c => c.id === selectedId)
@@ -494,6 +525,13 @@ export default function RecruiterCandidates() {
           <p>{byJob.length} candidate{byJob.length !== 1 ? 's' : ''} across all jobs</p>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <input
+            type="search"
+            placeholder="Search by name, role, skills…"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            style={{ width: 220, padding: '7px 12px', border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: 12, fontFamily: 'var(--font-body)' }}
+          />
           <select value={jobFilter} onChange={e => setJobFilter(e.target.value)} style={{ width: 200 }}>
             <option value="all">All Jobs</option>
             {jobs.map(j => <option key={j.id} value={j.id}>{j.title}</option>)}

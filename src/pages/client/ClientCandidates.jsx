@@ -4,6 +4,25 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../lib/AuthContext'
 
 const REC_COLOR = { 'Strong Hire': 'var(--green)', 'Hire': 'var(--accent)', 'Borderline': 'var(--amber)', 'Reject': 'var(--red)' }
+
+function ProfileLinks({ c }) {
+  const links = [
+    c.linkedin_url  && { href: c.linkedin_url,  label: 'LinkedIn' },
+    c.github_url    && { href: c.github_url,     label: 'GitHub' },
+    c.portfolio_url && { href: c.portfolio_url,  label: 'Portfolio' },
+  ].filter(Boolean)
+  if (!links.length) return null
+  return (
+    <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+      {links.map(({ href, label }) => (
+        <a key={label} href={href} target="_blank" rel="noopener noreferrer"
+          style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--accent)', textDecoration: 'none', padding: '2px 8px', border: '1px solid var(--accent)', opacity: 0.8 }}>
+          ↗ {label}
+        </a>
+      ))}
+    </div>
+  )
+}
 const DIMS = [
   ['technicalAbility','Technical Ability'],
   ['communication','Communication'],
@@ -145,16 +164,70 @@ function VideoModal({ candidate, onClose }) {
   )
 }
 
-function CandidateProfile({ candidate, onBack, onWatch }) {
+function CVModal({ candidate, onClose }) {
+  const { full_name, raw_text } = candidate
+  const text = (raw_text ?? '').trim()
+
+  function download() {
+    const blob = new Blob([text || `${full_name}\n\nNo CV text available.`], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${full_name.replace(/\s+/g, '_')}_CV.txt`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  return (
+    <div
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2100, padding: 20 }}
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div style={{ background: '#F8F7F4', width: '100%', maxWidth: 760, maxHeight: '88vh', display: 'flex', flexDirection: 'column', border: '1px solid #E8E4DC' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px 24px', borderBottom: '1px solid #E8E4DC', flexShrink: 0 }}>
+          <div>
+            <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.12em', color: '#9CA3AF', marginBottom: 3 }}>CV / Resume</div>
+            <div style={{ fontSize: 17, fontFamily: 'Georgia, serif', fontWeight: 400, color: '#2D3748' }}>{full_name}</div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button
+              onClick={download}
+              style={{ padding: '6px 14px', border: '1px solid #B8924A', background: 'rgba(184,146,74,0.08)', color: '#B8924A', cursor: 'pointer', fontSize: 12, fontFamily: 'var(--font-mono)' }}
+            >
+              ↓ Download .txt
+            </button>
+            <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: '#9CA3AF', padding: '4px 8px', lineHeight: 1 }}>✕</button>
+          </div>
+        </div>
+        <div style={{ flex: 1, overflow: 'auto', padding: '24px' }}>
+          {text
+            ? <pre style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: 12, lineHeight: 1.75, color: '#4A5568', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{text}</pre>
+            : <div style={{ textAlign: 'center', padding: '40px 0', color: '#9CA3AF', fontFamily: 'var(--font-mono)', fontSize: 13 }}>No CV text available for this candidate.</div>
+          }
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function CandidateProfile({ candidate, onBack, onWatch, onViewCV, onOffer }) {
   const s = candidate.scores ?? {}
   const transcript = candidate.interview_transcript ?? []
   const rec = s.recommendation
   const hasVideo = candidate.video_urls?.length > 0
+  const hasCV = !!(candidate.raw_text ?? '').trim()
+  const canOffer = candidate.match_pass === true && candidate.offer_status !== 'sent' && candidate.final_decision !== 'hired'
+  const offerDone = candidate.offer_status === 'sent' || candidate.final_decision === 'hired'
 
   return (
     <div>
-      <div className="no-print" style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+      <div className="no-print" style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap', alignItems: 'center' }}>
         <button className="btn btn-secondary" onClick={onBack}>← Back to list</button>
+        {hasCV && (
+          <button className="btn btn-secondary" onClick={onViewCV}>
+            CV
+          </button>
+        )}
         {hasVideo && (
           <button
             className="btn btn-primary"
@@ -164,6 +237,12 @@ function CandidateProfile({ candidate, onBack, onWatch }) {
             ▶ Watch Interview
           </button>
         )}
+        {offerDone && <span className="badge badge-green" style={{ fontSize: 12 }}>Offer Sent</span>}
+        {canOffer && (
+          <button className="btn btn-primary" style={{ background: 'var(--green)', borderColor: 'var(--green)', marginLeft: 'auto' }} onClick={onOffer}>
+            Make Offer
+          </button>
+        )}
       </div>
 
       <div className="profile-hero">
@@ -171,6 +250,7 @@ function CandidateProfile({ candidate, onBack, onWatch }) {
         <div className="profile-id" style={{ flex: 1 }}>
           <h3>{candidate.full_name}</h3>
           <p>{candidate.candidate_role} · {candidate.total_years}y exp</p>
+          <ProfileLinks c={candidate} />
           {candidate.match_score != null && (
             <div style={{ marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
               <span className={`badge ${candidate.match_pass ? 'badge-green' : 'badge-red'}`}>
@@ -282,6 +362,11 @@ export default function ClientCandidates() {
   const [tab, setTab] = useState('All')
   const [selectedId, setSelectedId] = useState(null)
   const [watchId, setWatchId] = useState(null)
+  const [cvId, setCvId] = useState(null)
+  const [showDismissed, setShowDismissed] = useState(false)
+  const [confirmRemoveId, setConfirmRemoveId] = useState(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [offerModal, setOfferModal] = useState(null)
 
   useEffect(() => { if (user) load() }, [user])
 
@@ -307,29 +392,61 @@ export default function ClientCandidates() {
     setLoading(false)
   }
 
+  async function dismissCandidate(id) {
+    await supabase.from('candidates').update({ client_dismissed: true }).eq('id', id)
+    setCandidates(prev => prev.map(c => c.id === id ? { ...c, client_dismissed: true } : c))
+    setConfirmRemoveId(null)
+    if (selectedId === id) setSelectedId(null)
+  }
+
+  async function restoreCandidate(id) {
+    await supabase.from('candidates').update({ client_dismissed: false }).eq('id', id)
+    setCandidates(prev => prev.map(c => c.id === id ? { ...c, client_dismissed: false } : c))
+  }
+
+  async function sendOffer() {
+    const { candidate, note } = offerModal
+    setOfferModal(m => ({ ...m, sending: true, error: null }))
+    const { error } = await supabase.from('candidates')
+      .update({ offer_status: 'sent', decision_notes: note || null, final_decision: 'hired' })
+      .eq('id', candidate.id)
+    if (error) {
+      setOfferModal(m => ({ ...m, sending: false, error: error.message }))
+    } else {
+      setCandidates(prev => prev.map(c => c.id === candidate.id ? { ...c, offer_status: 'sent', final_decision: 'hired' } : c))
+      setOfferModal(null)
+    }
+  }
+
   function getStatus(c) {
-    if (c.scores) return 'Interview Done'
+    if (c.scores?.overallScore != null) return 'Interview Done'
     if (c.match_pass === true) return 'Interview Pending'
     if (c.match_pass === false) return 'Screened Out'
     return 'Pending'
   }
 
   const byJob = jobFilter === 'all' ? candidates : candidates.filter(c => c.job_id === jobFilter)
+  const active    = byJob.filter(c => !c.client_dismissed)
+  const dismissed = byJob.filter(c => c.client_dismissed)
 
-  const tabFiltered = byJob.filter(c => {
-    if (tab === 'All') return true
-    return getStatus(c) === tab
+  const searchActive = active.filter(c => {
+    if (!searchQuery.trim()) return true
+    const words = searchQuery.toLowerCase().split(/\s+/)
+    const hay = [c.full_name, c.candidate_role, c.email, c.summary, ...(c.skills ?? [])].join(' ').toLowerCase()
+    return words.every(w => hay.includes(w))
   })
+  const tabFiltered = searchActive.filter(c => tab === 'All' || getStatus(c) === tab)
 
   const counts = {
-    'All': byJob.length,
-    'Interview Pending': byJob.filter(c => getStatus(c) === 'Interview Pending').length,
-    'Interview Done': byJob.filter(c => getStatus(c) === 'Interview Done').length,
-    'Screened Out': byJob.filter(c => getStatus(c) === 'Screened Out').length,
+    'All': searchActive.length,
+    'Interview Pending': searchActive.filter(c => getStatus(c) === 'Interview Pending').length,
+    'Interview Done': searchActive.filter(c => getStatus(c) === 'Interview Done').length,
+    'Screened Out': searchActive.filter(c => getStatus(c) === 'Screened Out').length,
   }
 
-  const selected  = candidates.find(c => c.id === selectedId)
-  const watching  = candidates.find(c => c.id === watchId)
+  const selected    = candidates.find(c => c.id === selectedId)
+  const watching    = candidates.find(c => c.id === watchId)
+  const cvCandidate = candidates.find(c => c.id === cvId)
 
   if (loading) return <div className="page"><span className="spinner" /></div>
 
@@ -340,8 +457,64 @@ export default function ClientCandidates() {
           candidate={selected}
           onBack={() => setSelectedId(null)}
           onWatch={() => setWatchId(selected.id)}
+          onViewCV={() => setCvId(selected.id)}
+          onOffer={() => setOfferModal({ candidate: selected, note: '', sending: false, error: null })}
         />
+        {!selected.client_dismissed && (
+          confirmRemoveId === selected.id ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 16, padding: '12px 16px', background: 'var(--surface)', border: '1px solid var(--border)' }}>
+              <span style={{ fontSize: 13, color: 'var(--text-2)' }}>Remove this candidate from your pipeline?</span>
+              <button className="btn btn-secondary" style={{ fontSize: 12, color: 'var(--red)', borderColor: 'var(--red)' }} onClick={() => dismissCandidate(selected.id)}>Remove</button>
+              <button className="btn btn-secondary" style={{ fontSize: 12 }} onClick={() => setConfirmRemoveId(null)}>Cancel</button>
+            </div>
+          ) : (
+            <div style={{ marginTop: 16 }}>
+              <button className="btn btn-secondary" style={{ fontSize: 12, color: 'var(--red)', borderColor: 'var(--red)' }} onClick={() => setConfirmRemoveId(selected.id)}>
+                Remove Candidate
+              </button>
+            </div>
+          )
+        )}
+        {selected.client_dismissed && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 16, padding: '12px 16px', background: 'var(--surface)', border: '1px solid var(--border)' }}>
+            <span style={{ fontSize: 13, color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>This candidate has been removed.</span>
+            <button className="btn btn-secondary" style={{ fontSize: 12 }} onClick={() => restoreCandidate(selected.id)}>Restore</button>
+          </div>
+        )}
         {watching && <VideoModal candidate={watching} onClose={() => setWatchId(null)} />}
+        {cvCandidate && <CVModal candidate={cvCandidate} onClose={() => setCvId(null)} />}
+        {offerModal && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2200, padding: 20 }}
+            onClick={e => { if (e.target === e.currentTarget) setOfferModal(null) }}>
+            <div style={{ background: '#F8F7F4', width: '100%', maxWidth: 460, padding: 28, border: '1px solid #E8E4DC', display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div>
+                <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.12em', color: '#9CA3AF', marginBottom: 4 }}>Make Offer</div>
+                <div style={{ fontSize: 17, fontFamily: 'Georgia, serif', color: '#2D3748' }}>{offerModal.candidate.full_name}</div>
+                <div style={{ fontSize: 13, color: '#9CA3AF', marginTop: 2 }}>{offerModal.candidate.candidate_role}</div>
+              </div>
+              <div>
+                <label style={{ fontSize: 11, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#9CA3AF', display: 'block', marginBottom: 6 }}>
+                  Note (optional)
+                </label>
+                <textarea
+                  rows={3}
+                  value={offerModal.note}
+                  onChange={e => setOfferModal(m => ({ ...m, note: e.target.value }))}
+                  placeholder="Any message or next steps for the recruiter…"
+                  style={{ width: '100%', padding: '9px 12px', border: '1px solid #E8E4DC', background: 'white', fontSize: 13, resize: 'vertical', boxSizing: 'border-box', fontFamily: 'var(--font-body)' }}
+                />
+              </div>
+              {offerModal.error && <div style={{ fontSize: 12, color: 'var(--red)' }}>{offerModal.error}</div>}
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                <button className="btn btn-secondary" onClick={() => setOfferModal(null)}>Cancel</button>
+                <button className="btn btn-primary" style={{ background: 'var(--green)', borderColor: 'var(--green)' }}
+                  disabled={offerModal.sending} onClick={sendOffer}>
+                  {offerModal.sending ? 'Sending…' : 'Confirm Offer'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     )
   }
@@ -353,10 +526,19 @@ export default function ClientCandidates() {
           <h2>Candidates</h2>
           <p>{byJob.length} candidate{byJob.length !== 1 ? 's' : ''} total</p>
         </div>
-        <select value={jobFilter} onChange={e => setJobFilter(e.target.value)} style={{ width: 200 }}>
-          <option value="all">All Jobs</option>
-          {jobs.map(j => <option key={j.id} value={j.id}>{j.title}</option>)}
-        </select>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input
+            type="search"
+            placeholder="Search by name, role, skills…"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            style={{ width: 220, padding: '7px 12px', border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: 12, fontFamily: 'var(--font-body)' }}
+          />
+          <select value={jobFilter} onChange={e => setJobFilter(e.target.value)} style={{ width: 200 }}>
+            <option value="all">All Jobs</option>
+            {jobs.map(j => <option key={j.id} value={j.id}>{j.title}</option>)}
+          </select>
+        </div>
       </div>
 
       <div style={{ display: 'flex', gap: 2, marginBottom: 20, borderBottom: '1px solid var(--border)' }}>
@@ -391,6 +573,7 @@ export default function ClientCandidates() {
             const rec = s?.recommendation
             const status = getStatus(c)
             const hasVideo = c.video_urls?.length > 0
+            const hasCV = !!(c.raw_text ?? '').trim()
             return (
               <div key={c.id} className="table-row clickable" onClick={() => setSelectedId(c.id)}>
                 <div className="col-main">
@@ -420,6 +603,15 @@ export default function ClientCandidates() {
                       {rec}
                     </span>
                   )}
+                  {hasCV && (
+                    <button
+                      className="btn btn-secondary"
+                      style={{ fontSize: 11, padding: '4px 10px' }}
+                      onClick={e => { e.stopPropagation(); setCvId(c.id) }}
+                    >
+                      CV
+                    </button>
+                  )}
                   {hasVideo && (
                     <button
                       className="btn btn-secondary"
@@ -432,6 +624,26 @@ export default function ClientCandidates() {
                   {status === 'Interview Pending'  && !hasVideo && <span className="badge badge-amber">Interview Pending</span>}
                   {status === 'Screened Out'       && !s && <span className="badge badge-red">Screened Out</span>}
                   {status === 'Pending'            && <span className="badge" style={{ color: 'var(--text-3)', background: 'var(--surface2)' }}>Pending</span>}
+                  {c.offer_status === 'sent' || c.final_decision === 'hired'
+                    ? <span className="badge badge-green" style={{ fontSize: 11 }}>Offer Sent</span>
+                    : c.match_pass === true && (
+                      <button className="btn btn-secondary" style={{ fontSize: 11, padding: '4px 10px', color: 'var(--green)', borderColor: 'var(--green)' }}
+                        onClick={e => { e.stopPropagation(); setOfferModal({ candidate: c, note: '', sending: false, error: null }) }}>
+                        Make Offer
+                      </button>
+                    )
+                  }
+                  {confirmRemoveId === c.id ? (
+                    <>
+                      <button className="btn btn-secondary" style={{ fontSize: 11, padding: '4px 10px', color: 'var(--red)', borderColor: 'var(--red)' }}
+                        onClick={e => { e.stopPropagation(); dismissCandidate(c.id) }}>Confirm</button>
+                      <button className="btn btn-secondary" style={{ fontSize: 11, padding: '4px 10px' }}
+                        onClick={e => { e.stopPropagation(); setConfirmRemoveId(null) }}>Cancel</button>
+                    </>
+                  ) : (
+                    <button className="btn btn-secondary" style={{ fontSize: 11, padding: '4px 10px', color: 'var(--text-3)' }}
+                      onClick={e => { e.stopPropagation(); setConfirmRemoveId(c.id) }}>✕ Remove</button>
+                  )}
                 </div>
               </div>
             )
@@ -439,7 +651,69 @@ export default function ClientCandidates() {
         )}
       </div>
 
+      {dismissed.length > 0 && (
+        <div style={{ marginTop: 16 }}>
+          <button
+            onClick={() => setShowDismissed(v => !v)}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--text-3)', padding: 0 }}
+          >
+            {showDismissed ? '▲' : '▼'} {dismissed.length} removed candidate{dismissed.length !== 1 ? 's' : ''}
+          </button>
+          {showDismissed && (
+            <div className="section-card" style={{ marginTop: 8, opacity: 0.65 }}>
+              {dismissed.map(c => (
+                <div key={c.id} className="table-row" style={{ cursor: 'default' }}>
+                  <div className="col-main">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div className="profile-avatar" style={{ width: 34, height: 34, fontSize: 14, borderRadius: 'var(--r)', flexShrink: 0 }}>
+                        {(c.full_name ?? '?')[0].toUpperCase()}
+                      </div>
+                      <div>
+                        <div className="col-name" style={{ textDecoration: 'line-through', color: 'var(--text-3)' }}>{c.full_name}</div>
+                        <div className="col-sub">{c.candidate_role} · {c.total_years}y exp</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="col-right">
+                    <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-3)' }}>Removed</span>
+                    <button className="btn btn-secondary" style={{ fontSize: 11, padding: '4px 10px' }}
+                      onClick={() => restoreCandidate(c.id)}>Restore</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {watching && <VideoModal candidate={watching} onClose={() => setWatchId(null)} />}
+      {cvCandidate && <CVModal candidate={cvCandidate} onClose={() => setCvId(null)} />}
+      {offerModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2200, padding: 20 }}
+          onClick={e => { if (e.target === e.currentTarget) setOfferModal(null) }}>
+          <div style={{ background: '#F8F7F4', width: '100%', maxWidth: 460, padding: 28, border: '1px solid #E8E4DC', display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div>
+              <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.12em', color: '#9CA3AF', marginBottom: 4 }}>Make Offer</div>
+              <div style={{ fontSize: 17, fontFamily: 'Georgia, serif', color: '#2D3748' }}>{offerModal.candidate.full_name}</div>
+              <div style={{ fontSize: 13, color: '#9CA3AF', marginTop: 2 }}>{offerModal.candidate.candidate_role}</div>
+            </div>
+            <div>
+              <label style={{ fontSize: 11, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#9CA3AF', display: 'block', marginBottom: 6 }}>Note (optional)</label>
+              <textarea rows={3} value={offerModal.note} onChange={e => setOfferModal(m => ({ ...m, note: e.target.value }))}
+                placeholder="Any message or next steps for the recruiter…"
+                style={{ width: '100%', padding: '9px 12px', border: '1px solid #E8E4DC', background: 'white', fontSize: 13, resize: 'vertical', boxSizing: 'border-box', fontFamily: 'var(--font-body)' }} />
+            </div>
+            {offerModal.error && <div style={{ fontSize: 12, color: 'var(--red)' }}>{offerModal.error}</div>}
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button className="btn btn-secondary" onClick={() => setOfferModal(null)}>Cancel</button>
+              <button className="btn btn-primary" style={{ background: 'var(--green)', borderColor: 'var(--green)' }}
+                disabled={offerModal.sending} onClick={sendOffer}>
+                {offerModal.sending ? 'Sending…' : 'Confirm Offer'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
