@@ -4,7 +4,7 @@ import { supabase } from '../../lib/supabase'
 
 export default function AdminDashboard() {
   const navigate = useNavigate()
-  const [stats, setStats] = useState({ clients: 0, jobs: 0, candidates: 0, interviews: 0, poolTotal: 0, poolAvailable: 0 })
+  const [stats, setStats] = useState({ clients: 0, jobs: 0, candidates: 0, interviews: 0, poolTotal: 0, poolAvailable: 0, mrr: 0, placements: 0 })
   const [recentJobs, setRecentJobs] = useState([])
   const [loading, setLoading] = useState(true)
   const [sendingUpdates, setSendingUpdates] = useState(false)
@@ -13,6 +13,7 @@ export default function AdminDashboard() {
   useEffect(() => { load() }, [])
 
   async function load() {
+    const ms = (() => { const d = new Date(); d.setDate(1); d.setHours(0,0,0,0); return d.toISOString() })()
     const [
       { count: clients },
       { count: jobs },
@@ -21,6 +22,8 @@ export default function AdminDashboard() {
       { data: recent },
       { count: poolTotal },
       { count: poolAvailable },
+      { data: clientProfiles },
+      { count: placements },
     ] = await Promise.all([
       supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('user_role', 'client'),
       supabase.from('jobs').select('*', { count: 'exact', head: true }).eq('status', 'active'),
@@ -29,8 +32,11 @@ export default function AdminDashboard() {
       supabase.from('jobs').select('id, title, status, created_at, profiles(company_name)').order('created_at', { ascending: false }).limit(8),
       supabase.from('talent_pool').select('*', { count: 'exact', head: true }),
       supabase.from('talent_pool').select('*', { count: 'exact', head: true }).eq('availability', 'available'),
+      supabase.from('profiles').select('plan').eq('user_role', 'client'),
+      supabase.from('candidates').select('*', { count: 'exact', head: true }).eq('final_decision', 'hired').gte('updated_at', ms),
     ])
-    setStats({ clients: clients ?? 0, jobs: jobs ?? 0, candidates: candidates ?? 0, interviews: interviews ?? 0, poolTotal: poolTotal ?? 0, poolAvailable: poolAvailable ?? 0 })
+    const mrr = (clientProfiles ?? []).reduce((s, c) => s + (c.plan === 'growth' ? 1500 : 0), 0)
+    setStats({ clients: clients ?? 0, jobs: jobs ?? 0, candidates: candidates ?? 0, interviews: interviews ?? 0, poolTotal: poolTotal ?? 0, poolAvailable: poolAvailable ?? 0, mrr, placements: placements ?? 0 })
     setRecentJobs(recent ?? [])
     setLoading(false)
   }
@@ -96,8 +102,14 @@ export default function AdminDashboard() {
           <span className="metric-val">{stats.poolAvailable}</span>
           <span className="metric-label">Pool · Available</span>
         </div>
-        <div className="metric-card" style={{ opacity: 0 }} />
-        <div className="metric-card" style={{ opacity: 0 }} />
+        <div className="metric-card green" style={{ cursor: 'pointer' }} onClick={() => navigate('/admin/billing')}>
+          <span className="metric-val">£{stats.mrr.toLocaleString()}</span>
+          <span className="metric-label">MRR</span>
+        </div>
+        <div className="metric-card amber" style={{ cursor: 'pointer' }} onClick={() => navigate('/admin/pipeline')}>
+          <span className="metric-val">{stats.placements}</span>
+          <span className="metric-label">Placements This Month</span>
+        </div>
       </div>
 
       <div className="section-card">

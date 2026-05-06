@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../lib/AuthContext'
 import { callClaude, runAutomatedInterview } from '../../utils/api'
+import { generateAssessment, scoreAssessment } from '../../utils/assessments'
 import mammoth from 'mammoth'
 import { extractContent, isSupported, fileExt, ACCEPT_ATTR } from '../../utils/fileExtract'
 import { parseExperience } from '../../utils/parseExperience'
@@ -58,6 +59,7 @@ export default function AdminPipeline({ allowedClientIds } = {}) {
   const [files, setFiles]             = useState([])
   const [dragging, setDragging]       = useState(false)
   const [pipelineRunning, setPipelineRunning] = useState(false)
+  const [assessmentEnabled, setAssessmentEnabled] = useState(false)
   const [log, setLog]                 = useState([])
   const [useTalentPool, setUseTalentPool] = useState(false)
   const [poolMatchLoading, setPoolMatchLoading] = useState(false)
@@ -566,6 +568,38 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
       }
     }
 
+    // ── Phase 2.5: Optional Assessment ────────────────────────────────────
+    if (assessmentEnabled && passedCandidates.length > 0) {
+      tsLog(`Generating assessment for ${activeJob.title}…`, 'info')
+      try {
+        const { questions } = await generateAssessment(activeJob.title, activeJob.required_skills ?? [], callClaude)
+        tsLog(`✓ ${questions.length} assessment questions generated`, 'ok')
+        for (const c of passedCandidates) {
+          tsLog(`Assessing ${c.full_name}…`, 'info')
+          try {
+            // Simulate answers based on candidate's CV
+            const simSystem = `You are simulating a job candidate answering written assessment questions based on their CV. Answer as the candidate would, drawing on their actual experience.`
+            const simPrompt = `Candidate: ${c.full_name}, ${c.candidate_role}, ${c.total_years}y exp.\nSkills: ${(c.skills ?? []).join(', ')}\nSummary: ${c.summary ?? ''}\n\nAnswer each question as this candidate would:\n${questions.map((q, i) => `Q${i + 1}: ${q.question}`).join('\n\n')}\n\nReturn ONLY a JSON array of answer strings matching the question order: ["answer1","answer2",...]`
+            const simRaw = await callClaude([{ role: 'user', content: simPrompt }], simSystem, 2000)
+            const answers = JSON.parse(simRaw.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, ''))
+            const answersMap = Object.fromEntries(questions.map((q, i) => [q.id, answers[i] ?? '']))
+            const scored = await scoreAssessment(questions, answersMap, activeJob.title, callClaude)
+            if (scored) {
+              await supabase.from('candidates').update({
+                assessment_score: scored.overallScore,
+                assessment_data:  { questions, answers: answersMap, scores: scored.scores, summary: scored.summary },
+              }).eq('id', c.id)
+              tsLog(`✓ ${c.full_name}: assessment ${scored.overallScore}/100`, 'ok')
+            }
+          } catch (err) {
+            tsLog(`⚠ Assessment failed for ${c.full_name}: ${err.message}`, 'err')
+          }
+        }
+      } catch (err) {
+        tsLog(`⚠ Assessment generation failed: ${err.message}`, 'err')
+      }
+    }
+
     // ── Phase 3: Auto-interview all passing candidates ─────────────────────
     tsLog(`Auto-interviewing ${passedCandidates.length} passing candidate${passedCandidates.length !== 1 ? 's' : ''}…`, 'info')
 
@@ -713,8 +747,18 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
           )}
 
           {activeJob && (
-            <div style={{ padding: '10px 14px', background: 'var(--green-d)', borderLeft: '2px solid var(--green)', fontSize: 13, color: 'var(--green)' }}>
-              ✓ Active job: <strong>{activeJob.title}</strong>
+            <div style={{ padding: '10px 14px', background: 'var(--green-d)', borderLeft: '2px solid var(--green)', fontSize: 13, color: 'var(--green)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span>✓ Active job: <strong>{activeJob.title}</strong></span>
+              {!isClient && (
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', color: assessmentEnabled ? 'var(--green)' : 'var(--text-3)', fontSize: 12, fontFamily: 'var(--font-mono)' }}>
+                  <input type="checkbox" checked={assessmentEnabled} onChange={async e => {
+                    const v = e.target.checked
+                    setAssessmentEnabled(v)
+                    await supabase.from('jobs').update({ assessment_enabled: v }).eq('id', activeJob.id)
+                  }} />
+                  Include Assessment Step
+                </label>
+              )}
             </div>
           )}
         </div>

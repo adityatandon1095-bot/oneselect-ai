@@ -2,14 +2,18 @@ import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../lib/AuthContext'
 
 const NAV = [
-  { to: '/admin/dashboard',   label: 'Dashboard',   icon: '◈' },
-  { to: '/admin/clients',     label: 'Clients',     icon: '◉' },
-  { to: '/admin/recruiters',  label: 'Recruiters',  icon: '◎' },
-  { to: '/admin/jobs',        label: 'Jobs',        icon: '◫' },
-  { to: '/admin/talent-pool', label: 'Talent Pool', icon: '◌' },
-  { to: '/admin/pipeline',    label: 'Pipeline',    icon: '◐' },
-  { to: '/admin/analytics',   label: 'Analytics',   icon: '◱' },
-  { to: '/admin/settings',    label: 'Settings',    icon: '◷' },
+  { to: '/admin/dashboard',   label: 'Dashboard',       icon: '◈' },
+  { to: '/admin/clients',     label: 'Clients',         icon: '◉' },
+  { to: '/admin/recruiters',  label: 'Recruiters',      icon: '◎' },
+  { to: '/admin/jobs',        label: 'Jobs',            icon: '◫' },
+  { to: '/admin/talent-pool', label: 'Talent Pool',     icon: '◌' },
+  { to: '/admin/sourcing',    label: 'Sourcing',        icon: '◍' },
+  { to: '/admin/pipeline',    label: 'Pipeline',        icon: '◐' },
+  { to: '/admin/board',       label: 'Pipeline Board',  icon: '▦'  },
+  { to: '/admin/compliance',  label: 'Compliance',      icon: '◑'  },
+  { to: '/admin/analytics',   label: 'Analytics',       icon: '◱'  },
+  { to: '/admin/billing',     label: 'Billing',         icon: '◇'  },
+  { to: '/admin/settings',    label: 'Settings',        icon: '◷'  },
 ]
 
 export default function AdminLayout() {

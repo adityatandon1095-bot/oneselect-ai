@@ -33,6 +33,16 @@ import PublicVideoInterview from './pages/PublicVideoInterview'
 import PublicLiveInterview from './pages/PublicLiveInterview'
 import PublicScheduleConfirm from './pages/PublicScheduleConfirm'
 import PublicJobs from './pages/PublicJobs'
+import CandidateLayout from './pages/candidate/CandidateLayout'
+import CandidateLogin from './pages/candidate/CandidateLogin'
+import CandidateRegister from './pages/candidate/CandidateRegister'
+import CandidateDashboard from './pages/candidate/CandidateDashboard'
+import CandidateProfile from './pages/candidate/CandidateProfile'
+import CandidateMatches from './pages/candidate/CandidateMatches'
+import AdminSourcing from './pages/admin/AdminSourcing'
+import AdminCompliance from './pages/admin/AdminCompliance'
+import AdminBoard from './pages/admin/AdminBoard'
+import AdminBilling from './pages/admin/AdminBilling'
 import './App.css'
 
 class ErrorBoundary extends Component {
@@ -74,8 +84,9 @@ function Loader() {
 }
 
 function roleHome(role) {
-  if (role === 'admin') return '/admin/dashboard'
-  if (role === 'client') return '/client/dashboard'
+  if (role === 'admin')     return '/admin/dashboard'
+  if (role === 'client')    return '/client/dashboard'
+  if (role === 'candidate') return '/candidate/dashboard'
   return '/recruiter/dashboard'
 }
 
@@ -108,18 +119,24 @@ export default function App() {
           <Route path="/live/:token" element={<PublicLiveInterview />} />
           <Route path="/schedule/:token" element={<PublicScheduleConfirm />} />
           <Route path="/jobs" element={<PublicJobs />} />
+          <Route path="/candidate/login"    element={<CandidateLogin />} />
+          <Route path="/candidate/register" element={<CandidateRegister />} />
           <Route path="/" element={<RootRedirect />} />
 
           <Route path="/admin" element={<ProtectedRoute role="admin"><AdminLayout /></ProtectedRoute>}>
             <Route index element={<AdminDashboard />} />
-            <Route path="dashboard" element={<AdminDashboard />} />
-            <Route path="clients" element={<AdminClients />} />
-            <Route path="recruiters" element={<AdminRecruiters />} />
-            <Route path="jobs" element={<AdminJobs />} />
-            <Route path="pipeline" element={<AdminPipeline />} />
+            <Route path="dashboard"   element={<AdminDashboard />} />
+            <Route path="clients"     element={<AdminClients />} />
+            <Route path="recruiters"  element={<AdminRecruiters />} />
+            <Route path="jobs"        element={<AdminJobs />} />
+            <Route path="pipeline"    element={<AdminPipeline />} />
             <Route path="talent-pool" element={<AdminTalentPool />} />
-            <Route path="analytics" element={<AdminAnalytics />} />
-            <Route path="settings" element={<AdminSettings />} />
+            <Route path="sourcing"    element={<AdminSourcing />} />
+            <Route path="board"       element={<AdminBoard />} />
+            <Route path="compliance"  element={<AdminCompliance />} />
+            <Route path="billing"     element={<AdminBilling />} />
+            <Route path="analytics"   element={<AdminAnalytics />} />
+            <Route path="settings"    element={<AdminSettings />} />
           </Route>
 
           <Route path="/recruiter" element={<ProtectedRoute role="recruiter"><RecruiterLayout /></ProtectedRoute>}>
@@ -144,6 +161,13 @@ export default function App() {
             <Route path="reports" element={<ClientReports />} />
             <Route path="settings" element={<ClientSettings />} />
             <Route path="chat"     element={<ClientChat />} />
+          </Route>
+
+          <Route path="/candidate" element={<ProtectedRoute role="candidate"><CandidateLayout /></ProtectedRoute>}>
+            <Route index element={<CandidateDashboard />} />
+            <Route path="dashboard" element={<CandidateDashboard />} />
+            <Route path="matches"   element={<CandidateMatches />} />
+            <Route path="profile"   element={<CandidateProfile />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />

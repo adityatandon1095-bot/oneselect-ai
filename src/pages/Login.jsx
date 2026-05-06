@@ -177,6 +177,17 @@ export default function Login() {
               <h2 className="login-welcome">Welcome back</h2>
               <p className="login-sub">Sign in to your account</p>
 
+              {/* Role selection hint */}
+              <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
+                <div style={{ flex: 1, padding: '10px 12px', border: '2px solid var(--accent)', borderRadius: 8, fontSize: 11, color: 'var(--accent)', textAlign: 'center', fontFamily: 'var(--font-mono)', letterSpacing: '0.04em' }}>
+                  ◎ Recruiter / Client
+                </div>
+                <div style={{ flex: 1, padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 8, fontSize: 11, color: 'var(--text-3)', textAlign: 'center', fontFamily: 'var(--font-mono)', letterSpacing: '0.04em', cursor: 'pointer' }}
+                  onClick={() => window.location.href = '/candidate/login'}>
+                  ◌ Candidate →
+                </div>
+              </div>
+
               {error && <div className="error-banner">{error}</div>}
               {info  && <div className="error-banner" style={{ background: 'var(--green-d)', borderColor: 'var(--green)', color: 'var(--green)' }}>{info}</div>}
 
