@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../../lib/AuthContext'
 import { supabase } from '../../lib/supabase'
+import TwoFactorSection from '../../components/TwoFactorSection'
 
 const EMPTY_PLAN = { name: '', description: '', price_monthly: '', max_jobs: '', max_candidates: '', max_recruiters: '' }
 
@@ -169,6 +170,8 @@ export default function AdminSettings() {
           </div>
         )}
       </div>
+
+      <TwoFactorSection />
 
       {/* Role */}
       <div className="section-card" style={{ marginBottom: 16 }}>

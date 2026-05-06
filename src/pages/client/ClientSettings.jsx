@@ -18,18 +18,45 @@ export default function ClientSettings() {
         .then(({ data }) => setPlan(data ?? null))
     }
   }, [profile?.plan_id])
-  const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
+  const [saving,      setSaving]      = useState(false)
+  const [saved,       setSaved]       = useState(false)
   const [companyName, setCompanyName] = useState(profile?.company_name ?? '')
+  const [webhookUrl,  setWebhookUrl]  = useState(profile?.webhook_url ?? '')
+  const [webhookSaving,  setWebhookSaving]  = useState(false)
+  const [webhookSaved,   setWebhookSaved]   = useState(false)
+  const [webhookTesting, setWebhookTesting] = useState(false)
+  const [webhookTestMsg, setWebhookTestMsg] = useState('')
 
   async function handleSave(e) {
     e.preventDefault()
-    setSaving(true)
-    setSaved(false)
+    setSaving(true); setSaved(false)
     await supabase.from('profiles').update({ company_name: companyName }).eq('id', user.id)
-    setSaving(false)
-    setSaved(true)
+    setSaving(false); setSaved(true)
     setTimeout(() => setSaved(false), 3000)
+  }
+
+  async function saveWebhook(e) {
+    e.preventDefault()
+    setWebhookSaving(true); setWebhookSaved(false); setWebhookTestMsg('')
+    await supabase.from('profiles').update({ webhook_url: webhookUrl.trim() || null }).eq('id', user.id)
+    setWebhookSaving(false); setWebhookSaved(true)
+    setTimeout(() => setWebhookSaved(false), 3000)
+  }
+
+  async function testWebhook() {
+    if (!webhookUrl.trim()) return
+    setWebhookTesting(true); setWebhookTestMsg('')
+    try {
+      const res = await fetch(webhookUrl.trim(), {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', 'X-OneSelect-Event': 'test' },
+        body:    JSON.stringify({ event: 'test', timestamp: new Date().toISOString(), source: 'oneselect' }),
+      })
+      setWebhookTestMsg(res.ok ? '✓ Webhook reachable — test delivered.' : `✗ Endpoint returned ${res.status}.`)
+    } catch {
+      setWebhookTestMsg('✗ Could not reach endpoint — check the URL and CORS settings.')
+    }
+    setWebhookTesting(false)
   }
 
   return (
@@ -74,6 +101,49 @@ export default function ClientSettings() {
               <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>Access to your jobs, candidates, and reports. CVs are uploaded and screened by your One Select recruiter.</div>
             </div>
             <span className="badge badge-blue">Client</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="section-card" style={{ marginBottom: 16 }}>
+        <div className="section-card-head">
+          <h3>Integrations</h3>
+          <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-3)' }}>Webhook · HRIS</span>
+        </div>
+        <div className="section-card-body">
+          <p style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.7, marginBottom: 16 }}>
+            When a candidate is marked as <strong>hired</strong>, One Select will send a POST request to this URL with the candidate details — for syncing with Workday, BambooHR, Darwinbox, or any custom system.
+          </p>
+          <form onSubmit={saveWebhook}>
+            <div className="field" style={{ marginBottom: 14 }}>
+              <label>Webhook URL</label>
+              <input
+                type="url"
+                value={webhookUrl}
+                onChange={e => setWebhookUrl(e.target.value)}
+                placeholder="https://your-hris.com/webhooks/oneselect"
+              />
+            </div>
+            {webhookTestMsg && (
+              <div style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: webhookTestMsg.startsWith('✓') ? 'var(--green)' : 'var(--red)', marginBottom: 12 }}>
+                {webhookTestMsg}
+              </div>
+            )}
+            <div className="form-actions">
+              <button type="submit" className="btn btn-primary" disabled={webhookSaving}>
+                {webhookSaving ? <><span className="spinner" style={{ width: 12, height: 12 }} /> Saving…</> : 'Save Webhook'}
+              </button>
+              {webhookUrl.trim() && (
+                <button type="button" className="btn btn-secondary" disabled={webhookTesting} onClick={testWebhook}>
+                  {webhookTesting ? <><span className="spinner" style={{ width: 12, height: 12 }} /> Testing…</> : 'Send Test'}
+                </button>
+              )}
+              {webhookSaved && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--green)' }}>✓ Saved</span>}
+            </div>
+          </form>
+          <div style={{ marginTop: 16, padding: '12px 14px', background: 'var(--surface2)', borderRadius: 'var(--r)', fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--text-3)', lineHeight: 1.8 }}>
+            Payload example:<br />
+            {`{ "event": "candidate.hired", "candidate_name": "...", "candidate_email": "...", "job_title": "...", "timestamp": "..." }`}
           </div>
         </div>
       </div>

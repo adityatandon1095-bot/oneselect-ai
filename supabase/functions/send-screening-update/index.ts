@@ -18,7 +18,7 @@ serve(async (req) => {
     }
 
     const resendKey = Deno.env.get('RESEND_API_KEY') ?? ''
-    const appUrl    = 'https://oneselect-ai-t6uo-phi.vercel.app'
+    const appUrl    = Deno.env.get('APP_URL') ?? 'https://oneselect.ai'
 
     const body = `
       <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;color:#2b3a4f">

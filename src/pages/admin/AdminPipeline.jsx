@@ -314,26 +314,47 @@ Return the subject line first starting with "SUBJECT: ", then a blank line, then
   async function saveDecision(decision) {
     const { candidate, notes } = decisionModal
     const table = candidate._fromPool ? 'job_matches' : 'candidates'
-    await supabase.from(table).update({ final_decision: decision, decision_notes: notes }).eq('id', candidate.id)
+    const updatePayload = { final_decision: decision, decision_notes: notes }
+
+    // DPDPA: remove raw CV text when candidate is no longer in consideration
+    if (decision === 'rejected') updatePayload.raw_text = null
+
+    await supabase.from(table).update(updatePayload).eq('id', candidate.id)
     setDecisionModal(null)
     addLog(`✓ Decision saved: ${candidate.full_name} → ${decision}`, 'ok')
     await refreshCandidates()
+
+    const { data: { session } } = await supabase.auth.getSession()
+    const authHeader = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` }
+
     if (decision === 'hired') {
       openOfferModal({ ...candidate, final_decision: 'hired' })
-    }
-    if (decision === 'rejected' && candidate.email) {
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-rejection-email`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY}` },
-          body: JSON.stringify({
-            candidateName:  candidate.full_name,
-            candidateEmail: candidate.email,
-            jobTitle:       activeJob?.title,
-            companyName:    clients.find(c => c.id === clientId)?.company_name,
-            notes:          notes || '',
-          }),
+      // Notify candidate
+      if (candidate.email) {
+        fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/notify-candidate`, {
+          method: 'POST', headers: authHeader,
+          body: JSON.stringify({ type: 'hired', candidateEmail: candidate.email, candidateName: candidate.full_name, jobTitle: activeJob?.title }),
         }).catch(() => {})
+      }
+      // Fire client webhook
+      if (activeJob?.id) {
+        fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/trigger-webhook`, {
+          method: 'POST', headers: authHeader,
+          body: JSON.stringify({ jobId: activeJob.id, candidateId: candidate.id, candidateName: candidate.full_name, candidateEmail: candidate.email, jobTitle: activeJob.title, decision }),
+        }).catch(() => {})
+      }
+    }
+
+    if (decision === 'rejected' && candidate.email) {
+      fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-rejection-email`, {
+        method: 'POST', headers: authHeader,
+        body: JSON.stringify({
+          candidateName:  candidate.full_name,
+          candidateEmail: candidate.email,
+          jobTitle:       activeJob?.title,
+          companyName:    clients.find(c => c.id === clientId)?.company_name,
+          notes:          notes || '',
+        }),
       }).catch(() => {})
     }
   }
@@ -560,7 +581,15 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
         await supabase.from('candidates').update({ match_score: s.matchScore, match_pass: s.pass, match_reason: s.reason, match_rank: s.rank }).eq('id', c.id)
         const updated = { ...c, _status: 'screened', match_score: s.matchScore, match_pass: s.pass, match_reason: s.reason, match_rank: s.rank }
         setCandidates(p => p.map(x => x.id === c.id ? updated : x))
-        if (s.pass) passedCandidates.push(updated)
+        if (s.pass) {
+          passedCandidates.push(updated)
+          // Notify shortlisted candidates who applied via the public jobs page
+          if (c.email) {
+            supabase.functions.invoke('notify-candidate', {
+              body: { type: 'shortlisted', candidateEmail: c.email, candidateName: c.full_name, jobTitle: activeJob.title },
+            }).catch(() => {})
+          }
+        }
         tsLog(`✓ ${c.full_name}: ${s.matchScore}/100 → ${s.pass ? 'PASS ✓' : 'FAIL'}`, s.pass ? 'ok' : '')
       } catch (err) {
         tsLog(`✗ ${c.full_name} screen error: ${err.message}`, 'err')

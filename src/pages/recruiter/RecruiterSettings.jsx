@@ -1,4 +1,5 @@
 import { useAuth } from '../../lib/AuthContext'
+import TwoFactorSection from '../../components/TwoFactorSection'
 
 export default function RecruiterSettings() {
   const { user } = useAuth()
@@ -23,6 +24,8 @@ export default function RecruiterSettings() {
           </div>
         </div>
       </div>
+
+      <TwoFactorSection />
 
       <div className="section-card">
         <div className="section-card-head"><h3>Role &amp; Access</h3></div>

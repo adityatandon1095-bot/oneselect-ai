@@ -49,7 +49,6 @@ export default function ClientDashboard() {
     setRecentJobs((jobs ?? []).slice(0, 4))
 
     if (!jobIds.length) {
-      if (!localStorage.getItem(`welcomed_${user.id}`)) setShowWelcome(true)
       setLoading(false)
       return
     }
@@ -108,6 +107,9 @@ export default function ClientDashboard() {
     setShowWelcome(false)
     if (goCreate) navigate('/client/jobs')
   }
+
+  const checklistDismissed = !!localStorage.getItem(`cl_done_${user?.id}`)
+  const showChecklist = !checklistDismissed && (stats.jobs === 0 || stats.candidates === 0)
 
   function getStatus(c) {
     if (c.scores) return {
@@ -185,35 +187,65 @@ export default function ClientDashboard() {
 
   return (
     <div className="page">
-      {showWelcome && (
-        <div className="modal-overlay">
-          <div className="welcome-card">
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.2em', color: 'var(--accent)', marginBottom: 20 }}>
-              One Select
+      {showChecklist && (
+        <div className="section-card" style={{ marginBottom: 20, borderLeft: '3px solid var(--accent)' }}>
+          <div className="section-card-head">
+            <div>
+              <h3 style={{ margin: 0 }}>Getting started</h3>
+              <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-3)' }}>Complete these steps to get your first hire</p>
             </div>
-            <h2 style={{ marginBottom: 14 }}>
-              Welcome{profile?.company_name ? `, ${profile.company_name}` : ''}!
-            </h2>
-            <p style={{ color: 'var(--text-2)', lineHeight: 1.8, marginBottom: 28 }}>
-              Your AI hiring portal is ready. Start by creating your first job —
-              your One Select recruiter will upload and screen CVs for you.
-            </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <button
-                className="btn btn-primary"
-                style={{ justifyContent: 'center', padding: '12px 24px' }}
-                onClick={() => dismissWelcome(true)}
-              >
-                Create Your First Job
-              </button>
-              <button
-                className="btn btn-secondary"
-                style={{ justifyContent: 'center' }}
-                onClick={() => dismissWelcome(false)}
-              >
-                Skip for now
-              </button>
-            </div>
+            <button
+              className="btn btn-secondary"
+              style={{ fontSize: 10, padding: '3px 8px' }}
+              onClick={() => { localStorage.setItem(`cl_done_${user.id}`, '1'); navigate(0) }}
+            >
+              Dismiss
+            </button>
+          </div>
+          <div style={{ padding: '4px 20px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {[
+              {
+                num: 1,
+                done: true,
+                label: 'Create your account',
+                desc:  'Your portal is ready to use.',
+                action: null,
+              },
+              {
+                num: 2,
+                done: stats.jobs > 0,
+                label: 'Add your first job',
+                desc:  'Describe the role — your recruiter will start sourcing candidates.',
+                action: { label: 'Create a job →', path: '/client/jobs' },
+              },
+              {
+                num: 3,
+                done: stats.candidates > 0,
+                label: 'Review your pipeline',
+                desc:  'Once your recruiter uploads and screens CVs, shortlisted candidates appear here.',
+                action: stats.jobs > 0 ? { label: 'View pipeline →', path: '/client/pipeline' } : null,
+              },
+            ].map(step => (
+              <div key={step.num} style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+                <div style={{
+                  width: 24, height: 24, borderRadius: '50%', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: step.done ? 'var(--green)' : 'var(--surface2)',
+                  border: step.done ? 'none' : '1px solid var(--border)',
+                  fontSize: 11, fontFamily: 'var(--font-mono)', color: step.done ? 'white' : 'var(--text-3)', fontWeight: 700,
+                }}>
+                  {step.done ? '✓' : step.num}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: step.done ? 'var(--text-3)' : 'var(--text)', textDecoration: step.done ? 'line-through' : 'none' }}>{step.label}</div>
+                  {!step.done && <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>{step.desc}</div>}
+                  {!step.done && step.action && (
+                    <button className="btn btn-secondary" style={{ fontSize: 11, padding: '3px 10px', marginTop: 8 }} onClick={() => navigate(step.action.path)}>
+                      {step.action.label}
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
