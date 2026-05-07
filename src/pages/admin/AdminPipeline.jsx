@@ -2,6 +2,9 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useLocation } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../lib/AuthContext'
+import { usePersistentState } from '../../hooks/usePersistentState'
+
+const stripRawText = (k, v) => k === 'raw_text' ? undefined : v
 import { callClaude, runAutomatedInterview } from '../../utils/api'
 import { generateAssessment, scoreAssessment } from '../../utils/assessments'
 import mammoth from 'mammoth'
@@ -50,19 +53,23 @@ export default function AdminPipeline({ allowedClientIds } = {}) {
   const isClient = profile?.user_role === 'client'
   const location = useLocation()
 
+  // Namespace keys so admin and recruiter don't share state
+  const storagePrefix = allowedClientIds !== undefined ? 'recruiter_pipeline' : 'admin_pipeline'
+  const initialClientRef = useRef(true)
+
   const [clients, setClients]         = useState([])
-  const [clientId, setClientId]       = useState('')
+  const [clientId, setClientId]       = usePersistentState(storagePrefix + '_client_id', '')
   const [clientJobs, setClientJobs]   = useState([])
-  const [jobId, setJobId]             = useState('')
+  const [jobId, setJobId]             = usePersistentState(storagePrefix + '_job_id', '')
   const [jobForm, setJobForm]         = useState(DEFAULT_JOB_FORM)
-  const [activeJob, setActiveJob]     = useState(null)
-  const [candidates, setCandidates]   = useState([])
+  const [activeJob, setActiveJob]     = usePersistentState(storagePrefix + '_active_job', null)
+  const [candidates, setCandidates]   = usePersistentState(storagePrefix + '_candidates', [], stripRawText)
   const [files, setFiles]             = useState([])
   const [dragging, setDragging]       = useState(false)
   const [pipelineRunning, setPipelineRunning] = useState(false)
-  const [assessmentEnabled, setAssessmentEnabled] = useState(false)
-  const [log, setLog]                 = useState([])
-  const [useTalentPool, setUseTalentPool] = useState(false)
+  const [assessmentEnabled, setAssessmentEnabled] = usePersistentState(storagePrefix + '_assessment_enabled', false)
+  const [log, setLog]                 = usePersistentState(storagePrefix + '_log', [])
+  const [useTalentPool, setUseTalentPool] = usePersistentState(storagePrefix + '_use_talent_pool', false)
   const [poolMatchLoading, setPoolMatchLoading] = useState(false)
   const [poolMatchProgress, setPoolMatchProgress] = useState({ current: 0, total: 0 })
   const [videoPlayerTarget, setVideoPlayerTarget] = useState(null)
@@ -95,7 +102,12 @@ export default function AdminPipeline({ allowedClientIds } = {}) {
   const logRef = useRef()
 
   useEffect(() => { loadClients() }, [])
-  useEffect(() => { if (clientId) loadClientJobs(clientId) }, [clientId])
+  useEffect(() => {
+    const isInitial = initialClientRef.current
+    initialClientRef.current = false
+    if (!clientId) return
+    loadClientJobs(clientId, isInitial)
+  }, [clientId])
   useEffect(() => {
     if (!clients.length || clientId) return
     if (clients.length === 1) { setClientId(clients[0].id); return }
@@ -119,10 +131,24 @@ export default function AdminPipeline({ allowedClientIds } = {}) {
     setClients(data ?? [])
   }
 
-  async function loadClientJobs(cid) {
-    setJobId(''); setActiveJob(null); setCandidates([]); setFiles([])
+  async function loadClientJobs(cid, keepSelection = false) {
+    if (!keepSelection) { setJobId(''); setActiveJob(null); setCandidates([]); setFiles([]) }
     const { data } = await supabase.from('jobs').select('*').eq('recruiter_id', cid).order('created_at', { ascending: false })
     setClientJobs(data ?? [])
+  }
+
+  function clearPipeline() {
+    const suffixes = ['_client_id', '_job_id', '_active_job', '_candidates', '_assessment_enabled', '_log', '_use_talent_pool']
+    suffixes.forEach(s => localStorage.removeItem(storagePrefix + s))
+    setClientId('')
+    setJobId('')
+    setActiveJob(null)
+    setCandidates([])
+    setAssessmentEnabled(false)
+    setLog([])
+    setUseTalentPool(false)
+    setClientJobs([])
+    setFiles([])
   }
 
   async function selectJob(id, poolMode = useTalentPool) {
@@ -727,15 +753,25 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
     <div className="page">
       <div className="page-head">
         <div><h2>Pipeline</h2><p>Run the full AI hiring pipeline for a client</p></div>
-        {candidates.length > 0 && (
-          <input
-            type="search"
-            placeholder="Filter candidates…"
-            value={candidateSearch}
-            onChange={e => setCandidateSearch(e.target.value)}
-            style={{ width: 220, padding: '7px 12px', border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: 12, fontFamily: 'var(--font-body)' }}
-          />
-        )}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {candidates.length > 0 && (
+            <input
+              type="search"
+              placeholder="Filter candidates…"
+              value={candidateSearch}
+              onChange={e => setCandidateSearch(e.target.value)}
+              style={{ width: 220, padding: '7px 12px', border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: 12, fontFamily: 'var(--font-body)' }}
+            />
+          )}
+          {(clientId || candidates.length > 0) && (
+            <button
+              onClick={clearPipeline}
+              style={{ border: '1px solid var(--accent)', color: 'var(--accent)', background: 'none', borderRadius: 'var(--r)', padding: '6px 14px', fontSize: 12, cursor: 'pointer', fontFamily: 'var(--font-body)', whiteSpace: 'nowrap' }}
+            >
+              Clear &amp; Start Over
+            </button>
+          )}
+        </div>
       </div>
 
       {/* ── 1 Job Setup ── */}
