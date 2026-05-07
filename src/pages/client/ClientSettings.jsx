@@ -161,10 +161,29 @@ export default function ClientSettings() {
               {webhookSaved && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--green)' }}>✓ Saved</span>}
             </div>
           </form>
-          <div style={{ marginTop: 16, padding: '12px 14px', background: 'var(--surface2)', borderRadius: 'var(--r)', fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--text-3)', lineHeight: 1.8 }}>
-            Payload example:<br />
-            {`{ "event": "candidate.hired", "candidate_name": "...", "candidate_email": "...", "job_title": "...", "timestamp": "..." }`}
-          </div>
+          <div style={{ marginTop: 16, padding: '14px 16px', background: 'var(--surface2)', borderRadius: 'var(--r)', fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-3)', lineHeight: 1.9, whiteSpace: 'pre' }}>{`{
+  "event": "candidate.hired",
+  "timestamp": "2026-05-07T17:30:00Z",
+  "candidate": {
+    "name": "Alex Rivera",
+    "email": "alex@email.com",
+    "phone": "+44 7700 000000",
+    "linkedin_url": "https://linkedin.com/in/..."
+  },
+  "job": {
+    "id": "uuid",
+    "title": "Senior Software Engineer",
+    "required_skills": ["Python", "PostgreSQL", "AWS"],
+    "experience_years": 5
+  },
+  "assessment": {
+    "match_score": 91,
+    "interview_score": 89,
+    "recommendation": "Strong Hire"
+  },
+  "client": { "company_name": "TechVentures Ltd" },
+  "meta": { "platform": "oneselect", "version": "1.0" }
+}`}</div>
         </div>
       </div>
 
