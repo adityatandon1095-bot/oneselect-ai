@@ -1,12 +1,16 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../lib/AuthContext'
+import { usePlan } from '../../hooks/usePlan'
+import { TRIAL_LIMITS } from '../../config/trialLimits'
+import PaidFeature from '../../components/PaidFeature'
+import { CURRENCIES, DEFAULT_CURRENCY, fmtSalary } from '../../utils/currency'
 import { triggerTalentPoolMatch } from '../../utils/talentPool'
 import TagInput from '../../components/TagInput'
 import JDWizard from '../../components/JDWizard'
 import InstantPost from '../../components/InstantPost'
 
-const DEFAULT = { title: '', experience_years: 3, required_skills: [], preferred_skills: [], description: '', tech_weight: 60, comm_weight: 40 }
+const DEFAULT = { title: '', experience_years: 3, required_skills: [], preferred_skills: [], description: '', tech_weight: 60, comm_weight: 40, salary_min: '', salary_max: '', salary_currency: DEFAULT_CURRENCY }
 const REC_COLOR = { 'Strong Hire': 'var(--green)', 'Hire': 'var(--accent)', 'Borderline': 'var(--amber)', 'Reject': 'var(--red)' }
 const mono = { fontFamily: 'var(--font-mono)' }
 
@@ -48,17 +52,60 @@ function PipelineFunnel({ candidates, activeStage, onStageClick }) {
   )
 }
 
-function JobDetail({ job, onBack }) {
+function JobDetail({ job: initialJob, onBack, onUpdate }) {
+  const [job, setJob] = useState(initialJob)
   const [candidates, setCandidates] = useState([])
   const [loading, setLoading] = useState(true)
   const [stageFilter, setStageFilter] = useState('all')
   const [selectedId, setSelectedId] = useState(null)
+  const [editing, setEditing] = useState(false)
+  const [activityLog, setActivityLog] = useState([])
+  const [editForm, setEditForm] = useState({
+    title: initialJob.title ?? '',
+    experience_years: initialJob.experience_years ?? 3,
+    required_skills: initialJob.required_skills ?? [],
+    preferred_skills: initialJob.preferred_skills ?? [],
+    description: initialJob.description ?? '',
+    salary_min: initialJob.salary_min ?? '',
+    salary_max: initialJob.salary_max ?? '',
+    salary_currency: initialJob.salary_currency ?? DEFAULT_CURRENCY,
+  })
+  const [updateSaving, setUpdateSaving] = useState(false)
+  const [updateError, setUpdateError] = useState('')
+  const setEF = (k, v) => setEditForm(f => ({ ...f, [k]: v }))
+
+  async function handleUpdate(e) {
+    e.preventDefault()
+    setUpdateError('')
+    setUpdateSaving(true)
+    const patch = {
+      title: editForm.title,
+      experience_years: editForm.experience_years,
+      required_skills: editForm.required_skills,
+      preferred_skills: editForm.preferred_skills,
+      description: editForm.description,
+      salary_min: editForm.salary_min ? parseInt(editForm.salary_min, 10) : null,
+      salary_max: editForm.salary_max ? parseInt(editForm.salary_max, 10) : null,
+      salary_currency: editForm.salary_currency || DEFAULT_CURRENCY,
+    }
+    const { error } = await supabase.from('jobs').update(patch).eq('id', job.id)
+    setUpdateSaving(false)
+    if (error) { setUpdateError(error.message); return }
+    const updated = { ...job, ...patch }
+    setJob(updated)
+    onUpdate?.(updated)
+    setEditing(false)
+  }
 
   useEffect(() => {
     supabase.from('candidates').select('*').eq('job_id', job.id)
       .order('match_score', { ascending: false, nullsFirst: false })
       .then(({ data }) => { setCandidates(data ?? []); setLoading(false) })
       .catch(() => setLoading(false))
+    supabase.from('audit_log').select('action, actor_role, metadata, created_at').eq('job_id', job.id)
+      .order('created_at', { ascending: false }).limit(20)
+      .then(({ data }) => setActivityLog(data ?? []))
+      .catch(() => {})
   }, [job.id])
 
   const filtered = stageFilter === 'all' ? candidates : candidates.filter(c => getStage(c) === stageFilter)
@@ -123,8 +170,66 @@ function JobDetail({ job, onBack }) {
             <p style={{ margin: 0 }}>{job.experience_years}+ yrs{job.required_skills?.length ? ` · ${job.required_skills.slice(0, 4).join(', ')}` : ''}</p>
           </div>
         </div>
-        <span className={`badge ${job.status === 'active' ? 'badge-green' : 'badge-amber'}`}>{job.status}</span>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <span className={`badge ${job.status === 'active' ? 'badge-green' : 'badge-amber'}`}>{job.status}</span>
+          <button className="btn btn-secondary" style={{ fontSize: 12, padding: '5px 12px' }} onClick={() => setEditing(v => !v)}>
+            {editing ? 'Cancel Edit' : '✎ Edit Job'}
+          </button>
+        </div>
       </div>
+
+      {editing && (
+        <div className="section-card" style={{ marginBottom: 20 }}>
+          <div className="section-card-head"><h3>Edit Job Details</h3></div>
+          <div className="section-card-body">
+            <form onSubmit={handleUpdate}>
+              <div className="form-grid">
+                <div className="field">
+                  <label>Job Title</label>
+                  <input type="text" required value={editForm.title} onChange={e => setEF('title', e.target.value)} />
+                </div>
+                <div className="field">
+                  <label>Years of Experience</label>
+                  <input type="number" min={0} value={editForm.experience_years} onChange={e => setEF('experience_years', +e.target.value)} />
+                </div>
+                <div className="field">
+                  <label>Currency</label>
+                  <select value={editForm.salary_currency} onChange={e => setEF('salary_currency', e.target.value)}>
+                    {CURRENCIES.map(c => <option key={c.code} value={c.code}>{c.symbol} {c.name}</option>)}
+                  </select>
+                </div>
+                <div className="field">
+                  <label>Salary Min ({editForm.salary_currency === 'INR' ? 'LPA' : 'K'})</label>
+                  <input type="number" min={0} value={editForm.salary_min} onChange={e => setEF('salary_min', e.target.value)} placeholder={editForm.salary_currency === 'INR' ? 'e.g. 18' : 'e.g. 50'} />
+                </div>
+                <div className="field">
+                  <label>Salary Max ({editForm.salary_currency === 'INR' ? 'LPA' : 'K'})</label>
+                  <input type="number" min={0} value={editForm.salary_max} onChange={e => setEF('salary_max', e.target.value)} placeholder={editForm.salary_currency === 'INR' ? 'e.g. 30' : 'e.g. 80'} />
+                </div>
+                <div className="field span-2">
+                  <label>Required Skills</label>
+                  <TagInput value={editForm.required_skills} onChange={v => setEF('required_skills', v)} placeholder="Type and press Enter…" />
+                </div>
+                <div className="field span-2">
+                  <label>Preferred Skills</label>
+                  <TagInput value={editForm.preferred_skills} onChange={v => setEF('preferred_skills', v)} placeholder="Nice-to-have…" />
+                </div>
+                <div className="field span-2">
+                  <label>Description</label>
+                  <textarea rows={6} value={editForm.description} onChange={e => setEF('description', e.target.value)} placeholder="Role responsibilities and context…" />
+                </div>
+              </div>
+              {updateError && <div style={{ fontSize: 12, color: 'var(--red)', marginTop: 12 }}>{updateError}</div>}
+              <div className="form-actions" style={{ marginTop: 16 }}>
+                <button type="submit" className="btn btn-primary" disabled={updateSaving}>
+                  {updateSaving ? <><span className="spinner" style={{ width: 12, height: 12 }} /> Saving…</> : 'Save Changes'}
+                </button>
+                <button type="button" className="btn btn-secondary" onClick={() => setEditing(false)}>Cancel</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {loading ? <div style={{ textAlign: 'center', padding: 40 }}><span className="spinner" /></div> : (
         <>
@@ -170,6 +275,39 @@ function JobDetail({ job, onBack }) {
               )
             })}
           </div>
+
+          {activityLog.length > 0 && (
+            <div className="section-card" style={{ marginTop: 16 }}>
+              <div className="section-card-head"><h3>Recruiter Activity</h3></div>
+              {activityLog.map((entry, i) => {
+                const ACTION_LABEL = {
+                  candidate_screened:   'Screened a candidate',
+                  interview_scored:     'Scored an interview',
+                  client_approved:      'Client approved a candidate',
+                  client_rejected:      'Client rejected a candidate',
+                  offer_sent:           'Offer sent',
+                  candidate_hired:      'Candidate hired',
+                  job_created:          'Job created',
+                  job_updated:          'Job updated',
+                }
+                const label = ACTION_LABEL[entry.action] ?? entry.action.replace(/_/g, ' ')
+                const who = entry.actor_role === 'client' ? 'You' : 'Recruiter'
+                const name = entry.metadata?.candidate_name ? ` — ${entry.metadata.candidate_name}` : ''
+                const reason = entry.metadata?.reason ? ` (${entry.metadata.reason})` : ''
+                return (
+                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '10px 20px', borderBottom: i < activityLog.length - 1 ? '1px solid var(--border)' : 'none', gap: 12 }}>
+                    <div style={{ fontSize: 13, color: 'var(--text-2)' }}>
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: entry.actor_role === 'client' ? 'var(--accent)' : 'var(--text-3)' }}>{who}</span>
+                      {' '}{label}{name}{reason}
+                    </div>
+                    <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-3)', flexShrink: 0 }}>
+                      {new Date(entry.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </>
       )}
     </div>
@@ -178,6 +316,7 @@ function JobDetail({ job, onBack }) {
 
 export default function ClientJobs() {
   const { user } = useAuth()
+  const { isTrial } = usePlan()
   const [jobs, setJobs] = useState([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -204,6 +343,10 @@ export default function ClientJobs() {
   async function handleCreate(e) {
     e.preventDefault()
     setError('')
+    if (isTrial && jobs.length >= TRIAL_LIMITS.max_jobs) {
+      setError(`Trial accounts can post ${TRIAL_LIMITS.max_jobs} job. Upgrade to post unlimited jobs.`)
+      return
+    }
     setSaving(true)
     const { data, error: err } = await supabase.from('jobs').insert({
       recruiter_id: user.id,
@@ -214,6 +357,9 @@ export default function ClientJobs() {
       description: form.description,
       tech_weight: form.tech_weight,
       comm_weight: form.comm_weight,
+      salary_min: form.salary_min ? parseInt(form.salary_min, 10) : null,
+      salary_max: form.salary_max ? parseInt(form.salary_max, 10) : null,
+      salary_currency: form.salary_currency || DEFAULT_CURRENCY,
       status: 'active',
     }).select().single()
     setSaving(false)
@@ -231,6 +377,10 @@ export default function ClientJobs() {
   async function handleInstantSave(jobData) {
     setShowInstant(false)
     setError('')
+    if (isTrial && jobs.length >= TRIAL_LIMITS.max_jobs) {
+      setError(`Trial accounts can post ${TRIAL_LIMITS.max_jobs} job. Upgrade to post unlimited jobs.`)
+      return
+    }
     const { data, error: err } = await supabase.from('jobs').insert({
       recruiter_id:    user.id,
       status:          'active',
@@ -253,6 +403,10 @@ export default function ClientJobs() {
   async function handleWizardSave(jobData) {
     setShowWizard(false)
     setError('')
+    if (isTrial && jobs.length >= TRIAL_LIMITS.max_jobs) {
+      setError(`Trial accounts can post ${TRIAL_LIMITS.max_jobs} job. Upgrade to post unlimited jobs.`)
+      return
+    }
     const { data, error: err } = await supabase.from('jobs').insert({
       recruiter_id: user.id,
       status: 'active',
@@ -286,7 +440,16 @@ export default function ClientJobs() {
 
   if (loading) return <div className="page"><span className="spinner" /></div>
 
-  if (selectedJob) return <JobDetail job={selectedJob} onBack={() => setSelectedJob(null)} />
+  if (selectedJob) return (
+    <JobDetail
+      job={selectedJob}
+      onBack={() => setSelectedJob(null)}
+      onUpdate={updated => {
+        setJobs(p => p.map(j => j.id === updated.id ? { ...j, ...updated } : j))
+        setSelectedJob(updated)
+      }}
+    />
+  )
 
   return (
     <div className="page">
@@ -323,6 +486,20 @@ export default function ClientJobs() {
                 <div className="field">
                   <label>Years of Experience</label>
                   <input type="number" min={0} value={form.experience_years} onChange={e => set('experience_years', +e.target.value)} />
+                </div>
+                <div className="field">
+                  <label>Currency</label>
+                  <select value={form.salary_currency} onChange={e => set('salary_currency', e.target.value)}>
+                    {CURRENCIES.map(c => <option key={c.code} value={c.code}>{c.symbol} {c.name}</option>)}
+                  </select>
+                </div>
+                <div className="field">
+                  <label>Salary Min ({form.salary_currency === 'INR' ? 'LPA' : 'K'})</label>
+                  <input type="number" min={0} value={form.salary_min} onChange={e => set('salary_min', e.target.value)} placeholder={form.salary_currency === 'INR' ? 'e.g. 18' : 'e.g. 50'} />
+                </div>
+                <div className="field">
+                  <label>Salary Max ({form.salary_currency === 'INR' ? 'LPA' : 'K'})</label>
+                  <input type="number" min={0} value={form.salary_max} onChange={e => set('salary_max', e.target.value)} placeholder={form.salary_currency === 'INR' ? 'e.g. 30' : 'e.g. 80'} />
                 </div>
                 <div className="field span-2">
                   <label>Required Skills</label>
@@ -389,6 +566,7 @@ export default function ClientJobs() {
                     <div className="col-sub">
                       {j.experience_years}+ yrs
                       {j.required_skills?.length ? ` · ${j.required_skills.slice(0, 3).join(', ')}${j.required_skills.length > 3 ? '…' : ''}` : ''}
+                      {j.salary_min && j.salary_max && <span style={{ marginLeft: 6, color: 'var(--green)', fontFamily: 'var(--font-mono)', fontSize: 10 }}>{fmtSalary(j.salary_min, j.salary_max, j.salary_currency)}</span>}
                     </div>
                   </div>
                   <div className="col-right">

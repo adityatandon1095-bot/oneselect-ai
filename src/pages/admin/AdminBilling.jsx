@@ -15,8 +15,8 @@ const monthStart = () => {
 
 function revenue(plan, rolesThisMonth) {
   if (!plan || plan === 'enterprise') return 'Custom'
-  if (plan === 'starter')  return `£${(800 * rolesThisMonth).toLocaleString()}`
-  if (plan === 'growth')   return '£1,500'
+  if (plan === 'starter')  return `₹${(800 * rolesThisMonth).toLocaleString()}`
+  if (plan === 'growth')   return '₹1,500'
   return '—'
 }
 
@@ -117,7 +117,7 @@ export default function AdminBilling() {
       {/* Revenue Summary */}
       <div className="metrics-row">
         <div className="metric-card green">
-          <span className="metric-val">£{totalMRR.toLocaleString()}</span>
+          <span className="metric-val">₹{totalMRR.toLocaleString()}</span>
           <span className="metric-label">MRR (Growth clients)</span>
         </div>
         <div className="metric-card blue">
@@ -142,7 +142,7 @@ export default function AdminBilling() {
             <div key={key} style={{ flex: '1 1 180px', padding: '14px 16px', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface2)' }}>
               <div style={{ fontFamily: 'var(--font-head)', fontSize: 18, marginBottom: 4 }}>{plan.label}</div>
               <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--accent)', marginBottom: 4 }}>
-                {plan.price ? `£${plan.price.toLocaleString()}` : 'Custom'}
+                {plan.price ? `₹${plan.price.toLocaleString()}` : 'Custom'}
                 <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--text-3)' }}>{plan.unit}</span>
               </div>
               <div style={{ fontSize: 12, color: 'var(--text-3)' }}>{plan.description}</div>
@@ -212,7 +212,7 @@ export default function AdminBilling() {
                 <td style={{ padding: '10px 12px', fontFamily: 'var(--font-mono)', textAlign: 'center', fontWeight: 600 }}>{totalCands}</td>
                 <td style={{ padding: '10px 12px', fontFamily: 'var(--font-mono)', textAlign: 'center', fontWeight: 600 }}>{totalIvs}</td>
                 <td />
-                <td style={{ padding: '10px 12px', fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--green)' }}>£{totalMRR.toLocaleString()}/mo MRR</td>
+                <td style={{ padding: '10px 12px', fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--green)' }}>₹{totalMRR.toLocaleString()}/mo MRR</td>
                 <td />
               </tr>
             </tfoot>
@@ -231,7 +231,7 @@ export default function AdminBilling() {
             <div className="field">
               <label style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-3)', display: 'block', marginBottom: 6 }}>Plan</label>
               <select style={MI} value={planSelect} onChange={e => setPlanSelect(e.target.value)}>
-                {Object.entries(PLANS).map(([k, p]) => <option key={k} value={k}>{p.label} — {p.price ? `£${p.price}${p.unit}` : 'Custom'}</option>)}
+                {Object.entries(PLANS).map(([k, p]) => <option key={k} value={k}>{p.label} — {p.price ? `₹${p.price}${p.unit}` : 'Custom'}</option>)}
               </select>
             </div>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>

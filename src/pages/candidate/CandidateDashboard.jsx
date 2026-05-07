@@ -24,19 +24,19 @@ function dimColor(v) {
 }
 
 function matchStatus(m) {
-  if (m.scores?.overallScore != null) return { label: 'Interview Done', cls: 'badge-green' }
-  if (m.match_pass === true)  return { label: 'Passed Screening', cls: 'badge-blue' }
-  if (m.match_pass === false) return { label: 'Not Selected',     cls: 'badge-red' }
-  return { label: 'Under Review', cls: 'badge-amber' }
+  if (m.scores?.overallScore != null) return { label: 'Interview reviewed', sub: 'Final decision pending', cls: 'badge-green' }
+  if (m.match_pass === true)  return { label: 'Shortlisted', sub: 'Interview invite coming within 2 business days', cls: 'badge-blue' }
+  if (m.match_pass === false) return { label: 'Not progressed', sub: 'Not selected for this role', cls: 'badge-red' }
+  return { label: 'Under review', sub: 'CV being assessed — usually within 24 hours', cls: 'badge-amber' }
 }
 
 function appStatus(c) {
-  if (c.final_decision === 'hired')    return { label: 'Offer Extended',     cls: 'badge-green' }
-  if (c.final_decision === 'rejected') return { label: 'Not Progressed',     cls: 'badge-red'   }
-  if (c.scores?.overallScore != null)  return { label: 'Interview Reviewed', cls: 'badge-blue'  }
-  if (c.match_pass === true)           return { label: 'Passed Screening',   cls: 'badge-blue'  }
-  if (c.match_pass === false)          return { label: 'Not Selected',       cls: 'badge-red'   }
-  return                                      { label: 'Under Review',        cls: 'badge-amber' }
+  if (c.final_decision === 'hired')    return { label: 'Offer made',         sub: 'Check your email for details',                     cls: 'badge-green' }
+  if (c.final_decision === 'rejected') return { label: 'Not progressed',     sub: 'Not selected for this role',                       cls: 'badge-red'   }
+  if (c.scores?.overallScore != null)  return { label: 'Interview reviewed', sub: 'Final decision pending',                           cls: 'badge-blue'  }
+  if (c.match_pass === true)           return { label: 'Shortlisted',        sub: 'Interview invite coming within 2 business days',   cls: 'badge-blue'  }
+  if (c.match_pass === false)          return { label: 'Not progressed',     sub: 'Not selected for this role',                       cls: 'badge-red'   }
+  return                                      { label: 'Under review',       sub: 'CV being assessed — usually within 24 hours',      cls: 'badge-amber' }
 }
 
 export default function CandidateDashboard() {
@@ -132,11 +132,14 @@ export default function CandidateDashboard() {
                   <div className="col-name">{c.jobs?.title ?? 'Role'}</div>
                   <div className="col-sub">{c.candidate_role} · Applied {new Date(c.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: '2-digit' })}</div>
                 </div>
-                <div className="col-right">
-                  {c.match_score != null && (
-                    <span className="mono" style={{ fontSize: 11, color: 'var(--text-3)' }}>Score {c.match_score}</span>
-                  )}
-                  <span className={`badge ${st.cls}`}>{st.label}</span>
+                <div className="col-right" style={{ flexDirection: 'column', alignItems: 'flex-end', gap: 3 }}>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    {c.match_score != null && (
+                      <span className="mono" style={{ fontSize: 11, color: 'var(--text-3)' }}>Score {c.match_score}</span>
+                    )}
+                    <span className={`badge ${st.cls}`}>{st.label}</span>
+                  </div>
+                  {st.sub && <div style={{ fontSize: 11, color: 'var(--text-3)', textAlign: 'right' }}>{st.sub}</div>}
                 </div>
               </div>
             )

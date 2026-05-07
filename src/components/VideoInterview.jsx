@@ -4,15 +4,16 @@ import { supabase } from '../lib/supabase'
 
 // ── Stage constants ───────────────────────────────────────────────────────────
 const S = {
-  SETUP:      'setup',
-  LOADING:    'loading',
-  READY:      'ready',
-  COUNTDOWN:  'countdown',
-  RECORDING:  'recording',
-  BETWEEN:    'between',
-  UPLOADING:  'uploading',
-  DONE:       'done',
-  ERROR:      'error',
+  SETUP:        'setup',
+  DEVICE_CHECK: 'device_check',
+  LOADING:      'loading',
+  READY:        'ready',
+  COUNTDOWN:    'countdown',
+  RECORDING:    'recording',
+  BETWEEN:      'between',
+  UPLOADING:    'uploading',
+  DONE:         'done',
+  ERROR:        'error',
 }
 
 // ── Integrity penalties ───────────────────────────────────────────────────────
@@ -84,6 +85,7 @@ export default function VideoInterview({ job, candidate, matchId, isFromPool, on
   const [warning,        setWarning]        = useState('')
   const [error,          setError]          = useState('')
   const [camOk,          setCamOk]          = useState(false)
+  const [micLevel,       setMicLevel]       = useState(0)
 
   // Refs — values needed in callbacks without causing re-renders
   const videoRef      = useRef(null)   // <video> element for camera preview
@@ -96,6 +98,8 @@ export default function VideoInterview({ job, candidate, matchId, isFromPool, on
   const stageRef      = useRef(S.SETUP)
   const timerRef      = useRef(null)
   const warnTimerRef  = useRef(null)
+  const audioCtxRef   = useRef(null)
+  const micRafRef     = useRef(null)
 
   // Keep refs in sync
   useEffect(() => { currentQRef.current = currentQ }, [currentQ])
@@ -112,17 +116,48 @@ export default function VideoInterview({ job, candidate, matchId, isFromPool, on
         videoRef.current.muted = true
       }
       setCamOk(true)
-      // Generate questions while camera loads
-      setStage(S.LOADING)
-      const qs = await generateQuestions(job)
-      setQuestions(qs)
-      setUploadProgress(qs.map(() => 'pending'))
-      setStage(S.READY)
+      startMicMonitor(stream)
+      setStage(S.DEVICE_CHECK)
     } catch (e) {
       setError(e.name === 'NotAllowedError'
         ? 'Camera and microphone access is required for the video interview. Please allow access and try again.'
         : 'Could not start camera: ' + e.message)
     }
+  }
+
+  function startMicMonitor(stream) {
+    try {
+      const ctx = new AudioContext()
+      audioCtxRef.current = ctx
+      const analyser = ctx.createAnalyser()
+      analyser.fftSize = 256
+      ctx.createMediaStreamSource(stream).connect(analyser)
+      const buf = new Uint8Array(analyser.frequencyBinCount)
+      const tick = () => {
+        analyser.getByteFrequencyData(buf)
+        const avg = buf.reduce((a, b) => a + b, 0) / buf.length
+        setMicLevel(Math.min(100, Math.round(avg * 2.2)))
+        micRafRef.current = requestAnimationFrame(tick)
+      }
+      tick()
+    } catch { /* silently ignore if AudioContext unavailable */ }
+  }
+
+  function stopMicMonitor() {
+    if (micRafRef.current) cancelAnimationFrame(micRafRef.current)
+    audioCtxRef.current?.close().catch(() => {})
+    setMicLevel(0)
+  }
+
+  async function confirmDevices() {
+    stopMicMonitor()
+    setStage(S.LOADING)
+    const customQs = Array.isArray(job.interview_questions) && job.interview_questions.length > 0
+      ? job.interview_questions
+      : await generateQuestions(job)
+    setQuestions(customQs)
+    setUploadProgress(customQs.map(() => 'pending'))
+    setStage(S.READY)
   }
 
   // Attach stream to video element on mount / when stream ready
@@ -140,6 +175,8 @@ export default function VideoInterview({ job, candidate, matchId, isFromPool, on
       clearTimeout(warnTimerRef.current)
       recorderRef.current?.stop()
       streamRef.current?.getTracks().forEach(t => t.stop())
+      if (micRafRef.current) cancelAnimationFrame(micRafRef.current)
+      audioCtxRef.current?.close().catch(() => {})
     }
   }, [])
 
@@ -334,6 +371,41 @@ export default function VideoInterview({ job, candidate, matchId, isFromPool, on
     </div>
   )
 
+  // ── DEVICE CHECK ─────────────────────────────────────────────────────────
+  if (stage === S.DEVICE_CHECK) return (
+    <div style={overlay}>
+      <button onClick={() => { stopMicMonitor(); streamRef.current?.getTracks().forEach(t => t.stop()); onClose() }}
+        style={{ position: 'absolute', top: 24, right: 28, background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.4)', fontSize: 22 }}>✕</button>
+
+      <div style={{ maxWidth: 460, width: '100%', padding: '0 32px', display: 'flex', flexDirection: 'column', gap: 22 }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: 10, ...mono, textTransform: 'uppercase', letterSpacing: '0.16em', color: 'rgba(255,255,255,0.35)', marginBottom: 8 }}>Device Check</div>
+          <h2 style={{ fontWeight: 300, fontSize: 22, margin: 0 }}>Camera &amp; Microphone</h2>
+          <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.45)', marginTop: 8, lineHeight: 1.6 }}>Confirm you can see yourself clearly and the mic bar moves when you speak.</p>
+        </div>
+
+        <div style={{ aspectRatio: '16/9', background: '#111', borderRadius: 10, overflow: 'hidden' }}>
+          <video ref={videoRef} autoPlay playsInline muted style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'scaleX(-1)' }} />
+        </div>
+
+        <div>
+          <div style={{ fontSize: 11, ...mono, color: 'rgba(255,255,255,0.35)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Microphone Level</div>
+          <div style={{ height: 8, background: 'rgba(255,255,255,0.08)', borderRadius: 4, overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: `${micLevel}%`, background: micLevel < 5 ? '#ef4444' : micLevel < 30 ? '#f59e0b' : '#22c55e', borderRadius: 4, transition: 'width 0.07s ease, background 0.3s' }} />
+          </div>
+          {micLevel < 4 && (
+            <p style={{ fontSize: 11, color: '#fbbf24', marginTop: 6, margin: '6px 0 0' }}>No audio detected — speak to test your mic</p>
+          )}
+        </div>
+
+        <button onClick={confirmDevices}
+          style={{ padding: '13px 0', background: '#B8924A', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 14, ...mono, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+          Camera &amp; Mic Working — Continue →
+        </button>
+      </div>
+    </div>
+  )
+
   // ── LOADING ───────────────────────────────────────────────────────────────
   if (stage === S.LOADING) return (
     <div style={overlay}>
@@ -496,31 +568,38 @@ export default function VideoInterview({ job, candidate, matchId, isFromPool, on
     const scoreLabel = integrityScore >= 80 ? 'High Integrity' : integrityScore >= 50 ? 'Some Concerns' : 'Flagged'
     return (
       <div style={overlay}>
-        <div style={{ maxWidth: 480, width: '100%', padding: '0 32px', textAlign: 'center' }}>
-          <div style={{ fontSize: 56, marginBottom: 16 }}>🎬</div>
+        <div style={{ maxWidth: 500, width: '100%', padding: '0 32px', textAlign: 'center' }}>
+          <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'rgba(34,197,94,0.12)', border: '2px solid rgba(34,197,94,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px', fontSize: 28 }}>✓</div>
           <h2 style={{ fontFamily: 'var(--font-head)', fontWeight: 300, fontSize: 26, margin: '0 0 8px' }}>Interview Complete</h2>
-          <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.45)', marginBottom: 32 }}>All answers have been recorded and uploaded.</p>
+          <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.45)', marginBottom: 28, lineHeight: 1.6 }}>
+            All {questions.length} answers have been recorded and submitted.
+          </p>
 
-          <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, padding: '20px 24px', marginBottom: 24 }}>
-            <div style={{ fontSize: 11, ...mono, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'rgba(255,255,255,0.3)', marginBottom: 12 }}>Integrity Report</div>
-            <div style={{ fontSize: 36, fontWeight: 700, color: scoreColor, marginBottom: 4 }}>{integrityScore}</div>
-            <div style={{ fontSize: 13, color: scoreColor, marginBottom: 16 }}>{scoreLabel}</div>
-            {violationsRef.current.length > 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, textAlign: 'left' }}>
-                {violationsRef.current.map((v, i) => (
-                  <div key={i} style={{ fontSize: 11, ...mono, color: 'rgba(239,68,68,0.75)', padding: '4px 0', borderTop: i > 0 ? '1px solid rgba(255,255,255,0.05)' : 'none' }}>
-                    {v.label} — Q{v.q + 1}
-                  </div>
-                ))}
+          <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, padding: '18px 20px', marginBottom: 16, textAlign: 'left' }}>
+            <div style={{ fontSize: 10, ...mono, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'rgba(255,255,255,0.25)', marginBottom: 14 }}>What happens next</div>
+            {[
+              'A recruiter reviews your responses — typically within 2 business days',
+              'You\'ll receive an email update regardless of the outcome',
+              'If progressed, your recruiter will reach out to discuss next steps',
+            ].map((step, i) => (
+              <div key={i} style={{ display: 'flex', gap: 12, marginBottom: i < 2 ? 10 : 0, alignItems: 'flex-start' }}>
+                <div style={{ width: 18, height: 18, borderRadius: '50%', background: 'rgba(184,146,74,0.2)', border: '1px solid rgba(184,146,74,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 10, ...mono, color: '#B8924A', marginTop: 1 }}>{i + 1}</div>
+                <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', lineHeight: 1.6 }}>{step}</div>
               </div>
-            ) : (
-              <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)' }}>No violations detected</div>
-            )}
+            ))}
+          </div>
+
+          <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, padding: '14px 18px', marginBottom: 24, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ fontSize: 11, ...mono, color: 'rgba(255,255,255,0.25)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Integrity</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 20, fontWeight: 700, color: scoreColor }}>{integrityScore}</span>
+              <span style={{ fontSize: 12, color: scoreColor }}>{scoreLabel}</span>
+            </div>
           </div>
 
           <button onClick={() => { streamRef.current?.getTracks().forEach(t => t.stop()); onClose() }}
             style={{ padding: '13px 32px', borderRadius: 8, background: 'rgba(99,102,241,1)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 14 }}>
-            Close Interview
+            Close
           </button>
         </div>
       </div>

@@ -172,7 +172,7 @@ export default function AdminSettings() {
                       {p.description && <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2 }}>{p.description}</div>}
                     </td>
                     <td style={{ padding: '12px 16px', fontFamily: 'var(--font-mono)', color: 'var(--accent)' }}>
-                      {p.price_monthly != null ? `£${Number(p.price_monthly).toFixed(0)}` : '—'}
+                      {p.price_monthly != null ? `₹${Number(p.price_monthly).toFixed(0)}` : '—'}
                     </td>
                     <td style={{ padding: '12px 16px', fontFamily: 'var(--font-mono)', color: 'var(--text-2)' }}>{limitLabel(p.max_jobs)}</td>
                     <td style={{ padding: '12px 16px', fontFamily: 'var(--font-mono)', color: 'var(--text-2)' }}>{limitLabel(p.max_candidates)}</td>
@@ -252,7 +252,7 @@ export default function AdminSettings() {
                   <input type="text" placeholder="Brief description shown to clients" value={planForm.description} onChange={e => setPlanForm(f => ({ ...f, description: e.target.value }))} />
                 </div>
                 <div className="field">
-                  <label>Monthly Price (£)</label>
+                  <label>Monthly Price (₹)</label>
                   <input type="number" min="0" step="0.01" placeholder="e.g. 299" value={planForm.price_monthly} onChange={e => setPlanForm(f => ({ ...f, price_monthly: e.target.value }))} />
                 </div>
                 <div className="field">

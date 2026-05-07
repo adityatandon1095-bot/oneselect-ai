@@ -38,6 +38,7 @@ export default function AdminJobs() {
   const [jobs,           setJobs]           = useState([])
   const [candMap,        setCandMap]        = useState({})  // job_id → Candidate[]
   const [webhookFails,   setWebhookFails]   = useState(new Set())  // job_ids with unresolved failures
+  const [retryingWebhook, setRetryingWebhook] = useState(new Set()) // job_ids currently retrying
   const [loading,        setLoading]        = useState(true)
   const [filter,         setFilter]         = useState('all')
   const [closing,        setClosing]        = useState(null)
@@ -59,13 +60,15 @@ export default function AdminJobs() {
   async function handleWizardSave(jobData) {
     setShowWizard(false)
     setError('')
-    const { assigned_to, work_mode, ...rest } = jobData
+    const { assigned_to, work_mode, comp_min, comp_max, ...rest } = jobData
     const recruiterId = assigned_to ?? null
     if (!recruiterId) { setError('No recruiter assigned — job not saved'); return }
     const { error: err } = await supabase.from('jobs').insert({
       recruiter_id: recruiterId,
       status: 'active',
       work_mode,
+      salary_min: rest.salary_min ?? comp_min ?? null,
+      salary_max: rest.salary_max ?? comp_max ?? null,
       ...rest,
     })
     if (err) { setError(err.message); return }
@@ -234,6 +237,10 @@ export default function AdminJobs() {
               const interviewed = cands.filter(c => c.scores != null).length
               const qualified  = cands.filter(c => c.match_pass).length
               const topScore   = cands.reduce((mx, c) => Math.max(mx, c.match_score ?? 0), 0)
+              const daysOpen   = Math.floor((Date.now() - new Date(j.created_at)) / 86_400_000)
+              const slaTarget  = j.sla_days ?? 30
+              const slaBreached = j.status === 'active' && daysOpen > slaTarget
+              const slaWarning  = j.status === 'active' && daysOpen > slaTarget * 0.75 && !slaBreached
 
               return (
                 <div key={j.id} style={{
@@ -266,13 +273,33 @@ export default function AdminJobs() {
                     <span className={`badge ${j.status === 'active' ? 'badge-green' : j.status === 'closed' ? 'badge-red' : 'badge-amber'}`} style={{ fontSize: 9 }}>
                       {j.status ?? 'active'}
                     </span>
+                    {slaBreached && <span className="badge badge-red" style={{ fontSize: 9 }} title={`${daysOpen}d open — SLA target ${slaTarget}d`}>⚠ {daysOpen}d</span>}
+                    {slaWarning  && <span className="badge badge-amber" style={{ fontSize: 9 }} title={`${daysOpen}d open — SLA target ${slaTarget}d`}>{daysOpen}d</span>}
                     {j.pipeline_status && j.pipeline_status !== 'awaiting_cvs' && (
                       <span className={`badge ${j.pipeline_status === 'notified' ? 'badge-green' : j.pipeline_status === 'complete' ? 'badge-blue' : j.pipeline_status === 'processing' ? 'badge-amber' : j.pipeline_status === 'pending_client_approval' ? 'badge-amber' : ''}`} style={{ fontSize: 9 }}>
                         {j.pipeline_status === 'processing' ? '⟳ running' : j.pipeline_status === 'complete' ? '✓ done' : j.pipeline_status === 'notified' ? '✉ notified' : j.pipeline_status === 'pending_client_approval' ? '⏸ awaiting approval' : j.pipeline_status}
                       </span>
                     )}
                     {webhookFails.has(j.id) && (
-                      <span className="badge badge-red" style={{ fontSize: 9 }} title="HRIS webhook delivery failed">⚠ webhook</span>
+                      <button
+                        className="badge badge-red"
+                        style={{ fontSize: 9, cursor: retryingWebhook.has(j.id) ? 'default' : 'pointer', border: 'none', padding: '2px 6px' }}
+                        title="HRIS webhook failed — click to retry"
+                        onClick={async (e) => {
+                          e.stopPropagation()
+                          if (retryingWebhook.has(j.id)) return
+                          setRetryingWebhook(prev => new Set(prev).add(j.id))
+                          try {
+                            const cands = candMap[j.id] ?? []
+                            const target = cands.find(c => c.final_decision === 'hired' || c.offer_status === 'sent') ?? cands[0]
+                            if (target) await supabase.functions.invoke('trigger-webhook', { body: { candidateId: target.id, event: 'candidate.hired' } })
+                            setWebhookFails(prev => { const n = new Set(prev); n.delete(j.id); return n })
+                          } catch { /* badge stays */ }
+                          setRetryingWebhook(prev => { const n = new Set(prev); n.delete(j.id); return n })
+                        }}
+                      >
+                        {retryingWebhook.has(j.id) ? '⟳ retrying…' : '⚠ retry webhook'}
+                      </button>
                     )}
                   </div>
 

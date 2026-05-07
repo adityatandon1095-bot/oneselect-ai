@@ -657,7 +657,7 @@ export default function AdminClients() {
                     <option value="">— No plan assigned —</option>
                     {plans.map(p => (
                       <option key={p.id} value={p.id}>
-                        {p.name}{p.price_monthly != null ? ` — £${Number(p.price_monthly).toFixed(0)}/mo` : ''}
+                        {p.name}{p.price_monthly != null ? ` — ₹${Number(p.price_monthly).toFixed(0)}/mo` : ''}
                       </option>
                     ))}
                   </select>

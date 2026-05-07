@@ -100,6 +100,9 @@ export default function AdminPipeline({ allowedClientIds } = {}) {
   // Live call modal
   const [liveCallModal, setLiveCallModal] = useState(null)
 
+  // Recruiter notes modal
+  const [notesModal, setNotesModal] = useState(null) // { candidate, text, saving }
+
   // Offer letter modal (Feature 5)
   const [offerModal, setOfferModal] = useState(null)
 
@@ -453,6 +456,16 @@ Be specific about why they weren't a fit this time and what might improve their 
     setCandidates(p => p.filter(c => c.id !== candidate.id))
     addLog(`✓ Removed ${candidate.full_name} from pipeline`, 'ok')
     setDeleteModal(null)
+  }
+
+  async function saveNotes() {
+    if (!notesModal) return
+    setNotesModal(m => ({ ...m, saving: true }))
+    const { candidate, text } = notesModal
+    const table = candidate._fromPool ? 'job_matches' : 'candidates'
+    await supabase.from(table).update({ recruiter_notes: text.trim() || null }).eq('id', candidate.id)
+    setCandidates(p => p.map(c => c.id === candidate.id ? { ...c, recruiter_notes: text.trim() || null } : c))
+    setNotesModal(null)
   }
 
   async function handleAddManually() {
@@ -1257,6 +1270,7 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
                         {hasVideo && <button className="btn btn-secondary" style={{ fontSize: 10, padding: '2px 8px' }} onClick={() => setVideoPlayerTarget(c)}>▶ Watch</button>}
                       </>
                     )}
+                    {!isClient && <button className="btn btn-ghost" title={c.recruiter_notes ? 'Edit notes' : 'Add notes'} style={{ padding: '2px 6px', fontSize: 12, color: c.recruiter_notes ? 'var(--accent)' : 'var(--text-3)', opacity: 0.8 }} onClick={e => { e.stopPropagation(); setNotesModal({ candidate: c, text: c.recruiter_notes ?? '', saving: false }) }}>📝</button>}
                     {!isClient && <button className="btn btn-ghost" title="Remove candidate" style={{ padding: '2px 6px', fontSize: 14, color: 'var(--red)', opacity: 0.5 }} onClick={e => { e.stopPropagation(); setDeleteModal({ candidate: c }) }}>🗑</button>}
                   </div>
                 </div>
@@ -1299,6 +1313,7 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
                       </>
                     )}
                     {completed && <span className="badge badge-green">Live Done</span>}
+                    {!isClient && <button className="btn btn-ghost" title={c.recruiter_notes ? 'Edit notes' : 'Add notes'} style={{ padding: '2px 6px', fontSize: 12, color: c.recruiter_notes ? 'var(--accent)' : 'var(--text-3)', opacity: 0.8 }} onClick={e => { e.stopPropagation(); setNotesModal({ candidate: c, text: c.recruiter_notes ?? '', saving: false }) }}>📝</button>}
                     {!isClient && <button className="btn btn-ghost" title="Remove candidate" style={{ padding: '2px 6px', fontSize: 14, color: 'var(--red)', opacity: 0.5 }} onClick={e => { e.stopPropagation(); setDeleteModal({ candidate: c }) }}>🗑</button>}
                   </div>
                 </div>
@@ -1342,6 +1357,7 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
                     )}
                     {decision === 'rejected' && <span className="badge badge-red" style={{ fontSize: 12 }}>✗ Rejected</span>}
                     {decision && <button className="btn btn-secondary" style={{ fontSize: 10, padding: '2px 8px' }} onClick={() => setDecisionModal({ candidate: c, notes: c.decision_notes ?? '' })}>Edit</button>}
+                    {!isClient && <button className="btn btn-ghost" title={c.recruiter_notes ? 'Edit notes' : 'Add notes'} style={{ padding: '2px 6px', fontSize: 12, color: c.recruiter_notes ? 'var(--accent)' : 'var(--text-3)', opacity: 0.8 }} onClick={e => { e.stopPropagation(); setNotesModal({ candidate: c, text: c.recruiter_notes ?? '', saving: false }) }}>📝</button>}
                     {!isClient && <button className="btn btn-ghost" title="Remove candidate" style={{ padding: '2px 6px', fontSize: 14, color: 'var(--red)', opacity: 0.5 }} onClick={e => { e.stopPropagation(); setDeleteModal({ candidate: c }) }}>🗑</button>}
                   </div>
                 </div>
@@ -1495,6 +1511,33 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
                 onClick={handleDeleteCandidate}
               >
                 {deleteModal.deleting ? <><span className="spinner" style={{ width: 11, height: 11 }} /> Removing…</> : 'Remove'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Recruiter Notes Modal ── */}
+      {notesModal && (
+        <div style={MO}>
+          <div style={{ ...MB, width: 440 }}>
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>Recruiter Notes</div>
+              <div style={{ fontSize: 13, color: 'var(--text-3)' }}>{notesModal.candidate.full_name} · {notesModal.candidate.candidate_role}</div>
+            </div>
+            <textarea
+              autoFocus
+              rows={6}
+              style={{ ...MI, resize: 'vertical', lineHeight: 1.6 }}
+              value={notesModal.text}
+              onChange={e => setNotesModal(m => ({ ...m, text: e.target.value }))}
+              placeholder="Phone screen impressions, salary expectations, notice period, red flags…"
+            />
+            <div style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>Visible to recruiters and admins only. Not shared with the client.</div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button className="btn btn-secondary" onClick={() => setNotesModal(null)}>Cancel</button>
+              <button className="btn btn-primary" disabled={notesModal.saving} onClick={saveNotes}>
+                {notesModal.saving ? <><span className="spinner" style={{ width: 11, height: 11 }} /> Saving…</> : 'Save Notes'}
               </button>
             </div>
           </div>

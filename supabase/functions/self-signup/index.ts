@@ -58,6 +58,8 @@ serve(async (req) => {
       })
     }
 
+    const trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString()
+
     // Create profile row
     await admin.from('profiles').insert({
       id:                  userData.user.id,
@@ -67,6 +69,7 @@ serve(async (req) => {
       full_name:           contact_name?.trim() ?? null,
       subscription_status: 'trial',
       first_login:         true,
+      trial_ends_at:       trialEndsAt,
     })
 
     return new Response(JSON.stringify({ success: true }), {

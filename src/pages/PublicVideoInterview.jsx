@@ -11,6 +11,7 @@ export default function PublicVideoInterview() {
   const [done, setDone] = useState(false)
   const [showInterview, setShowInterview] = useState(false)
   const [resendState, setResendState] = useState('idle') // 'idle' | 'sending' | 'sent' | 'error'
+  const [withdrawState, setWithdrawState] = useState('idle') // 'idle' | 'confirm' | 'withdrawing' | 'withdrawn'
 
   useEffect(() => { load() }, [token])
 
@@ -26,7 +27,14 @@ export default function PublicVideoInterview() {
       .maybeSingle()
 
     if (cRow) {
-      if (cRow.video_urls?.length > 0) { setDone(true); setLoading(false); return }
+      const vUrls = cRow.video_urls ?? []
+      const allDone = vUrls.length > 0 && vUrls.every(v => v?.url != null)
+      if (allDone) { setDone(true); setLoading(false); return }
+      if (vUrls.length > 0) {
+        // Partial upload — some answers failed; token still valid, show warning
+        setData({ candidate: cRow, job: cRow.jobs, table: 'candidates', partialCount: vUrls.filter(v => v?.url != null).length, totalCount: vUrls.length })
+        setLoading(false); return
+      }
       if (cRow.interview_token_expires_at && new Date(cRow.interview_token_expires_at) < new Date()) {
         setError(`expired:${new Date(cRow.interview_token_expires_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`)
         setLoading(false); return
@@ -44,7 +52,19 @@ export default function PublicVideoInterview() {
       .maybeSingle()
 
     if (mRow) {
-      if (mRow.video_urls?.length > 0) { setDone(true); setLoading(false); return }
+      const vUrls = mRow.video_urls ?? []
+      const allDone = vUrls.length > 0 && vUrls.every(v => v?.url != null)
+      if (allDone) { setDone(true); setLoading(false); return }
+      if (vUrls.length > 0) {
+        const candidate = {
+          id: mRow.id,
+          full_name: mRow.talent_pool?.full_name ?? '',
+          candidate_role: mRow.talent_pool?.candidate_role ?? '',
+          email: mRow.talent_pool?.email ?? '',
+        }
+        setData({ candidate, job: mRow.jobs, table: 'job_matches', partialCount: vUrls.filter(v => v?.url != null).length, totalCount: vUrls.length })
+        setLoading(false); return
+      }
       if (mRow.interview_token_expires_at && new Date(mRow.interview_token_expires_at) < new Date()) {
         setError(`expired:${new Date(mRow.interview_token_expires_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`)
         setLoading(false); return
@@ -96,6 +116,32 @@ export default function PublicVideoInterview() {
     } catch {
       setResendState('error')
     }
+  }
+
+  async function handleWithdraw() {
+    setWithdrawState('withdrawing')
+    const now = new Date().toISOString()
+    if (data?.table === 'candidates') {
+      await supabase.from('candidates').update({ withdrawn_at: now }).eq('id', data.candidate.id)
+    } else if (data?.table === 'job_matches') {
+      await supabase.from('job_matches').update({ withdrawn_at: now }).eq('id', data.candidate.id)
+    }
+    setWithdrawState('withdrawn')
+  }
+
+  if (withdrawState === 'withdrawn') {
+    return (
+      <div style={pageStyle}>
+        <div style={{ textAlign: 'center', maxWidth: 440, padding: '0 24px' }}>
+          <div style={{ fontSize: 36, marginBottom: 16, opacity: 0.3 }}>✓</div>
+          <h2 style={{ fontFamily: 'var(--font-head)', fontWeight: 300, marginBottom: 8 }}>Application withdrawn</h2>
+          <p style={{ color: 'var(--text-3)', fontSize: 14, lineHeight: 1.7 }}>
+            Your application has been withdrawn. Your personal data will be processed in accordance with our data retention policy.
+          </p>
+          <p style={{ color: 'var(--text-3)', fontSize: 13, marginTop: 20 }}>You may close this window.</p>
+        </div>
+      </div>
+    )
   }
 
   if (error) {
@@ -152,13 +198,29 @@ export default function PublicVideoInterview() {
   if (done) {
     return (
       <div style={pageStyle}>
-        <div style={{ textAlign: 'center', maxWidth: 480, padding: '0 24px' }}>
+        <div style={{ maxWidth: 480, width: '100%', padding: '0 24px', textAlign: 'center' }}>
           <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'rgba(34,197,94,0.1)', border: '2px solid rgba(34,197,94,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px', fontSize: 26, color: 'var(--green)' }}>✓</div>
           <h2 style={{ fontFamily: 'var(--font-head)', fontWeight: 300, marginBottom: 8 }}>Interview submitted</h2>
-          <p style={{ color: 'var(--text-3)', fontSize: 14, lineHeight: 1.7 }}>
-            Your responses have been recorded. Our team will review them and be in touch soon.
+          <p style={{ color: 'var(--text-3)', fontSize: 14, lineHeight: 1.7, marginBottom: 24 }}>
+            Your responses have been recorded and sent to the recruitment team.
           </p>
-          <p style={{ color: 'var(--text-3)', fontSize: 13, marginTop: 24 }}>You may close this window.</p>
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '18px 20px', textAlign: 'left', marginBottom: 20 }}>
+            <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-3)', marginBottom: 12 }}>What happens next</div>
+            {[
+              'A recruiter reviews your responses within 2 business days',
+              "You'll receive an email update regardless of the outcome",
+              'If progressed, the recruiter will be in touch to discuss next steps',
+            ].map((s, i) => (
+              <div key={i} style={{ display: 'flex', gap: 10, marginBottom: i < 2 ? 10 : 0 }}>
+                <div style={{ width: 18, height: 18, borderRadius: '50%', background: 'rgba(184,146,74,0.15)', border: '1px solid rgba(184,146,74,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 10, fontFamily: 'var(--font-mono)', color: '#B8924A' }}>{i + 1}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.6 }}>{s}</div>
+              </div>
+            ))}
+          </div>
+          <p style={{ color: 'var(--text-3)', fontSize: 12 }}>
+            Questions? Email <a href="mailto:candidates@oneselect.co.uk" style={{ color: 'var(--accent)', textDecoration: 'none' }}>candidates@oneselect.co.uk</a>
+          </p>
+          <p style={{ color: 'var(--text-3)', fontSize: 11, marginTop: 16 }}>You may close this window.</p>
         </div>
       </div>
     )
@@ -211,12 +273,42 @@ export default function PublicVideoInterview() {
             ))}
           </div>
 
+          {data.partialCount != null && (
+            <div style={{ marginBottom: 16, padding: '10px 14px', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 6, fontSize: 12, color: '#fca5a5', lineHeight: 1.6 }}>
+              <strong>Your last session had upload errors</strong> ({data.partialCount} of {data.totalCount} answers saved).
+              Starting again will replace your previous responses.
+            </div>
+          )}
+
           <button
             onClick={() => setShowInterview(true)}
             style={{ width: '100%', padding: '14px 0', background: '#B8924A', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 14, fontFamily: 'var(--font-mono)', letterSpacing: '0.06em', textTransform: 'uppercase' }}
           >
-            Start Interview →
+            {data.partialCount != null ? 'Retry Interview →' : 'Start Interview →'}
           </button>
+
+          {withdrawState === 'idle' && (
+            <button
+              onClick={() => setWithdrawState('confirm')}
+              style={{ width: '100%', marginTop: 10, padding: '8px 0', background: 'transparent', color: 'var(--text-3)', border: 'none', cursor: 'pointer', fontSize: 12, textDecoration: 'underline' }}
+            >
+              Withdraw my application
+            </button>
+          )}
+          {withdrawState === 'confirm' && (
+            <div style={{ marginTop: 12, padding: '14px 16px', background: 'var(--surface2)', borderRadius: 8, textAlign: 'center' }}>
+              <p style={{ fontSize: 13, color: 'var(--text-2)', marginBottom: 12 }}>Are you sure you want to withdraw your application? This cannot be undone.</p>
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+                <button onClick={() => setWithdrawState('idle')} style={{ padding: '7px 16px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, cursor: 'pointer', fontSize: 12 }}>Cancel</button>
+                <button onClick={handleWithdraw} style={{ padding: '7px 16px', background: 'var(--red)', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 12 }}>Withdraw</button>
+              </div>
+            </div>
+          )}
+          {withdrawState === 'withdrawing' && (
+            <div style={{ marginTop: 10, textAlign: 'center', fontSize: 12, color: 'var(--text-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+              <span className="spinner" style={{ width: 12, height: 12 }} /> Withdrawing…
+            </div>
+          )}
         </div>
 
         <p style={{ textAlign: 'center', color: 'var(--text-3)', fontSize: 11, marginTop: 20, letterSpacing: '0.06em' }}>

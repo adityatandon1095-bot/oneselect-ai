@@ -104,6 +104,7 @@ export default function JDWizard({ onClose, onSave, showAssign = false, recruite
   const [clarifyQ,      setClarifyQ]      = useState(d?.clarifyQ ?? '')
   const [clarifyA,      setClarifyA]      = useState(d?.clarifyA ?? '')
   const [industry,      setIndustry]      = useState(d?.industry ?? '')
+  const [companySize,   setCompanySize]   = useState(d?.companySize ?? '')
   const [location,      setLocation]      = useState(d?.location ?? '')
   const [workMode,      setWorkMode]      = useState(d?.workMode ?? '')
   const [expYears,      setExpYears]      = useState(d?.expYears ?? 3)
@@ -119,6 +120,10 @@ export default function JDWizard({ onClose, onSave, showAssign = false, recruite
   const [requiredSkills, setRequiredSkills] = useState(prefill?.required_skills ?? d?.requiredSkills ?? [])
   const [preferredSkills,setPreferredSkills]= useState(prefill?.preferred_skills ?? d?.preferredSkills ?? [])
 
+  // ── Custom interview questions ────────────────────────────────────────────
+  const [customQuestions, setCustomQuestions] = useState(prefill?.interview_questions?.map(q => q.q ?? q) ?? d?.customQuestions ?? [])
+  const [newQuestion, setNewQuestion] = useState('')
+
   // ── Assignment ────────────────────────────────────────────────────────────
   const [assignedTo, setAssignedTo] = useState('')
 
@@ -132,7 +137,7 @@ export default function JDWizard({ onClose, onSave, showAssign = false, recruite
   useEffect(() => {
     if (!mountedRef.current) { mountedRef.current = true; return }
     if (prefill) return  // prefill flow doesn't use drafts
-    saveDraft({ step, jdMode, brief, pastedJD, clarifyQ, clarifyA, industry, location, workMode, expYears, compMode, compMin, compMax, title, description, requiredSkills, preferredSkills })
+    saveDraft({ step, jdMode, brief, pastedJD, clarifyQ, clarifyA, industry, location, workMode, expYears, compMode, compMin, compMax, title, description, requiredSkills, preferredSkills, customQuestions })
     setDraftSaved(true)
     const t = setTimeout(() => setDraftSaved(false), 1800)
     return () => clearTimeout(t)
@@ -245,20 +250,27 @@ export default function JDWizard({ onClose, onSave, showAssign = false, recruite
 
   function doSave() {
     clearDraft()
+    const iqFormatted = customQuestions.length > 0
+      ? customQuestions.map(q => ({ q, type: 'behavioral', seconds: 90 }))
+      : null
     onSave({
       title,
       description,
-      required_skills:  requiredSkills,
-      preferred_skills: preferredSkills,
-      experience_years: expYears,
-      industry:         industry || null,
-      location:         location || null,
-      work_mode:        workMode || null,
-      comp_min:         compMode === 'manual' && compMin ? parseInt(compMin, 10) : null,
-      comp_max:         compMode === 'manual' && compMax ? parseInt(compMax, 10) : null,
-      tech_weight:      60,
-      comm_weight:      40,
-      assigned_to:      assignedTo || null,
+      required_skills:      requiredSkills,
+      preferred_skills:     preferredSkills,
+      experience_years:     expYears,
+      industry:             industry || null,
+      company_size:         companySize || null,
+      location:             location || null,
+      work_mode:            workMode || null,
+      salary_min:           compMode === 'manual' && compMin ? parseInt(compMin, 10) : null,
+      salary_max:           compMode === 'manual' && compMax ? parseInt(compMax, 10) : null,
+      comp_min:             compMode === 'manual' && compMin ? parseInt(compMin, 10) : null,
+      comp_max:             compMode === 'manual' && compMax ? parseInt(compMax, 10) : null,
+      tech_weight:          60,
+      comm_weight:          40,
+      assigned_to:          assignedTo || null,
+      interview_questions:  iqFormatted,
     })
   }
 
@@ -443,6 +455,18 @@ export default function JDWizard({ onClose, onSave, showAssign = false, recruite
                 </button>
               ))}
             </div>
+            <div style={S.field}>
+              <label style={S.label}>Company Size <span style={{ color: 'var(--text-3)', fontWeight: 300 }}>(optional — shown to candidates)</span></label>
+              <select value={companySize} onChange={e => setCompanySize(e.target.value)} style={{ ...S.input, width: '100%', boxSizing: 'border-box' }}>
+                <option value="">Not specified</option>
+                <option>1–10 employees</option>
+                <option>11–50 employees</option>
+                <option>51–200 employees</option>
+                <option>201–500 employees</option>
+                <option>500–2,000 employees</option>
+                <option>2,000+ employees</option>
+              </select>
+            </div>
             <button className="btn btn-secondary" onClick={() => setStep('clarify')}>← Back</button>
           </div>
         )}
@@ -606,6 +630,51 @@ export default function JDWizard({ onClose, onSave, showAssign = false, recruite
                 rows={14}
                 style={{ ...S.input, fontFamily: 'var(--font-mono)', fontSize: 12, lineHeight: 1.65, resize: 'vertical' }}
               />
+            </div>
+
+            <div style={{ ...S.field, borderTop: '1px solid var(--border)', paddingTop: 16 }}>
+              <label style={S.label}>Custom Interview Questions <span style={{ textTransform: 'none', letterSpacing: 0, color: 'var(--text-3)', fontFamily: 'var(--font-body)' }}>(optional — up to 5)</span></label>
+              <p style={{ fontSize: 12, color: 'var(--text-3)', margin: '0 0 10px', lineHeight: 1.6 }}>
+                Add role-specific questions. If left blank, AI will generate questions automatically.
+              </p>
+              {customQuestions.map((q, i) => (
+                <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
+                  <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--accent)', minWidth: 20, paddingTop: 9 }}>Q{i+1}</span>
+                  <input
+                    style={{ ...S.input, flex: 1 }}
+                    value={q}
+                    onChange={e => setCustomQuestions(qs => qs.map((v, j) => j === i ? e.target.value : v))}
+                    placeholder={`Question ${i + 1}…`}
+                  />
+                  <button
+                    className="btn btn-ghost"
+                    style={{ padding: '4px 8px', color: 'var(--red)', opacity: 0.6, flexShrink: 0 }}
+                    onClick={() => setCustomQuestions(qs => qs.filter((_, j) => j !== i))}
+                  >✕</button>
+                </div>
+              ))}
+              {customQuestions.length < 5 && (
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <input
+                    style={{ ...S.input, flex: 1 }}
+                    value={newQuestion}
+                    onChange={e => setNewQuestion(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && newQuestion.trim()) {
+                        setCustomQuestions(qs => [...qs, newQuestion.trim()])
+                        setNewQuestion('')
+                      }
+                    }}
+                    placeholder="Type a question and press Enter…"
+                  />
+                  <button
+                    className="btn btn-secondary"
+                    style={{ flexShrink: 0 }}
+                    disabled={!newQuestion.trim()}
+                    onClick={() => { setCustomQuestions(qs => [...qs, newQuestion.trim()]); setNewQuestion('') }}
+                  >+ Add</button>
+                </div>
+              )}
             </div>
 
             <div style={S.row}>

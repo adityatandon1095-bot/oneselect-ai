@@ -106,7 +106,7 @@ export default function AdminDashboard() {
           <span className="metric-label">Pool · Available</span>
         </div>
         <div className="metric-card green" style={{ cursor: 'pointer' }} onClick={() => navigate('/admin/billing')}>
-          <span className="metric-val">£{stats.mrr.toLocaleString()}</span>
+          <span className="metric-val">₹{stats.mrr.toLocaleString()}</span>
           <span className="metric-label">MRR</span>
         </div>
         <div className="metric-card amber" style={{ cursor: 'pointer' }} onClick={() => navigate('/admin/pipeline')}>

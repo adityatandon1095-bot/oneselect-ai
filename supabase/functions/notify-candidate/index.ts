@@ -91,6 +91,30 @@ serve(async (req) => {
           </div>
           <p style="text-align:center;color:#9CA3AF;font-size:11px;margin-top:24px;">ONE SELECT — STRATEGIC TALENT SOLUTIONS</p>
         </div>`
+    } else if (type === 'application_received') {
+      subject = `Application received — ${role}`
+      body = `
+        <div style="font-family:Georgia,serif;max-width:600px;margin:0 auto;background:#F8F7F4;padding:40px;">
+          <div style="text-align:center;padding:24px 0;border-bottom:1px solid #E8E4DC;margin-bottom:32px;">
+            <h1 style="font-family:Georgia,serif;color:#B8924A;font-weight:300;letter-spacing:0.15em;font-size:26px;margin:0;">ONE SELECT</h1>
+          </div>
+          <div style="background:white;padding:40px;border:1px solid #E8E4DC;">
+            <h2 style="font-family:Georgia,serif;color:#2D3748;font-weight:400;font-size:20px;margin:0 0 16px;">Hi ${name},</h2>
+            <p style="color:#6B7280;line-height:1.8;font-size:15px;margin:0 0 16px;">
+              Thank you for applying for <strong style="color:#2D3748;">${role}</strong>. We've received your application and our team will review it shortly.
+            </p>
+            <p style="color:#6B7280;line-height:1.8;font-size:15px;margin:0 0 16px;">
+              <strong style="color:#2D3748;">What happens next:</strong>
+            </p>
+            <ol style="color:#6B7280;line-height:2;font-size:14px;margin:0 0 24px;padding-left:20px;">
+              <li>Our AI screening reviews your CV against the role requirements (usually within 24 hours)</li>
+              <li>If shortlisted, you'll receive a link to complete a short video interview</li>
+              <li>A recruiter reviews all video interviews and makes a decision within 3–5 business days</li>
+            </ol>
+            <p style="color:#9CA3AF;font-size:13px;margin:0 0 32px;">Questions? Reply to this email or contact us at <a href="mailto:candidates@oneselect.co.uk" style="color:#B8924A;">candidates@oneselect.co.uk</a></p>
+          </div>
+          <p style="text-align:center;color:#9CA3AF;font-size:11px;margin-top:24px;">ONE SELECT — STRATEGIC TALENT SOLUTIONS</p>
+        </div>`
     } else {
       return new Response(JSON.stringify({ error: `Unknown notification type: ${type}` }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },

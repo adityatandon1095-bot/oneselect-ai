@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../../lib/AuthContext'
 import { supabase } from '../../lib/supabase'
+import { usePlan } from '../../hooks/usePlan'
+import PaidFeature from '../../components/PaidFeature'
 
 function subLabel(st) {
   if (st === 'active')    return { label: 'Active',    cls: 'badge-green' }
@@ -8,8 +10,11 @@ function subLabel(st) {
   return                         { label: 'Trial',     cls: 'badge-amber' }
 }
 
+const DEFAULT_NOTIF = { shortlisted: true, interview_complete: true, approval_reminder: true, weekly_digest: true }
+
 export default function ClientSettings() {
   const { user, profile } = useAuth()
+  const { canAccess } = usePlan()
   const [plan, setPlan] = useState(null)
 
   useEffect(() => {
@@ -20,6 +25,9 @@ export default function ClientSettings() {
   }, [profile?.plan_id])
   const [saving,      setSaving]      = useState(false)
   const [saved,       setSaved]       = useState(false)
+  const [notifPrefs,  setNotifPrefs]  = useState({ ...DEFAULT_NOTIF, ...(profile?.notification_prefs ?? {}) })
+  const [notifSaving, setNotifSaving] = useState(false)
+  const [notifSaved,  setNotifSaved]  = useState(false)
   const [fullName,    setFullName]    = useState(profile?.full_name    ?? '')
   const [jobTitle,    setJobTitle]    = useState(profile?.job_title    ?? '')
   const [phone,       setPhone]       = useState(profile?.phone        ?? '')
@@ -29,6 +37,13 @@ export default function ClientSettings() {
   const [webhookSaved,   setWebhookSaved]   = useState(false)
   const [webhookTesting, setWebhookTesting] = useState(false)
   const [webhookTestMsg, setWebhookTestMsg] = useState('')
+
+  async function saveNotifPrefs() {
+    setNotifSaving(true); setNotifSaved(false)
+    await supabase.from('profiles').update({ notification_prefs: notifPrefs }).eq('id', user.id)
+    setNotifSaving(false); setNotifSaved(true)
+    setTimeout(() => setNotifSaved(false), 3000)
+  }
 
   async function handleSave(e) {
     e.preventDefault()
@@ -131,37 +146,43 @@ export default function ClientSettings() {
           <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-3)' }}>Webhook · HRIS</span>
         </div>
         <div className="section-card-body">
-          <p style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.7, marginBottom: 16 }}>
-            When a candidate is marked as <strong>hired</strong>, One Select will send a POST request to this URL with the candidate details — for syncing with Workday, BambooHR, Darwinbox, or any custom system.
-          </p>
-          <form onSubmit={saveWebhook}>
-            <div className="field" style={{ marginBottom: 14 }}>
-              <label>Webhook URL</label>
-              <input
-                type="url"
-                value={webhookUrl}
-                onChange={e => setWebhookUrl(e.target.value)}
-                placeholder="https://your-hris.com/webhooks/oneselect"
-              />
-            </div>
-            {webhookTestMsg && (
-              <div style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: webhookTestMsg.startsWith('✓') ? 'var(--green)' : 'var(--red)', marginBottom: 12 }}>
-                {webhookTestMsg}
-              </div>
-            )}
-            <div className="form-actions">
-              <button type="submit" className="btn btn-primary" disabled={webhookSaving}>
-                {webhookSaving ? <><span className="spinner" style={{ width: 12, height: 12 }} /> Saving…</> : 'Save Webhook'}
-              </button>
-              {webhookUrl.trim() && (
-                <button type="button" className="btn btn-secondary" disabled={webhookTesting} onClick={testWebhook}>
-                  {webhookTesting ? <><span className="spinner" style={{ width: 12, height: 12 }} /> Testing…</> : 'Send Test'}
-                </button>
-              )}
-              {webhookSaved && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--green)' }}>✓ Saved</span>}
-            </div>
-          </form>
-          <div style={{ marginTop: 16, padding: '14px 16px', background: 'var(--surface2)', borderRadius: 'var(--r)', fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-3)', lineHeight: 1.9, whiteSpace: 'pre' }}>{`{
+          {!canAccess('can_access_hris_webhook') ? (
+            <PaidFeature feature="can_access_hris_webhook" inline>
+              HRIS webhook integration
+            </PaidFeature>
+          ) : (
+            <>
+              <p style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.7, marginBottom: 16 }}>
+                When a candidate is marked as <strong>hired</strong>, One Select will send a POST request to this URL with the candidate details — for syncing with Workday, BambooHR, Darwinbox, or any custom system.
+              </p>
+              <form onSubmit={saveWebhook}>
+                <div className="field" style={{ marginBottom: 14 }}>
+                  <label>Webhook URL</label>
+                  <input
+                    type="url"
+                    value={webhookUrl}
+                    onChange={e => setWebhookUrl(e.target.value)}
+                    placeholder="https://your-hris.com/webhooks/oneselect"
+                  />
+                </div>
+                {webhookTestMsg && (
+                  <div style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: webhookTestMsg.startsWith('✓') ? 'var(--green)' : 'var(--red)', marginBottom: 12 }}>
+                    {webhookTestMsg}
+                  </div>
+                )}
+                <div className="form-actions">
+                  <button type="submit" className="btn btn-primary" disabled={webhookSaving}>
+                    {webhookSaving ? <><span className="spinner" style={{ width: 12, height: 12 }} /> Saving…</> : 'Save Webhook'}
+                  </button>
+                  {webhookUrl.trim() && (
+                    <button type="button" className="btn btn-secondary" disabled={webhookTesting} onClick={testWebhook}>
+                      {webhookTesting ? <><span className="spinner" style={{ width: 12, height: 12 }} /> Testing…</> : 'Send Test'}
+                    </button>
+                  )}
+                  {webhookSaved && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--green)' }}>✓ Saved</span>}
+                </div>
+              </form>
+              <div style={{ marginTop: 16, padding: '14px 16px', background: 'var(--surface2)', borderRadius: 'var(--r)', fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-3)', lineHeight: 1.9, whiteSpace: 'pre' }}>{`{
   "event": "candidate.hired",
   "timestamp": "2026-05-07T17:30:00Z",
   "candidate": {
@@ -184,6 +205,42 @@ export default function ClientSettings() {
   "client": { "company_name": "TechVentures Ltd" },
   "meta": { "platform": "oneselect", "version": "1.0" }
 }`}</div>
+            </>
+          )}
+        </div>
+      </div>
+
+      <div className="section-card" style={{ marginBottom: 16 }}>
+        <div className="section-card-head"><h3>Email Notifications</h3></div>
+        <div className="section-card-body">
+          <p style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.7, marginBottom: 16 }}>
+            Choose which emails you receive from One Select.
+          </p>
+          {[
+            { key: 'shortlisted',        label: 'New candidate shortlisted',    desc: 'When a candidate passes AI screening for your role' },
+            { key: 'interview_complete',  label: 'Interview completed',          desc: 'When a candidate finishes their video interview' },
+            { key: 'approval_reminder',   label: 'Approval reminder',            desc: 'Nudges when candidates are awaiting your decision for 48h+' },
+            { key: 'weekly_digest',       label: 'Weekly digest',                desc: 'A summary of pipeline activity every Monday morning' },
+          ].map(({ key, label, desc }) => (
+            <label key={key} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 16, cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={notifPrefs[key] ?? true}
+                onChange={e => setNotifPrefs(p => ({ ...p, [key]: e.target.checked }))}
+                style={{ marginTop: 2, accentColor: 'var(--accent)', width: 15, height: 15, flexShrink: 0 }}
+              />
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)' }}>{label}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>{desc}</div>
+              </div>
+            </label>
+          ))}
+          <div className="form-actions">
+            <button className="btn btn-primary" disabled={notifSaving} onClick={saveNotifPrefs}>
+              {notifSaving ? <><span className="spinner" style={{ width: 12, height: 12 }} /> Saving…</> : 'Save Preferences'}
+            </button>
+            {notifSaved && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--green)', letterSpacing: '0.06em' }}>✓ Saved</span>}
+          </div>
         </div>
       </div>
 
@@ -198,7 +255,7 @@ export default function ClientSettings() {
               {plan?.description && <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>{plan.description}</div>}
               {plan?.price_monthly != null && (
                 <div style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--accent)', marginTop: 4 }}>
-                  £{Number(plan.price_monthly).toFixed(0)} / month
+                  ₹{Number(plan.price_monthly).toFixed(0)} / month
                 </div>
               )}
               {profile?.subscription_started_at && (

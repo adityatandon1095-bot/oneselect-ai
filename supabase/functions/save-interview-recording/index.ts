@@ -31,10 +31,19 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: 'Token not found' }), { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
-    // Nullify the token after use so it cannot be replayed
+    // Only nullify the token once all uploads succeeded (no null URLs).
+    // A partial save (failed uploads) keeps the token so the candidate can retry.
+    const allUploaded = Array.isArray(video_urls) && video_urls.length > 0 &&
+      video_urls.every((v: { url: string | null }) => v?.url != null)
+
     const { error: updateErr } = await admin
       .from(table)
-      .update({ video_urls, integrity_score, integrity_flags, interview_invite_token: null })
+      .update({
+        video_urls,
+        integrity_score,
+        integrity_flags,
+        ...(allUploaded ? { interview_invite_token: null } : {}),
+      })
       .eq('id', row.id)
 
     if (updateErr) throw new Error(updateErr.message)

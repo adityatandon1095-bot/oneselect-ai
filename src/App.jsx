@@ -23,6 +23,7 @@ import RecruiterChat from './pages/recruiter/RecruiterChat'
 import RecruiterReports from './pages/recruiter/RecruiterReports'
 import RecruiterSettings from './pages/recruiter/RecruiterSettings'
 import ClientLayout from './pages/client/ClientLayout'
+import ClientRegister from './pages/client/ClientRegister'
 import ClientDashboard from './pages/client/ClientDashboard'
 import ClientJobs from './pages/client/ClientJobs'
 import ClientCandidates from './pages/client/ClientCandidates'
@@ -89,6 +90,7 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
+          <Route path="/client/register" element={<ClientRegister />} />
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/terms"   element={<Terms />} />
           <Route path="/interview/:token" element={<PublicVideoInterview />} />

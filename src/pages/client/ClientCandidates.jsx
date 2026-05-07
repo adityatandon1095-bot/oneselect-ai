@@ -2,6 +2,9 @@ import { useState, useEffect, useRef } from 'react'
 import { useLocation } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../lib/AuthContext'
+import { usePlan } from '../../hooks/usePlan'
+import { TRIAL_LIMITS } from '../../config/trialLimits'
+import PaidFeature from '../../components/PaidFeature'
 import { downloadCsv, candidateRows } from '../../utils/exportCsv'
 import { logAudit } from '../../utils/audit'
 
@@ -212,14 +215,15 @@ function CVModal({ candidate, onClose }) {
   )
 }
 
-function CandidateProfile({ candidate, onBack, onWatch, onViewCV, onOffer }) {
+function CandidateProfile({ candidate, onBack, onWatch, onViewCV, onOffer, onDeclineOffer, onReopenOffer }) {
   const s = candidate.scores ?? {}
   const transcript = candidate.interview_transcript ?? []
   const rec = s.recommendation
   const hasVideo = candidate.video_urls?.length > 0
   const hasCV = !!(candidate.raw_text ?? '').trim()
-  const canOffer = candidate.match_pass === true && candidate.offer_status !== 'sent' && candidate.final_decision !== 'hired'
+  const canOffer = candidate.match_pass === true && candidate.offer_status !== 'sent' && candidate.offer_status !== 'rejected' && candidate.final_decision !== 'hired'
   const offerDone = candidate.offer_status === 'sent' || candidate.final_decision === 'hired'
+  const offerRejected = candidate.offer_status === 'rejected'
 
   return (
     <div>
@@ -239,7 +243,22 @@ function CandidateProfile({ candidate, onBack, onWatch, onViewCV, onOffer }) {
             ▶ Watch Interview
           </button>
         )}
-        {offerDone && <span className="badge badge-green" style={{ fontSize: 12 }}>Offer Sent</span>}
+        {offerDone && (
+          <>
+            <span className="badge badge-green" style={{ fontSize: 12 }}>Offer Sent</span>
+            <button className="btn btn-secondary" style={{ fontSize: 11, padding: '4px 10px', color: 'var(--red)', borderColor: 'var(--red)' }} onClick={onDeclineOffer}>
+              Candidate Declined
+            </button>
+          </>
+        )}
+        {offerRejected && (
+          <>
+            <span className="badge badge-red" style={{ fontSize: 12 }}>Offer Declined</span>
+            <button className="btn btn-secondary" style={{ fontSize: 11, padding: '4px 10px' }} onClick={onReopenOffer}>
+              Re-open
+            </button>
+          </>
+        )}
         {canOffer && (
           <button className="btn btn-primary" style={{ background: 'var(--green)', borderColor: 'var(--green)', marginLeft: 'auto' }} onClick={onOffer}>
             Make Offer
@@ -356,6 +375,7 @@ function CandidateProfile({ candidate, onBack, onWatch, onViewCV, onOffer }) {
 
 export default function ClientCandidates() {
   const { user } = useAuth()
+  const { isTrial, canAccess } = usePlan()
   const location = useLocation()
   const [jobs, setJobs] = useState([])
   const [candidates, setCandidates] = useState([])
@@ -369,8 +389,28 @@ export default function ClientCandidates() {
   const [confirmRemoveId, setConfirmRemoveId] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [offerModal, setOfferModal] = useState(null)
+  const [clientNoteDraft, setClientNoteDraft] = useState({}) // id → text
+  const [compareIds, setCompareIds] = useState([])
+  const [showCompare, setShowCompare] = useState(false)
+  const [approvePrompt, setApprovePrompt] = useState(null)
+  const jobIdsRef = useRef([])
 
-  useEffect(() => { if (user) load() }, [user])
+  useEffect(() => {
+    if (!user) return
+    load()
+    const channel = supabase
+      .channel('client-candidates-live')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'candidates' }, ({ new: row }) => {
+        if (jobIdsRef.current.includes(row.job_id))
+          setCandidates(prev => prev.map(c => c.id === row.id ? { ...c, ...row } : c))
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'candidates' }, ({ new: row }) => {
+        if (jobIdsRef.current.includes(row.job_id))
+          setCandidates(prev => prev.some(c => c.id === row.id) ? prev : [...prev, row])
+      })
+      .subscribe()
+    return () => supabase.removeChannel(channel)
+  }, [user])
 
   useEffect(() => {
     const params = new URLSearchParams(location.search)
@@ -381,6 +421,7 @@ export default function ClientCandidates() {
   async function load() {
     const { data: jobData } = await supabase.from('jobs').select('id, title').eq('recruiter_id', user.id)
     const ids = (jobData ?? []).map(j => j.id)
+    jobIdsRef.current = ids
     setJobs(jobData ?? [])
     if (!ids.length) { setLoading(false); return }
 
@@ -406,18 +447,35 @@ export default function ClientCandidates() {
     setCandidates(prev => prev.map(c => c.id === id ? { ...c, client_dismissed: false } : c))
   }
 
-  async function approveCandidate(id) {
-    await supabase.from('candidates').update({ client_approved: true }).eq('id', id)
-    setCandidates(prev => prev.map(c => c.id === id ? { ...c, client_approved: true } : c))
+  async function approveCandidate(id, reason) {
     const c = candidates.find(x => x.id === id)
-    logAudit(supabase, { actorId: user?.id, actorRole: 'client', action: 'client_approved', entityType: 'candidate', entityId: id, jobId: c?.job_id, metadata: { candidate_name: c?.full_name } })
+    const updates = { client_approved: true }
+    if (reason?.trim()) {
+      const existing = (c?.client_notes ?? '').trim()
+      updates.client_notes = existing ? `${existing}\n✓ Approved: ${reason.trim()}` : `✓ Approved: ${reason.trim()}`
+    }
+    await supabase.from('candidates').update(updates).eq('id', id)
+    setCandidates(prev => prev.map(x => x.id === id ? { ...x, ...updates } : x))
+    logAudit(supabase, { actorId: user?.id, actorRole: 'client', action: 'client_approved', entityType: 'candidate', entityId: id, jobId: c?.job_id, metadata: { candidate_name: c?.full_name, reason: reason?.trim() || null } })
+    setApprovePrompt(null)
   }
 
-  async function rejectCandidate(id) {
-    await supabase.from('candidates').update({ client_approved: false }).eq('id', id)
-    setCandidates(prev => prev.map(c => c.id === id ? { ...c, client_approved: false } : c))
+  async function rejectCandidate(id, reason) {
     const c = candidates.find(x => x.id === id)
-    logAudit(supabase, { actorId: user?.id, actorRole: 'client', action: 'client_rejected', entityType: 'candidate', entityId: id, jobId: c?.job_id, metadata: { candidate_name: c?.full_name } })
+    const updates = { client_approved: false }
+    if (reason?.trim()) {
+      const existing = (c?.client_notes ?? '').trim()
+      updates.client_notes = existing ? `${existing}\n✕ Rejected: ${reason.trim()}` : `✕ Rejected: ${reason.trim()}`
+    }
+    await supabase.from('candidates').update(updates).eq('id', id)
+    setCandidates(prev => prev.map(x => x.id === id ? { ...x, ...updates } : x))
+    logAudit(supabase, { actorId: user?.id, actorRole: 'client', action: 'client_rejected', entityType: 'candidate', entityId: id, jobId: c?.job_id, metadata: { candidate_name: c?.full_name, reason: reason?.trim() || null } })
+    setApprovePrompt(null)
+  }
+
+  async function saveClientNote(id, text) {
+    await supabase.from('candidates').update({ client_notes: text.trim() || null }).eq('id', id)
+    setCandidates(prev => prev.map(c => c.id === id ? { ...c, client_notes: text.trim() || null } : c))
   }
 
   async function sendOffer() {
@@ -432,6 +490,21 @@ export default function ClientCandidates() {
       setCandidates(prev => prev.map(c => c.id === candidate.id ? { ...c, offer_status: 'sent', final_decision: 'hired' } : c))
       setOfferModal(null)
     }
+  }
+
+  async function declineOffer(id) {
+    await supabase.from('candidates').update({ offer_status: 'rejected', final_decision: null }).eq('id', id)
+    setCandidates(prev => prev.map(c => c.id === id ? { ...c, offer_status: 'rejected', final_decision: null } : c))
+  }
+
+  async function reopenOffer(id) {
+    await supabase.from('candidates').update({ offer_status: null, final_decision: null }).eq('id', id)
+    setCandidates(prev => prev.map(c => c.id === id ? { ...c, offer_status: null, final_decision: null } : c))
+  }
+
+  function slaDays(c) {
+    if (c.match_pass !== true || c.client_approved != null) return null
+    return Math.floor((Date.now() - new Date(c.created_at)) / 86400000)
   }
 
   function getStatus(c) {
@@ -451,7 +524,10 @@ export default function ClientCandidates() {
     const hay = [c.full_name, c.candidate_role, c.email, c.summary, ...(c.skills ?? [])].join(' ').toLowerCase()
     return words.every(w => hay.includes(w))
   })
-  const tabFiltered = searchActive.filter(c => tab === 'All' || getStatus(c) === tab)
+  const tabFilteredAll = searchActive.filter(c => tab === 'All' || getStatus(c) === tab)
+  const trialCap = isTrial && !canAccess('can_view_full_candidate_profile')
+  const tabFiltered    = trialCap ? tabFilteredAll.slice(0, TRIAL_LIMITS.max_candidates_visible) : tabFilteredAll
+  const trialHidden    = trialCap ? Math.max(0, tabFilteredAll.length - TRIAL_LIMITS.max_candidates_visible) : 0
 
   const counts = {
     'All': searchActive.length,
@@ -467,6 +543,16 @@ export default function ClientCandidates() {
   if (loading) return <div className="page"><span className="spinner" /></div>
 
   if (selected) {
+    if (!canAccess('can_view_full_candidate_profile')) {
+      return (
+        <div className="page">
+          <button className="btn btn-secondary" style={{ marginBottom: 20 }} onClick={() => setSelectedId(null)}>← Back to list</button>
+          <PaidFeature feature="can_view_full_candidate_profile">
+            <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-3)' }}>Full profile</div>
+          </PaidFeature>
+        </div>
+      )
+    }
     return (
       <div className="page">
         <CandidateProfile
@@ -475,7 +561,27 @@ export default function ClientCandidates() {
           onWatch={() => setWatchId(selected.id)}
           onViewCV={() => setCvId(selected.id)}
           onOffer={() => setOfferModal({ candidate: selected, note: '', sending: false, error: null })}
+          onDeclineOffer={() => declineOffer(selected.id)}
+          onReopenOffer={() => reopenOffer(selected.id)}
         />
+        <div className="section-card" style={{ marginTop: 16 }}>
+          <div className="section-card-head"><h3>Your Notes</h3></div>
+          <div className="section-card-body">
+            <textarea
+              rows={4}
+              style={{ width: '100%', boxSizing: 'border-box', resize: 'vertical', fontFamily: 'var(--font-body)', fontSize: 13, lineHeight: 1.6 }}
+              placeholder="Add private notes — notice period, salary expectations, concerns, next steps…"
+              value={clientNoteDraft[selected.id] ?? (selected.client_notes ?? '')}
+              onChange={e => setClientNoteDraft(d => ({ ...d, [selected.id]: e.target.value }))}
+              onBlur={() => {
+                const text = clientNoteDraft[selected.id] ?? selected.client_notes ?? ''
+                if (text !== (selected.client_notes ?? '')) saveClientNote(selected.id, text)
+              }}
+            />
+            <div style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--font-mono)', marginTop: 6 }}>Saved automatically. Not visible to the candidate.</div>
+          </div>
+        </div>
+
         {!selected.client_dismissed && (
           confirmRemoveId === selected.id ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 16, padding: '12px 16px', background: 'var(--surface)', border: '1px solid var(--border)' }}>
@@ -564,6 +670,26 @@ export default function ClientCandidates() {
               }}
             >↓ CSV</button>
           )}
+          {compareIds.length === 0 ? (
+            <button
+              className="btn btn-secondary"
+              style={{ fontSize: 12, padding: '6px 12px', whiteSpace: 'nowrap' }}
+              title="Tick checkboxes to select candidates for comparison"
+              onClick={() => {}}
+            >⊞ Compare</button>
+          ) : compareIds.length === 1 ? (
+            <button
+              className="btn btn-secondary"
+              style={{ fontSize: 12, padding: '6px 12px', whiteSpace: 'nowrap', color: 'var(--accent)', borderColor: 'var(--accent)' }}
+              onClick={() => setCompareIds([])}
+            >1 selected — pick 1 more (×)</button>
+          ) : (
+            <button
+              className="btn btn-primary"
+              style={{ fontSize: 12, padding: '6px 12px', whiteSpace: 'nowrap' }}
+              onClick={() => setShowCompare(true)}
+            >⊞ Compare {compareIds.length}</button>
+          )}
         </div>
       </div>
 
@@ -604,6 +730,21 @@ export default function ClientCandidates() {
               <div key={c.id} className="table-row clickable" onClick={() => setSelectedId(c.id)}>
                 <div className="col-main">
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <input
+                      type="checkbox"
+                      checked={compareIds.includes(c.id)}
+                      onChange={e => {
+                        e.stopPropagation()
+                        setCompareIds(prev =>
+                          prev.includes(c.id)
+                            ? prev.filter(id => id !== c.id)
+                            : prev.length < 4 ? [...prev, c.id] : prev
+                        )
+                      }}
+                      onClick={e => e.stopPropagation()}
+                      style={{ flexShrink: 0, width: 14, height: 14, accentColor: 'var(--accent)', cursor: 'pointer' }}
+                      title="Select for comparison"
+                    />
                     <div className="profile-avatar" style={{ width: 34, height: 34, fontSize: 14, borderRadius: 'var(--r)', flexShrink: 0 }}>
                       {(c.full_name ?? '?')[0].toUpperCase()}
                     </div>
@@ -647,20 +788,53 @@ export default function ClientCandidates() {
                       ▶ Watch
                     </button>
                   )}
+                  {(() => { const d = slaDays(c); return d != null && d >= 1 ? (
+                    <span title={`Awaiting your decision for ${d} day${d !== 1 ? 's' : ''}`}
+                      style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: d >= 3 ? 'var(--red)' : 'var(--amber)', border: `1px solid ${d >= 3 ? 'var(--red)' : 'var(--amber)'}`, padding: '1px 5px' }}>
+                      ⏱ {d}d
+                    </span>
+                  ) : null })()}
                   {c.match_pass === true && c.client_approved === null && (
-                    <>
-                      <button className="btn btn-secondary" style={{ fontSize: 11, padding: '4px 10px', color: 'var(--green)', borderColor: 'var(--green)' }}
-                        onClick={e => { e.stopPropagation(); approveCandidate(c.id) }}>✓ Approve</button>
-                      <button className="btn btn-secondary" style={{ fontSize: 11, padding: '4px 10px', color: 'var(--red)', borderColor: 'var(--red)' }}
-                        onClick={e => { e.stopPropagation(); rejectCandidate(c.id) }}>✕ Reject</button>
-                    </>
+                    approvePrompt?.id === c.id
+                      ? (
+                        <div onClick={e => e.stopPropagation()} style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
+                          <input
+                            type="text"
+                            placeholder="Reason (optional)…"
+                            value={approvePrompt.reason}
+                            autoFocus
+                            onChange={e => setApprovePrompt(p => ({ ...p, reason: e.target.value }))}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') approvePrompt.action === 'approve' ? approveCandidate(c.id, approvePrompt.reason) : rejectCandidate(c.id, approvePrompt.reason)
+                              if (e.key === 'Escape') setApprovePrompt(null)
+                            }}
+                            style={{ fontSize: 11, padding: '3px 7px', border: '1px solid var(--border)', fontFamily: 'var(--font-body)', width: 150 }}
+                          />
+                          <button className="btn btn-secondary"
+                            style={{ fontSize: 11, padding: '3px 8px', color: approvePrompt.action === 'approve' ? 'var(--green)' : 'var(--red)', borderColor: approvePrompt.action === 'approve' ? 'var(--green)' : 'var(--red)' }}
+                            onClick={e => { e.stopPropagation(); approvePrompt.action === 'approve' ? approveCandidate(c.id, approvePrompt.reason) : rejectCandidate(c.id, approvePrompt.reason) }}>
+                            {approvePrompt.action === 'approve' ? '✓' : '✕'}
+                          </button>
+                          <button className="btn btn-secondary" style={{ fontSize: 11, padding: '3px 8px' }}
+                            onClick={e => { e.stopPropagation(); setApprovePrompt(null) }}>×</button>
+                        </div>
+                      ) : (
+                        <>
+                          <button className="btn btn-secondary" style={{ fontSize: 11, padding: '4px 10px', color: 'var(--green)', borderColor: 'var(--green)' }}
+                            onClick={e => { e.stopPropagation(); setApprovePrompt({ id: c.id, action: 'approve', reason: '' }) }}>✓ Approve</button>
+                          <button className="btn btn-secondary" style={{ fontSize: 11, padding: '4px 10px', color: 'var(--red)', borderColor: 'var(--red)' }}
+                            onClick={e => { e.stopPropagation(); setApprovePrompt({ id: c.id, action: 'reject', reason: '' }) }}>✕ Reject</button>
+                        </>
+                      )
                   )}
                   {c.client_approved === true  && <span className="badge badge-green" style={{ fontSize: 10 }}>Approved</span>}
                   {c.client_approved === false && <span className="badge badge-red"   style={{ fontSize: 10 }}>Rejected</span>}
                   {status === 'Interview Pending'  && !hasVideo && <span className="badge badge-amber">Interview Pending</span>}
                   {status === 'Screened Out'       && !s && <span className="badge badge-red">Screened Out</span>}
                   {status === 'Pending'            && <span className="badge" style={{ color: 'var(--text-3)', background: 'var(--surface2)' }}>Pending</span>}
-                  {c.offer_status === 'sent' || c.final_decision === 'hired'
+                  {c.offer_status === 'rejected'
+                    ? <span className="badge badge-red" style={{ fontSize: 11 }}>Offer Declined</span>
+                    : c.offer_status === 'sent' || c.final_decision === 'hired'
                     ? <span className="badge badge-green" style={{ fontSize: 11 }}>Offer Sent</span>
                     : c.match_pass === true && (
                       <button className="btn btn-secondary" style={{ fontSize: 11, padding: '4px 10px', color: 'var(--green)', borderColor: 'var(--green)' }}
@@ -684,6 +858,33 @@ export default function ClientCandidates() {
               </div>
             )
           })
+        )}
+        {trialHidden > 0 && (
+          <>
+            {[...Array(Math.min(trialHidden, 3))].map((_, i) => (
+              <div key={`locked-${i}`} style={{ filter: 'blur(3px)', pointerEvents: 'none', userSelect: 'none', opacity: 0.35 }} className="table-row">
+                <div className="col-main">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div className="profile-avatar" style={{ width: 34, height: 34, fontSize: 14, borderRadius: 'var(--r)', flexShrink: 0, background: 'var(--surface2)' }}>?</div>
+                    <div>
+                      <div className="col-name">Candidate {TRIAL_LIMITS.max_candidates_visible + i + 1}</div>
+                      <div className="col-sub">Hidden · Upgrade to view</div>
+                    </div>
+                  </div>
+                </div>
+                <div className="col-right">
+                  <span className="badge badge-amber">Interview Done</span>
+                  <span className="mono" style={{ fontSize: 13, fontWeight: 700, color: 'var(--green)' }}>87</span>
+                </div>
+              </div>
+            ))}
+            <div style={{ padding: '14px 20px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--surface)' }}>
+              <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
+                🔒 {trialHidden} more candidate{trialHidden !== 1 ? 's' : ''} hidden on trial
+              </span>
+              <a href="mailto:hello@oneselect.co.uk" style={{ fontSize: 12, color: 'var(--accent)', fontFamily: 'var(--font-mono)', textDecoration: 'none' }}>Upgrade to see all →</a>
+            </div>
+          </>
         )}
       </div>
 
@@ -724,6 +925,75 @@ export default function ClientCandidates() {
 
       {watching && <VideoModal candidate={watching} onClose={() => setWatchId(null)} />}
       {cvCandidate && <CVModal candidate={cvCandidate} onClose={() => setCvId(null)} />}
+
+      {showCompare && compareIds.length >= 2 && (() => {
+        const compared = compareIds.map(id => candidates.find(c => c.id === id)).filter(Boolean)
+        return (
+          <div
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', zIndex: 2100, padding: '40px 20px', overflowY: 'auto' }}
+            onClick={e => { if (e.target === e.currentTarget) setShowCompare(false) }}
+          >
+            <div style={{ background: '#F8F7F4', width: '100%', maxWidth: 960, border: '1px solid #E8E4DC', display: 'flex', flexDirection: 'column' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px 24px', borderBottom: '1px solid #E8E4DC' }}>
+                <div>
+                  <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.12em', color: '#9CA3AF', marginBottom: 3 }}>Side-by-Side</div>
+                  <div style={{ fontSize: 17, fontFamily: 'Georgia, serif', color: '#2D3748' }}>Candidate Comparison</div>
+                </div>
+                <button onClick={() => setShowCompare(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: '#9CA3AF', lineHeight: 1 }}>×</button>
+              </div>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <thead>
+                    <tr>
+                      <th style={{ padding: '12px 20px', textAlign: 'left', fontFamily: 'var(--font-mono)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#9CA3AF', background: '#F8F7F4', width: 140, borderBottom: '1px solid #E8E4DC' }}>Metric</th>
+                      {compared.map(c => (
+                        <th key={c.id} style={{ padding: '12px 16px', textAlign: 'center', fontFamily: 'Georgia, serif', fontWeight: 400, color: '#2D3748', background: compareIds[0] === c.id ? 'rgba(184,146,74,0.06)' : '#F8F7F4', borderBottom: '1px solid #E8E4DC', borderLeft: '1px solid #E8E4DC' }}>
+                          <div style={{ fontWeight: 500 }}>{c.full_name}</div>
+                          <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: '#9CA3AF', fontWeight: 400, marginTop: 2 }}>{c.candidate_role}</div>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[
+                      { label: 'Screen Score', render: c => c.match_score != null ? <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: dimColor(c.match_score) }}>{c.match_score}</span> : <span style={{ color: '#9CA3AF' }}>—</span> },
+                      { label: 'Interview Score', render: c => c.scores?.overallScore != null ? <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: dimColor(c.scores.overallScore) }}>{c.scores.overallScore}</span> : <span style={{ color: '#9CA3AF' }}>—</span> },
+                      { label: 'Recommendation', render: c => c.scores?.recommendation ? <span style={{ fontWeight: 600, color: REC_COLOR[c.scores.recommendation], fontFamily: 'var(--font-mono)', fontSize: 11 }}>{c.scores.recommendation}</span> : <span style={{ color: '#9CA3AF' }}>—</span> },
+                      { label: 'Experience', render: c => c.total_years != null ? `${c.total_years}y` : '—' },
+                      ...DIMS.map(([key, label]) => ({
+                        label,
+                        render: c => {
+                          const v = c.scores?.[key]
+                          return v != null ? <span style={{ fontFamily: 'var(--font-mono)', color: dimColor(v) }}>{v}</span> : <span style={{ color: '#9CA3AF' }}>—</span>
+                        },
+                      })),
+                      { label: 'Skills', render: c => (c.skills ?? []).length > 0 ? (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, justifyContent: 'center' }}>
+                          {(c.skills ?? []).slice(0, 6).map(sk => <span key={sk} style={{ fontSize: 10, fontFamily: 'var(--font-mono)', padding: '2px 6px', background: 'rgba(0,0,0,0.05)', borderRadius: 3 }}>{sk}</span>)}
+                          {(c.skills ?? []).length > 6 && <span style={{ fontSize: 10, color: '#9CA3AF' }}>+{(c.skills ?? []).length - 6}</span>}
+                        </div>
+                      ) : <span style={{ color: '#9CA3AF' }}>—</span> },
+                      { label: 'Status', render: c => <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)' }}>{getStatus(c)}</span> },
+                    ].map(({ label, render }) => (
+                      <tr key={label} style={{ borderBottom: '1px solid #E8E4DC' }}>
+                        <td style={{ padding: '11px 20px', fontFamily: 'var(--font-mono)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#9CA3AF', background: '#F8F7F4' }}>{label}</td>
+                        {compared.map(c => (
+                          <td key={c.id} style={{ padding: '11px 16px', textAlign: 'center', borderLeft: '1px solid #E8E4DC', background: compareIds[0] === c.id ? 'rgba(184,146,74,0.04)' : 'white' }}>{render(c)}</td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div style={{ padding: '14px 24px', borderTop: '1px solid #E8E4DC', display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                <button className="btn btn-secondary" onClick={() => { setShowCompare(false); setCompareIds([]) }} style={{ fontSize: 12 }}>Clear & Close</button>
+                <button className="btn btn-secondary" onClick={() => setShowCompare(false)} style={{ fontSize: 12 }}>Close</button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
       {offerModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2200, padding: 20 }}
           onClick={e => { if (e.target === e.currentTarget) setOfferModal(null) }}>

@@ -31,9 +31,19 @@ export default function ClientDashboard() {
     if (!profile?.first_login_at) updates.first_login_at = new Date().toISOString()
     supabase.from('profiles').update(updates).eq('id', user.id)
 
-    if (profile?.first_login && !sessionStorage.getItem(`pw_set_${user.id}`)) {
-      setLoading(false)
-      setShowPasswordChange(true)
+    if (profile?.first_login === true) {
+      if (profile?.subscription_status === 'trial') {
+        // Self-registered trial — show welcome modal, clear first_login flag
+        supabase.from('profiles').update({ first_login: false }).eq('id', user.id)
+        setShowWelcome(true)
+        load()
+      } else if (!sessionStorage.getItem(`pw_set_${user.id}`)) {
+        // Admin-created account — show password set modal
+        setLoading(false)
+        setShowPasswordChange(true)
+      } else {
+        load()
+      }
     } else {
       load()
     }
@@ -197,6 +207,47 @@ export default function ClientDashboard() {
 
   return (
     <div className="page">
+      {showWelcome && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000, padding: 24 }}>
+          <div style={{ background: '#F8F7F4', width: '100%', maxWidth: 480, border: '1px solid #E8E4DC', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ padding: '28px 32px 0' }}>
+              <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.2em', color: 'var(--accent)', marginBottom: 8 }}>One Select</div>
+              <h2 style={{ fontFamily: 'var(--font-head)', fontWeight: 300, fontSize: 24, margin: 0, color: 'var(--text)' }}>Welcome to One Select</h2>
+              <p style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.75, marginTop: 10 }}>
+                Your AI hiring platform is ready. Here's what to do first:
+              </p>
+            </div>
+            <div style={{ padding: '16px 32px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {[
+                { n: 1, text: 'Post your first job', desc: 'Describe the role and skills required — takes 2 minutes.' },
+                { n: 2, text: 'Your recruiter will upload and screen CVs', desc: 'AI screening scores every CV against your requirements automatically.' },
+                { n: 3, text: 'Review scores and interview results here', desc: 'Approve shortlisted candidates and watch their video interviews.' },
+              ].map(step => (
+                <div key={step.n} style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+                  <div style={{ width: 26, height: 26, borderRadius: '50%', background: 'var(--accent)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-mono)', fontSize: 12, flexShrink: 0, fontWeight: 700 }}>{step.n}</div>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)' }}>{step.text}</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>{step.desc}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div style={{ padding: '16px 32px 28px', borderTop: '1px solid var(--border)', display: 'flex', gap: 10 }}>
+              <button
+                className="btn btn-primary"
+                style={{ flex: 1, justifyContent: 'center', padding: '11px', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.07em' }}
+                onClick={() => dismissWelcome(true)}
+              >
+                Post Your First Job →
+              </button>
+              <button className="btn btn-secondary" style={{ fontSize: 12 }} onClick={() => dismissWelcome(false)}>
+                Later
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showChecklist && (
         <div className="section-card" style={{ marginBottom: 20, borderLeft: '3px solid var(--accent)' }}>
           <div className="section-card-head">

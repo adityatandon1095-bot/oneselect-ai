@@ -20,6 +20,7 @@ export function isSupported(file) {
  * Extracts content from a File object.
  * Returns { kind: 'text', text: string }
  *      or { kind: 'image', base64: string, mediaType: 'image/jpeg'|'image/png' }
+ *      or { kind: 'images', pages: Array<{ base64, mediaType }> }  (scanned PDF)
  */
 export async function extractContent(file) {
   const ext = fileExt(file)
@@ -29,7 +30,7 @@ export async function extractContent(file) {
   }
 
   if (ext === 'pdf') {
-    return { kind: 'text', text: await extractPdf(file) }
+    return await extractPdf(file)
   }
 
   if (ext === 'docx') {
@@ -55,7 +56,6 @@ async function extractPdf(file) {
   for (let i = 1; i <= pdf.numPages; i++) {
     const page    = await pdf.getPage(i)
     const content = await page.getTextContent()
-    // Items can be TextItem (has .str) or TextMarkedContent (no .str)
     const text = content.items
       .map((item) => ('str' in item ? item.str : ''))
       .join(' ')
@@ -64,7 +64,32 @@ async function extractPdf(file) {
     if (text) pages.push(text)
   }
 
-  return pages.join('\n\n')
+  const fullText = pages.join('\n\n')
+
+  // Scanned (image-only) PDF: too little text extracted — render pages as images for vision parsing
+  if (fullText.trim().length < 150 && pdf.numPages > 0) {
+    const imagePages = await renderPdfPages(pdf)
+    if (!imagePages.length) throw new Error('No content could be extracted from this PDF')
+    return { kind: 'images', pages: imagePages }
+  }
+
+  return { kind: 'text', text: fullText }
+}
+
+async function renderPdfPages(pdf) {
+  const result = []
+  const maxPages = Math.min(pdf.numPages, 4)
+  for (let i = 1; i <= maxPages; i++) {
+    const page     = await pdf.getPage(i)
+    const viewport = page.getViewport({ scale: 1.8 })
+    const canvas   = document.createElement('canvas')
+    canvas.width   = viewport.width
+    canvas.height  = viewport.height
+    await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise
+    const base64 = canvas.toDataURL('image/jpeg', 0.82).split(',')[1]
+    result.push({ base64, mediaType: 'image/jpeg' })
+  }
+  return result
 }
 
 async function extractDocx(file) {

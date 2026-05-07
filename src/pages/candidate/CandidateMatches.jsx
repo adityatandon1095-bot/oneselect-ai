@@ -9,10 +9,10 @@ function dimColor(v) {
 }
 
 function matchStatus(m) {
-  if (m.scores?.overallScore != null) return { label: 'Interview Done', cls: 'badge-green' }
-  if (m.match_pass === true)  return { label: 'Passed Screening', cls: 'badge-blue' }
-  if (m.match_pass === false) return { label: 'Not Selected',     cls: 'badge-red' }
-  return { label: 'Under Review', cls: 'badge-amber' }
+  if (m.scores?.overallScore != null) return { label: 'Interview reviewed', sub: 'Final decision pending', cls: 'badge-green' }
+  if (m.match_pass === true)  return { label: 'Shortlisted', sub: 'Interview invite within 2 business days', cls: 'badge-blue' }
+  if (m.match_pass === false) return { label: 'Not progressed', sub: 'Not selected for this role', cls: 'badge-red' }
+  return { label: 'Under review', sub: 'CV being assessed — usually within 24 hours', cls: 'badge-amber' }
 }
 
 function ScoreBar({ label, value }) {
@@ -46,7 +46,7 @@ export default function CandidateMatches() {
     if (pool) {
       const { data: matchData } = await supabase
         .from('job_matches')
-        .select('*, jobs(id, title, experience_years, required_skills, description)')
+        .select('*, jobs(id, title, experience_years, required_skills, description), video_urls, scores, interview_transcript')
         .eq('talent_id', pool.id)
         .order('match_score', { ascending: false })
       setMatches(matchData ?? [])
@@ -129,14 +129,17 @@ export default function CandidateMatches() {
                       ))}
                     </div>
                   </div>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                    {m.match_score != null && (
-                      <span className="mono" style={{ fontSize: 13, fontWeight: 700, color: dimColor(m.match_score) }}>
-                        {m.match_score}/100
-                      </span>
-                    )}
-                    <span className={`badge ${st.cls}`}>{st.label}</span>
-                    {hasScores && <span style={{ fontSize: 11, color: 'var(--text-3)' }}>{isOpen ? '▲' : '▼'}</span>}
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                      {m.match_score != null && (
+                        <span className="mono" style={{ fontSize: 13, fontWeight: 700, color: dimColor(m.match_score) }}>
+                          {m.match_score}/100
+                        </span>
+                      )}
+                      <span className={`badge ${st.cls}`}>{st.label}</span>
+                      {hasScores && <span style={{ fontSize: 11, color: 'var(--text-3)' }}>{isOpen ? '▲' : '▼'}</span>}
+                    </div>
+                    {st.sub && <div style={{ fontSize: 11, color: 'var(--text-3)', textAlign: 'right' }}>{st.sub}</div>}
                   </div>
                 </div>
 
@@ -179,6 +182,29 @@ export default function CandidateMatches() {
                         <div style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.7, borderLeft: '2px solid var(--accent)', paddingLeft: 10 }}>"{m.scores.bestAnswer}"</div>
                       </div>
                     )}
+
+                    {/* Interview question history */}
+                    {Array.isArray(m.video_urls) && m.video_urls.length > 0 && (
+                      <div>
+                        <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-3)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Your Answers</div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          {m.video_urls.map((v, i) => (
+                            <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '10px 12px', background: 'var(--surface2)', borderRadius: 6 }}>
+                              <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--accent)', flexShrink: 0, marginTop: 2 }}>Q{i + 1}</span>
+                              <div style={{ flex: 1 }}>
+                                <div style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5 }}>{v.q}</div>
+                              </div>
+                              {v.url && (
+                                <a href={v.url} target="_blank" rel="noopener noreferrer"
+                                  style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: '#B8924A', textDecoration: 'none', flexShrink: 0, whiteSpace: 'nowrap' }}>
+                                  ▶ Watch
+                                </a>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -187,8 +213,15 @@ export default function CandidateMatches() {
         </div>
       )}
 
-      <div style={{ marginTop: 24, padding: '12px 16px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12, color: 'var(--text-3)', lineHeight: 1.6 }}>
-        <strong>About our process:</strong> This role uses AI-assisted screening. A human recruiter reviews all AI decisions before final selection. Company details are kept confidential until the offer stage to ensure fair evaluation.
+      <div style={{ marginTop: 24, padding: '14px 18px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12, color: 'var(--text-3)', lineHeight: 1.7 }}>
+        <strong style={{ color: 'var(--text-2)' }}>About our process:</strong> This role uses AI-assisted screening. A human recruiter reviews all AI decisions before final selection. Company details are kept confidential until the offer stage to ensure fair evaluation.
+      </div>
+
+      <div style={{ marginTop: 12, padding: '14px 18px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12, color: 'var(--text-3)', lineHeight: 1.7, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+        <span>Questions about your application?</span>
+        <a href="mailto:candidates@oneselect.co.uk" style={{ color: 'var(--accent)', textDecoration: 'none', fontFamily: 'var(--font-mono)', fontSize: 12 }}>
+          candidates@oneselect.co.uk →
+        </a>
       </div>
     </div>
   )

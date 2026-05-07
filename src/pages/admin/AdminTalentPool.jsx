@@ -124,13 +124,31 @@ export default function AdminTalentPool() {
           content = await extractContent(entry.file)
         }
 
-        const msgs = content.kind === 'image'
+        if (content.kind === 'images') {
+          addLog(`  ℹ Scanned PDF detected — using vision (${content.pages.length} page${content.pages.length !== 1 ? 's' : ''})`, 'info')
+        }
+        const msgs = content.kind === 'images'
+          ? [{ role: 'user', content: [
+              ...content.pages.map(p => ({ type: 'image', source: { type: 'base64', media_type: p.mediaType, data: p.base64 } })),
+              { type: 'text', text: 'Parse this CV. It is provided as page images from a scanned PDF.' },
+            ]}]
+          : content.kind === 'image'
           ? [{ role: 'user', content: [{ type: 'image', source: { type: 'base64', media_type: content.mediaType, data: content.base64 } }, { type: 'text', text: 'Parse this CV image.' }] }]
           : [{ role: 'user', content: `Parse this CV:\n\n${content.text}` }]
-        const reply = await callClaude(msgs, CV_PARSE_SYSTEM, 1024)
-        // Strip markdown code fences Claude sometimes wraps around JSON
-        const jsonStr = reply.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
-        const parsed = JSON.parse(jsonStr)
+
+        let parsed
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          try {
+            const reply = await callClaude(msgs, CV_PARSE_SYSTEM, 1024)
+            const jsonStr = reply.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
+            parsed = JSON.parse(jsonStr)
+            break
+          } catch (err) {
+            if (attempt === 3) throw new Error(`Claude parse failed after 3 attempts: ${err.message}`)
+            addLog(`  ↻ Retrying parse (attempt ${attempt + 1}/3)…`, 'info')
+            await new Promise(r => setTimeout(r, 1000 * attempt))
+          }
+        }
 
         const { data: saved, error } = await supabase.from('talent_pool').insert({
           full_name:      parsed.name,
