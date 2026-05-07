@@ -26,12 +26,12 @@ export default function RecruiterLayout() {
 
   return (
     <div className="layout">
-      <aside className="sidebar">
+      <aside className="sidebar" style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
         <div className="sidebar-brand">
           <img src="/oneselect-logo.png" alt="One Select" style={{ width: '100%', maxWidth: 160, height: 'auto', objectFit: 'contain', display: 'block' }} />
         </div>
 
-        <nav className="sidebar-nav">
+        <nav className="sidebar-nav" style={{ flex: 1, overflowY: 'auto' }}>
           <div className="nav-section">Recruiter</div>
           {NAV.map((item) => (
             <NavLink
@@ -45,7 +45,7 @@ export default function RecruiterLayout() {
           ))}
         </nav>
 
-        <div className="sidebar-footer">
+        <div className="sidebar-footer" style={{ flexShrink: 0, borderTop: '1px solid var(--border)' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
             <div className="sidebar-user-email" style={{ margin: 0 }}>{user?.email}</div>
             <NotificationBell />

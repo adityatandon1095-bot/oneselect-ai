@@ -262,6 +262,12 @@ export default function RecruiterCandidates() {
   useEffect(() => { if (user) load() }, [user])
 
   useEffect(() => {
+    if (!addManuallyModal) return
+    const { saving, error, ...formData } = addManuallyModal
+    try { localStorage.setItem('form_candidate_add', JSON.stringify(formData)) } catch {}
+  }, [addManuallyModal])
+
+  useEffect(() => {
     const params = new URLSearchParams(location.search)
     const t = params.get('tab')
     if (t && TABS.includes(t)) setTab(t)
@@ -335,6 +341,7 @@ export default function RecruiterCandidates() {
         })
       }
       setCandidates(p => [saved, ...p])
+      localStorage.removeItem('form_candidate_add')
       setAddManuallyModal(null)
     } catch (err) {
       setAddManuallyModal(m => ({ ...m, saving: false, error: err.message }))
@@ -563,7 +570,7 @@ export default function RecruiterCandidates() {
             className="btn btn-primary"
             style={{ whiteSpace: 'nowrap' }}
             disabled={jobs.length === 0}
-            onClick={() => setAddManuallyModal({ ...EMPTY_MANUAL, saving: false, error: null })}
+            onClick={() => { const saved = (() => { try { return JSON.parse(localStorage.getItem('form_candidate_add') || 'null') } catch { return null } })(); setAddManuallyModal({ ...EMPTY_MANUAL, ...(saved ?? {}), saving: false, error: null }) }}
           >
             + Add Manually
           </button>

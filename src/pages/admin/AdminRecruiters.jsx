@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
+import { useFormPersistence } from '../../hooks/useFormPersistence'
 
 export default function AdminRecruiters() {
   const [recruiters, setRecruiters] = useState([])
@@ -9,8 +10,7 @@ export default function AdminRecruiters() {
 
   // Invite state
   const [showInvite, setShowInvite] = useState(false)
-  const [invName,  setInvName]  = useState('')
-  const [invEmail, setInvEmail] = useState('')
+  const { values: inv, updateField: updateInv, clearForm: clearInv } = useFormPersistence('recruiter_invite', { invName: '', invEmail: '' })
   const [inviting, setInviting] = useState(false)
   const [invError, setInvError] = useState('')
   const [invResult, setInvResult] = useState(null)
@@ -51,7 +51,7 @@ export default function AdminRecruiters() {
   }
 
   async function handleInvite() {
-    if (!invEmail.trim()) { setInvError('Email is required'); return }
+    if (!inv.invEmail.trim()) { setInvError('Email is required'); return }
     setInviting(true); setInvError('')
     try {
       const { data: { session } } = await supabase.auth.getSession()
@@ -63,8 +63,8 @@ export default function AdminRecruiters() {
           'Authorization': `Bearer ${session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY}`,
         },
         body: JSON.stringify({
-          email:        invEmail.trim().toLowerCase(),
-          contact_name: invName.trim() || invEmail.trim().toLowerCase(),
+          email:        inv.invEmail.trim().toLowerCase(),
+          contact_name: inv.invName.trim() || inv.invEmail.trim().toLowerCase(),
           company_name: 'One Select',
           role:         'recruiter',
         }),
@@ -75,11 +75,12 @@ export default function AdminRecruiters() {
       if (result.userId) {
         await supabase.from('profiles').update({
           user_role:   'recruiter',
-          full_name:   invName.trim() || invEmail.trim().toLowerCase(),
+          full_name:   inv.invName.trim() || inv.invEmail.trim().toLowerCase(),
           first_login: true,
         }).eq('id', result.userId)
       }
-      setInvResult({ email: invEmail.trim().toLowerCase(), password: result.tempPassword, emailSent: result.emailSent })
+      setInvResult({ email: inv.invEmail.trim().toLowerCase(), password: result.tempPassword, emailSent: result.emailSent })
+      clearInv()
       setShowInvite(false)
       await load()
     } catch (err) {
@@ -254,13 +255,13 @@ export default function AdminRecruiters() {
               <div className="form-grid">
                 <div className="field span-2">
                   <label>Full Name</label>
-                  <input type="text" placeholder="Jane Smith" value={invName} onChange={e => setInvName(e.target.value)} autoFocus />
+                  <input type="text" placeholder="Jane Smith" value={inv.invName} onChange={e => updateInv('invName', e.target.value)} autoFocus />
                 </div>
                 <div className="field span-2">
                   <label>Email Address *</label>
                   <input
                     type="email" placeholder="jane@oneselect.ai"
-                    value={invEmail} onChange={e => setInvEmail(e.target.value)}
+                    value={inv.invEmail} onChange={e => updateInv('invEmail', e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleInvite() } }}
                   />
                 </div>

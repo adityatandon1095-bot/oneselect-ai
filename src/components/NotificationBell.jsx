@@ -16,7 +16,9 @@ export default function NotificationBell() {
   const navigate = useNavigate()
   const [notifications, setNotifications] = useState([])
   const [open, setOpen] = useState(false)
+  const [panelPos, setPanelPos] = useState(null)
   const panelRef = useRef()
+  const buttonRef = useRef()
 
   useEffect(() => {
     if (!user) return
@@ -51,7 +53,15 @@ export default function NotificationBell() {
   }
 
   async function handleOpen() {
-    setOpen(v => !v)
+    const next = !open
+    if (next && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect()
+      setPanelPos({
+        bottom: window.innerHeight - rect.top + 8,
+        left: Math.max(8, rect.left + rect.width / 2 - 150),
+      })
+    }
+    setOpen(next)
     const unreadIds = notifications.filter(n => !n.read).map(n => n.id)
     if (unreadIds.length) {
       await supabase.from('notifications').update({ read: true }).in('id', unreadIds)
@@ -69,6 +79,7 @@ export default function NotificationBell() {
   return (
     <div ref={panelRef} style={{ position: 'relative' }}>
       <button
+        ref={buttonRef}
         onClick={handleOpen}
         style={{
           position: 'relative', background: 'none', border: 'none', cursor: 'pointer',
@@ -92,13 +103,13 @@ export default function NotificationBell() {
         )}
       </button>
 
-      {open && (
+      {open && panelPos && (
         <div style={{
-          position: 'absolute', bottom: '110%', left: '50%', transform: 'translateX(-50%)',
-          width: 300, maxHeight: 400, overflowY: 'auto',
+          position: 'fixed', bottom: panelPos.bottom, left: panelPos.left,
+          width: 300, maxHeight: 180, overflowY: 'auto',
           background: 'var(--surface)', border: '1px solid var(--border)',
           borderRadius: 'var(--r)', boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
-          zIndex: 1000,
+          zIndex: 9999,
         }}>
           <div style={{
             padding: '12px 16px', borderBottom: '1px solid var(--border)',

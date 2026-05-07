@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
 import { callClaude } from '../../utils/api'
+import { useFormPersistence } from '../../hooks/useFormPersistence'
 
 const CV_PARSE_SYSTEM = `You are a CV parser. Return ONLY valid JSON — no markdown:
 {"name":"string","email":"string","currentRole":"string","totalYears":number,"skills":["..."],"education":"string","summary":"string","highlights":["..."],"linkedinUrl":"string or null","githubUrl":"string or null","portfolioUrl":"string or null"}`
@@ -72,19 +73,18 @@ function addLog(setLog, msg, type = '') {
 
 // ── LinkedIn Tab ──────────────────────────────────────────────────────────────
 function LinkedInTab() {
-  const [profileText, setProfileText] = useState('')
-  const [profileUrl,  setProfileUrl]  = useState('')
-  const [parsing,     setParsing]     = useState(false)
-  const [result,      setResult]      = useState(null)
-  const [error,       setError]       = useState('')
+  const { values: form, updateField, clearForm } = useFormPersistence('sourcing_linkedin', { profileText: '', profileUrl: '' })
+  const [parsing, setParsing] = useState(false)
+  const [result,  setResult]  = useState(null)
+  const [error,   setError]   = useState('')
 
   async function parseProfile() {
-    if (!profileText.trim()) return
+    if (!form.profileText.trim()) return
     setParsing(true)
     setError('')
     setResult(null)
     try {
-      const reply = await callClaude([{ role: 'user', content: `Parse this LinkedIn profile text into a structured candidate profile:\n\n${profileText}` }], CV_PARSE_SYSTEM, 1024)
+      const reply = await callClaude([{ role: 'user', content: `Parse this LinkedIn profile text into a structured candidate profile:\n\n${form.profileText}` }], CV_PARSE_SYSTEM, 1024)
       const parsed = JSON.parse(reply.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, ''))
       const { data: saved, error: insertErr } = await supabase.from('talent_pool').insert({
         full_name:      parsed.name ?? 'Unknown',
@@ -97,14 +97,13 @@ function LinkedInTab() {
         highlights:     parsed.highlights ?? [],
         availability:   'available',
         source:         'linkedin',
-        linkedin_url:   profileUrl.trim() || parsed.linkedinUrl || null,
+        linkedin_url:   form.profileUrl.trim() || parsed.linkedinUrl || null,
         github_url:     parsed.githubUrl || null,
         portfolio_url:  parsed.portfolioUrl || null,
       }).select().single()
       if (insertErr) throw new Error(insertErr.message)
       setResult(saved)
-      setProfileText('')
-      setProfileUrl('')
+      clearForm()
     } catch (err) {
       setError(err.message)
     }
@@ -133,18 +132,18 @@ function LinkedInTab() {
       <div className="field">
         <label style={{ fontSize: 11, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-3)', display: 'block', marginBottom: 6 }}>LinkedIn Profile URL (for reference)</label>
         <input style={{ width: '100%', padding: '9px 12px', borderRadius: 7, border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)', fontSize: 13, boxSizing: 'border-box' }}
-          value={profileUrl} onChange={e => setProfileUrl(e.target.value)} placeholder="https://linkedin.com/in/candidate-name" />
+          value={form.profileUrl} onChange={e => updateField('profileUrl', e.target.value)} placeholder="https://linkedin.com/in/candidate-name" />
       </div>
       <div className="field">
         <label style={{ fontSize: 11, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-3)', display: 'block', marginBottom: 6 }}>Paste LinkedIn Profile Text</label>
         <textarea
           style={{ width: '100%', padding: '9px 12px', borderRadius: 7, border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)', fontSize: 13, boxSizing: 'border-box', resize: 'vertical', minHeight: 200, fontFamily: 'var(--font-body)', lineHeight: 1.6 }}
-          value={profileText}
-          onChange={e => setProfileText(e.target.value)}
+          value={form.profileText}
+          onChange={e => updateField('profileText', e.target.value)}
           placeholder="Paste the full LinkedIn profile text here…"
         />
       </div>
-      <button className="btn btn-primary" disabled={!profileText.trim() || parsing} onClick={parseProfile}>
+      <button className="btn btn-primary" disabled={!form.profileText.trim() || parsing} onClick={parseProfile}>
         {parsing ? <><span className="spinner" style={{ width: 11, height: 11 }} /> Parsing & Saving…</> : '◈ Parse & Add to Pool'}
       </button>
     </div>
@@ -278,7 +277,7 @@ function JobBoardsTab() {
 
 // ── Outreach Templates Tab ─────────────────────────────────────────────────────
 function TemplatesTab() {
-  const [values, setValues] = useState({})
+  const { values, updateField } = useFormPersistence('outreach_template', {})
   const [copied, setCopied] = useState(null)
 
   function fillTemplate(template, ph, v) {
@@ -301,7 +300,7 @@ function TemplatesTab() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       {OUTREACH_TEMPLATES.map(tmpl => {
         const v = values[tmpl.id] ?? {}
-        const setV = (k, val) => setValues(p => ({ ...p, [tmpl.id]: { ...(p[tmpl.id] ?? {}), [k]: val } }))
+        const setV = (k, val) => updateField(tmpl.id, { ...(values[tmpl.id] ?? {}), [k]: val })
         const filled = fillTemplate(tmpl.template, tmpl.placeholders, v)
 
         return (

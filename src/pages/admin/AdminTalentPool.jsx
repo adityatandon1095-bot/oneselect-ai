@@ -3,7 +3,7 @@ import mammoth from 'mammoth'
 import { supabase } from '../../lib/supabase'
 import { callClaude } from '../../utils/api'
 import { extractContent, isSupported, fileExt, ACCEPT_ATTR } from '../../utils/fileExtract'
-import { triggerTalentPoolMatch } from '../../utils/talentPool'
+import { subscribePoolMatch, startPoolMatch, isPoolMatchRunning } from '../../utils/poolMatchRunner'
 
 const CV_PARSE_SYSTEM = `You are a CV parser. Return ONLY valid JSON — no markdown:
 {"name":"string","email":"string","currentRole":"string","totalYears":number,"skills":["..."],"education":"string","summary":"string","highlights":["..."]}`
@@ -59,6 +59,19 @@ export default function AdminTalentPool() {
 
   useEffect(() => { load(0) }, [])
   useEffect(() => { logRef.current?.scrollTo(0, logRef.current.scrollHeight) }, [log])
+
+  // Re-attach to any in-progress pool match when this component mounts
+  useEffect(() => {
+    const unsub = subscribePoolMatch(snap => {
+      setMatching(snap.running)
+      setMatchProgress(snap.progress)
+      setLog(snap.log)
+      setMatchResults(snap.results)
+      setMatchDone(snap.done)
+      if (snap.jobId) setMatchJobId(snap.jobId)
+    })
+    return unsub
+  }, [])
 
   async function load(p = 0) {
     setLoading(true)
@@ -142,9 +155,8 @@ export default function AdminTalentPool() {
       }
     }
     setParsing(false)
-    if (matchJobId) {
-      addLog('Auto-matching new candidates against selected job…', 'info')
-      runMatch()
+    if (matchJobId && !isPoolMatchRunning()) {
+      startPoolMatch(matchJobId)
     }
   }
 
@@ -274,27 +286,10 @@ export default function AdminTalentPool() {
     if (!error) setAddedToJob(p => ({ ...p, [candidate.id + jobId]: true }))
   }
 
-  async function runMatch() {
-    if (!matchJobId) return
-    setMatching(true)
-    setMatchDone(false)
-    setMatchResults([])
-    setLog([])
+  function runMatch() {
+    if (!matchJobId || isPoolMatchRunning()) return
     setShowLog(false)
-    setMatchProgress({ current: 0, total: 0 })
-    addLog('Starting pool match…', 'info')
-    try {
-      const passed = await triggerTalentPoolMatch(matchJobId, {
-        onProgress: (cur, total) => setMatchProgress({ current: cur, total }),
-        onLog: (msg, type) => addLog(msg, type),
-        onResult: (r) => setMatchResults(p => [...p, r]),
-      })
-      addLog(`Match complete — ${passed} candidate${passed !== 1 ? 's' : ''} passed.`, 'ok')
-      setMatchDone(true)
-    } catch (err) {
-      addLog(`✗ Match error: ${err.message}`, 'err')
-    }
-    setMatching(false)
+    startPoolMatch(matchJobId)
   }
 
   // ── Derived ───────────────────────────────────────────────────────────────
@@ -505,8 +500,21 @@ export default function AdminTalentPool() {
           <p style={{ fontSize: 13, color: 'var(--text-2)', marginBottom: 14 }}>
             Run AI screening on all available pool candidates against a job. Results appear in the recruiter's pipeline and the admin's Pipeline page.
           </p>
+          {matching && matchProgress.total > 0 && (
+            <div style={{ marginBottom: 14, padding: '10px 14px', background: 'rgba(184,146,74,0.07)', border: '1px solid rgba(184,146,74,0.3)', borderRadius: 'var(--r)', display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span className="spinner" style={{ width: 12, height: 12, flexShrink: 0 }} />
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 12, color: 'var(--text-2)', marginBottom: 6 }}>
+                  Matching in progress — {matchProgress.current} of {matchProgress.total} candidates scored
+                </div>
+                <div style={{ height: 4, background: 'var(--surface2)', borderRadius: 2, overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${(matchProgress.current / matchProgress.total) * 100}%`, background: 'var(--accent)', borderRadius: 2, transition: 'width 0.3s' }} />
+                </div>
+              </div>
+            </div>
+          )}
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-            <select value={matchJobId} onChange={e => setMatchJobId(e.target.value)} style={{ flex: 1 }}>
+            <select value={matchJobId} onChange={e => setMatchJobId(e.target.value)} style={{ flex: 1 }} disabled={matching}>
               <option value="">— select active job —</option>
               {jobs.map(j => (
                 <option key={j.id} value={j.id}>

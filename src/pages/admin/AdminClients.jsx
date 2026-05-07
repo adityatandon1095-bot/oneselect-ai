@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { useFormPersistence } from '../../hooks/useFormPersistence'
 
 const PAGE_SIZE = 20
 
@@ -46,10 +47,7 @@ export default function AdminClients() {
 
   // ── Invite client ─────────────────────────────────────────────────────────────
   const [showInvite, setShowInvite] = useState(false)
-  const [invEmail,   setInvEmail]   = useState('')
-  const [invCompany, setInvCompany] = useState('')
-  const [invContact, setInvContact] = useState('')
-  const [invPrefix,  setInvPrefix]  = useState('')
+  const { values: inv, updateField: updateInv, clearForm: clearInv } = useFormPersistence('client_invite', { invEmail: '', invCompany: '', invContact: '', invPrefix: '' })
   const [inviting,   setInviting]   = useState(false)
   const [invError,   setInvError]   = useState('')
   const [invResult,  setInvResult]  = useState(null)
@@ -156,12 +154,12 @@ export default function AdminClients() {
 
   // ── Invite handlers ───────────────────────────────────────────────────────────
   function openInvite() {
-    setInvEmail(''); setInvCompany(''); setInvContact(''); setInvPrefix(''); setInvError('')
+    setInvError('')
     setShowInvite(true)
   }
 
   async function handleInvite() {
-    if (!invCompany.trim() || !invEmail.trim()) { setInvError('Please fill in all fields'); return }
+    if (!inv.invCompany.trim() || !inv.invEmail.trim()) { setInvError('Please fill in all fields'); return }
     setInviting(true); setInvError('')
     try {
       const { data: { session } } = await supabase.auth.getSession()
@@ -173,9 +171,9 @@ export default function AdminClients() {
           'Authorization': `Bearer ${session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY}`,
         },
         body: JSON.stringify({
-          email:        invEmail.trim().toLowerCase(),
-          company_name: invCompany.trim(),
-          contact_name: invContact.trim(),
+          email:        inv.invEmail.trim().toLowerCase(),
+          company_name: inv.invCompany.trim(),
+          contact_name: inv.invContact.trim(),
           role:         'client',
         }),
       })
@@ -183,16 +181,17 @@ export default function AdminClients() {
       if (!res.ok) throw new Error(result.error || result.message || 'Invite failed')
       // Force-correct the role — deployed edge function may be stale and use wrong default
       if (result.userId) {
-        const prefix = (invPrefix.trim() || derivePrefix(invCompany)).toUpperCase().replace(/[^A-Z]/g, '').substring(0, 3)
+        const prefix = (inv.invPrefix.trim() || derivePrefix(inv.invCompany)).toUpperCase().replace(/[^A-Z]/g, '').substring(0, 3)
         await supabase.from('profiles').update({
           user_role:     'client',
-          company_name:  invCompany.trim() || null,
-          full_name:     invContact.trim() || null,
+          company_name:  inv.invCompany.trim() || null,
+          full_name:     inv.invContact.trim() || null,
           client_prefix: prefix || null,
           first_login:   true,
         }).eq('id', result.userId)
       }
-      setInvResult({ email: invEmail.trim().toLowerCase(), password: result.tempPassword, emailSent: result.emailSent })
+      setInvResult({ email: inv.invEmail.trim().toLowerCase(), password: result.tempPassword, emailSent: result.emailSent })
+      clearInv()
       setShowInvite(false)
       await load()
     } catch (err) {
@@ -563,8 +562,8 @@ export default function AdminClients() {
               <div className="form-grid">
                 <div className="field">
                   <label>Company Name *</label>
-                  <input type="text" placeholder="Acme Corp" value={invCompany} autoFocus
-                    onChange={e => { setInvCompany(e.target.value); setInvPrefix(derivePrefix(e.target.value)) }} />
+                  <input type="text" placeholder="Acme Corp" value={inv.invCompany} autoFocus
+                    onChange={e => { updateInv('invCompany', e.target.value); updateInv('invPrefix', derivePrefix(e.target.value)) }} />
                 </div>
                 <div className="field">
                   <label>
@@ -573,22 +572,22 @@ export default function AdminClients() {
                   </label>
                   <input
                     type="text"
-                    value={invPrefix}
+                    value={inv.invPrefix}
                     maxLength={3}
                     placeholder="e.g. TEV"
-                    onChange={e => setInvPrefix(e.target.value.toUpperCase().replace(/[^A-Z]/g, '').substring(0, 3))}
+                    onChange={e => updateInv('invPrefix', e.target.value.toUpperCase().replace(/[^A-Z]/g, '').substring(0, 3))}
                     style={{ fontFamily: 'var(--font-mono)', letterSpacing: '0.15em', textTransform: 'uppercase', width: 100 }}
                   />
                 </div>
                 <div className="field">
                   <label>Contact Name</label>
-                  <input type="text" placeholder="Jane Smith" value={invContact} onChange={e => setInvContact(e.target.value)} />
+                  <input type="text" placeholder="Jane Smith" value={inv.invContact} onChange={e => updateInv('invContact', e.target.value)} />
                 </div>
                 <div className="field">
                   <label>Email Address *</label>
                   <input
                     type="email" placeholder="jane@acmecorp.com"
-                    value={invEmail} onChange={e => setInvEmail(e.target.value)}
+                    value={inv.invEmail} onChange={e => updateInv('invEmail', e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleInvite() } }}
                   />
                 </div>
