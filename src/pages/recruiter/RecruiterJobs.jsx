@@ -31,11 +31,12 @@ export default function RecruiterJobs() {
   const { user }   = useAuth()
   const navigate   = useNavigate()
 
-  const [clientIds, setClientIds]     = useState(null)
-  const [clients, setClients]         = useState([])
+  const [clientIds, setClientIds]       = useState(null)
+  const [clients, setClients]           = useState([])
   const [selectedClientId, setSelectedClientId] = useState('')
-  const [jobs, setJobs]               = useState([])
-  const [candMap, setCandMap]         = useState({})
+  const [jobs, setJobs]                 = useState([])
+  const [candMap, setCandMap]           = useState({})
+  const [webhookFails, setWebhookFails] = useState(new Set())
   const [loading, setLoading]         = useState(true)
   const [filter, setFilter]           = useState('all')
   const [closing, setClosing]         = useState(null)
@@ -92,8 +93,15 @@ export default function RecruiterJobs() {
       cm[c.job_id].push(c)
     })
 
+    let failSet = new Set()
+    if (jobIds.length) {
+      const { data: failures } = await supabase.from('webhook_failures').select('job_id').in('job_id', jobIds).eq('resolved', false)
+      ;(failures ?? []).forEach(f => failSet.add(f.job_id))
+    }
+
     setJobs(jobData ?? [])
     setCandMap(cm)
+    setWebhookFails(failSet)
     setLoading(false)
   }
 
@@ -360,9 +368,12 @@ export default function RecruiterJobs() {
                     <div className="col-right">
                       <span className={`badge ${REQ_CFG[rq].cls}`} style={{ fontSize: 9 }}>{REQ_CFG[rq].label}</span>
                       {j.pipeline_status && j.pipeline_status !== 'awaiting_cvs' && (
-                        <span className={`badge ${j.pipeline_status === 'notified' ? 'badge-green' : j.pipeline_status === 'complete' ? 'badge-blue' : j.pipeline_status === 'processing' ? 'badge-amber' : ''}`} style={{ fontSize: 9 }}>
-                          {j.pipeline_status === 'processing' ? '⟳ running' : j.pipeline_status === 'complete' ? '✓ done' : j.pipeline_status === 'notified' ? '✉ notified' : j.pipeline_status}
+                        <span className={`badge ${j.pipeline_status === 'notified' ? 'badge-green' : j.pipeline_status === 'complete' ? 'badge-blue' : j.pipeline_status === 'processing' ? 'badge-amber' : j.pipeline_status === 'pending_client_approval' ? 'badge-amber' : ''}`} style={{ fontSize: 9 }}>
+                          {j.pipeline_status === 'processing' ? '⟳ running' : j.pipeline_status === 'complete' ? '✓ done' : j.pipeline_status === 'notified' ? '✉ notified' : j.pipeline_status === 'pending_client_approval' ? '⏸ awaiting approval' : j.pipeline_status}
                         </span>
+                      )}
+                      {webhookFails.has(j.id) && (
+                        <span className="badge badge-red" style={{ fontSize: 9 }} title="HRIS webhook delivery failed">⚠ webhook</span>
                       )}
                       <span className="mono" style={{ fontSize: 11, color: 'var(--text-3)' }}>
                         {cands.filter(c => c.match_score != null).length} screened ·{' '}

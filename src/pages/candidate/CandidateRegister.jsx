@@ -119,6 +119,12 @@ export default function CandidateRegister() {
       })
       if (poolErr) console.warn('Pool insert warning:', poolErr.message)
 
+      // Step 5: Link any existing candidate records to this user by email
+      await supabase.from('candidates')
+        .update({ candidate_user_id: userId })
+        .ilike('email', email.trim().toLowerCase())
+        .is('candidate_user_id', null)
+
       // Check if session is available (email confirmation may or may not be required)
       const { data: sessionData } = await supabase.auth.getSession()
       if (sessionData?.session) {

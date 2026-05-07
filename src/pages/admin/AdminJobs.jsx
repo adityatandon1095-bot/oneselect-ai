@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import JDWizard from '../../components/JDWizard'
+import { downloadCsv, candidateRows } from '../../utils/exportCsv'
 
 // ── Requirements-met logic ────────────────────────────────────────────────────
 // met      = 1+ candidate with match_pass=true AND Strong Hire/Hire recommendation
@@ -34,14 +35,15 @@ export default function AdminJobs() {
   const clientId   = location.state?.clientId   ?? null
   const clientName = location.state?.clientName ?? null
 
-  const [jobs,       setJobs]       = useState([])
-  const [candMap,    setCandMap]    = useState({})  // job_id → Candidate[]
-  const [loading,    setLoading]    = useState(true)
-  const [filter,     setFilter]     = useState('all')
-  const [closing,    setClosing]    = useState(null)
-  const [showWizard, setShowWizard] = useState(false)
-  const [recruiters, setRecruiters] = useState([])
-  const [error,      setError]      = useState('')
+  const [jobs,           setJobs]           = useState([])
+  const [candMap,        setCandMap]        = useState({})  // job_id → Candidate[]
+  const [webhookFails,   setWebhookFails]   = useState(new Set())  // job_ids with unresolved failures
+  const [loading,        setLoading]        = useState(true)
+  const [filter,         setFilter]         = useState('all')
+  const [closing,        setClosing]        = useState(null)
+  const [showWizard,     setShowWizard]     = useState(false)
+  const [recruiters,     setRecruiters]     = useState([])
+  const [error,          setError]          = useState('')
 
   useEffect(() => { load(); loadRecruiters() }, [])
 
@@ -95,8 +97,15 @@ export default function AdminJobs() {
       cm[c.job_id].push(c)
     })
 
+    let failSet = new Set()
+    if (ids.length) {
+      const { data: failures } = await supabase.from('webhook_failures').select('job_id').in('job_id', ids).eq('resolved', false)
+      ;(failures ?? []).forEach(f => failSet.add(f.job_id))
+    }
+
     setJobs(jobData ?? [])
     setCandMap(cm)
+    setWebhookFails(failSet)
     setLoading(false)
   }
 
@@ -258,9 +267,12 @@ export default function AdminJobs() {
                       {j.status ?? 'active'}
                     </span>
                     {j.pipeline_status && j.pipeline_status !== 'awaiting_cvs' && (
-                      <span className={`badge ${j.pipeline_status === 'notified' ? 'badge-green' : j.pipeline_status === 'complete' ? 'badge-blue' : j.pipeline_status === 'processing' ? 'badge-amber' : ''}`} style={{ fontSize: 9 }}>
-                        {j.pipeline_status === 'processing' ? '⟳ running' : j.pipeline_status === 'complete' ? '✓ done' : j.pipeline_status === 'notified' ? '✉ notified' : j.pipeline_status}
+                      <span className={`badge ${j.pipeline_status === 'notified' ? 'badge-green' : j.pipeline_status === 'complete' ? 'badge-blue' : j.pipeline_status === 'processing' ? 'badge-amber' : j.pipeline_status === 'pending_client_approval' ? 'badge-amber' : ''}`} style={{ fontSize: 9 }}>
+                        {j.pipeline_status === 'processing' ? '⟳ running' : j.pipeline_status === 'complete' ? '✓ done' : j.pipeline_status === 'notified' ? '✉ notified' : j.pipeline_status === 'pending_client_approval' ? '⏸ awaiting approval' : j.pipeline_status}
                       </span>
+                    )}
+                    {webhookFails.has(j.id) && (
+                      <span className="badge badge-red" style={{ fontSize: 9 }} title="HRIS webhook delivery failed">⚠ webhook</span>
                     )}
                   </div>
 
@@ -304,6 +316,14 @@ export default function AdminJobs() {
                       disabled={closing === j.id}
                       onClick={() => toggleStatus(j)}
                     >{closing === j.id ? '…' : j.status === 'active' ? 'Close' : 'Reopen'}</button>
+                    <button
+                      className="btn btn-secondary"
+                      style={{ fontSize: 10, padding: '3px 7px', whiteSpace: 'nowrap' }}
+                      onClick={async () => {
+                        const { data } = await supabase.from('candidates').select('*').eq('job_id', j.id).order('match_score', { ascending: false })
+                        downloadCsv(`${j.job_code ?? j.id}-candidates.csv`, candidateRows(data ?? [], j.title))
+                      }}
+                    >↓ CSV</button>
                   </div>
                 </div>
               )

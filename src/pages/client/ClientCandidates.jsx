@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useLocation } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../lib/AuthContext'
+import { downloadCsv, candidateRows } from '../../utils/exportCsv'
 
 const REC_COLOR = { 'Strong Hire': 'var(--green)', 'Hire': 'var(--accent)', 'Borderline': 'var(--amber)', 'Reject': 'var(--red)' }
 
@@ -404,6 +405,16 @@ export default function ClientCandidates() {
     setCandidates(prev => prev.map(c => c.id === id ? { ...c, client_dismissed: false } : c))
   }
 
+  async function approveCandidate(id) {
+    await supabase.from('candidates').update({ client_approved: true }).eq('id', id)
+    setCandidates(prev => prev.map(c => c.id === id ? { ...c, client_approved: true } : c))
+  }
+
+  async function rejectCandidate(id) {
+    await supabase.from('candidates').update({ client_approved: false }).eq('id', id)
+    setCandidates(prev => prev.map(c => c.id === id ? { ...c, client_approved: false } : c))
+  }
+
   async function sendOffer() {
     const { candidate, note } = offerModal
     setOfferModal(m => ({ ...m, sending: true, error: null }))
@@ -538,6 +549,16 @@ export default function ClientCandidates() {
             <option value="all">All Jobs</option>
             {jobs.map(j => <option key={j.id} value={j.id}>{j.title}</option>)}
           </select>
+          {tabFiltered.length > 0 && (
+            <button
+              className="btn btn-secondary"
+              style={{ fontSize: 12, padding: '6px 12px', whiteSpace: 'nowrap' }}
+              onClick={() => {
+                const jobTitle = jobFilter === 'all' ? '' : jobs.find(j => j.id === jobFilter)?.title ?? ''
+                downloadCsv(`candidates-${jobTitle || 'all'}.csv`, candidateRows(tabFiltered, jobTitle))
+              }}
+            >↓ CSV</button>
+          )}
         </div>
       </div>
 
@@ -621,6 +642,16 @@ export default function ClientCandidates() {
                       ▶ Watch
                     </button>
                   )}
+                  {c.match_pass === true && c.client_approved === null && (
+                    <>
+                      <button className="btn btn-secondary" style={{ fontSize: 11, padding: '4px 10px', color: 'var(--green)', borderColor: 'var(--green)' }}
+                        onClick={e => { e.stopPropagation(); approveCandidate(c.id) }}>✓ Approve</button>
+                      <button className="btn btn-secondary" style={{ fontSize: 11, padding: '4px 10px', color: 'var(--red)', borderColor: 'var(--red)' }}
+                        onClick={e => { e.stopPropagation(); rejectCandidate(c.id) }}>✕ Reject</button>
+                    </>
+                  )}
+                  {c.client_approved === true  && <span className="badge badge-green" style={{ fontSize: 10 }}>Approved</span>}
+                  {c.client_approved === false && <span className="badge badge-red"   style={{ fontSize: 10 }}>Rejected</span>}
                   {status === 'Interview Pending'  && !hasVideo && <span className="badge badge-amber">Interview Pending</span>}
                   {status === 'Screened Out'       && !s && <span className="badge badge-red">Screened Out</span>}
                   {status === 'Pending'            && <span className="badge" style={{ color: 'var(--text-3)', background: 'var(--surface2)' }}>Pending</span>}

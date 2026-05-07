@@ -4,8 +4,8 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../lib/AuthContext'
 import { usePersistentState } from '../../hooks/usePersistentState'
 
-const stripRawText = (k, v) => k === 'raw_text' ? undefined : v
 import { callClaude, runAutomatedInterview } from '../../utils/api'
+import { subscribeRunner, runnerStart, runnerComplete, runnerPause, runnerResume, runnerStop, awaitResume, getRunnerState } from '../../utils/pipelineRunner'
 import { generateAssessment, scoreAssessment } from '../../utils/assessments'
 import mammoth from 'mammoth'
 import { extractContent, isSupported, fileExt, ACCEPT_ATTR } from '../../utils/fileExtract'
@@ -13,6 +13,8 @@ import { parseExperience } from '../../utils/parseExperience'
 import { triggerTalentPoolMatch, mapMatchToCandidate } from '../../utils/talentPool'
 import TagInput from '../../components/TagInput'
 import VideoPlayer from '../../components/VideoPlayer'
+
+const stripRawText = (k, v) => k === 'raw_text' ? undefined : v
 
 const CV_PARSE_SYSTEM = `You are a CV parser. Return ONLY valid JSON — no markdown:
 {"name":"string","email":"string","currentRole":"string","totalYears":number,"skills":["..."],"education":"string","summary":"string","highlights":["..."],"linkedinUrl":"string or null","githubUrl":"string or null","portfolioUrl":"string or null"}`
@@ -28,6 +30,12 @@ const FORMAT_ICON = { pdf:'📕', docx:'📝', txt:'📄', jpg:'🖼️', jpeg:'
 const REC_COLOR   = { 'Strong Hire': 'var(--green)', 'Hire': 'var(--accent)', 'Borderline': 'var(--amber)', 'Reject': 'var(--red)' }
 
 function dimColor(v) { return v >= 70 ? 'var(--green)' : v >= 50 ? 'var(--accent)' : 'var(--red)' }
+
+function daysAgo(ts) {
+  if (!ts) return null
+  const d = Math.floor((Date.now() - new Date(ts)) / 86_400_000)
+  return d === 0 ? 'today' : d === 1 ? '1d' : `${d}d`
+}
 
 function ScoreRing({ score, size = 48 }) {
   const r = size / 2 - 5, circ = 2 * Math.PI * r
@@ -67,6 +75,7 @@ export default function AdminPipeline({ allowedClientIds } = {}) {
   const [files, setFiles]             = useState([])
   const [dragging, setDragging]       = useState(false)
   const [pipelineRunning, setPipelineRunning] = useState(false)
+  const [pipelinePaused, setPipelinePaused]   = useState(false)
   const [assessmentEnabled, setAssessmentEnabled] = usePersistentState(storagePrefix + '_assessment_enabled', false)
   const [log, setLog]                 = usePersistentState(storagePrefix + '_log', [])
   const [useTalentPool, setUseTalentPool] = usePersistentState(storagePrefix + '_use_talent_pool', false)
@@ -123,6 +132,19 @@ export default function AdminPipeline({ allowedClientIds } = {}) {
   }, [clientJobs, jobId, location.search])
 
   useEffect(() => { logRef.current?.scrollTo(0, logRef.current.scrollHeight) }, [log])
+
+  // Sync local running/paused state with the module-level runner singleton
+  useEffect(() => {
+    const { running, paused, jobId: rJobId } = getRunnerState()
+    const isOurs = !!activeJob?.id && rJobId === activeJob.id
+    if (running && isOurs) { setPipelineRunning(true); setPipelinePaused(paused); refreshCandidates() }
+    return subscribeRunner(({ running: r, paused: p, jobId: rj }) => {
+      const ours = !!activeJob?.id && rj === activeJob.id
+      setPipelineRunning(r && ours)
+      setPipelinePaused(p && ours)
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeJob?.id])
 
   async function loadClients() {
     let q = supabase.from('profiles').select('id, full_name, company_name, email').eq('user_role', 'client').order('company_name')
@@ -210,7 +232,10 @@ export default function AdminPipeline({ allowedClientIds } = {}) {
 
   // ── Feature 1: Outreach ───────────────────────────────────────────────────
   async function openOutreachModal(candidate) {
-    const companyName = clients.find(c => c.id === clientId)?.company_name ?? ''
+    const companyName   = clients.find(c => c.id === clientId)?.company_name ?? ''
+    const senderName    = profile?.full_name  || profile?.contact_name || ''
+    const senderTitle   = profile?.job_title  || 'Recruiter'
+    const senderPhone   = profile?.phone      || ''
     setOutreachModal({ candidate, email: candidate.email ?? '', emailContent: '', subject: '', generating: true, sending: false, sent: false, error: null })
     try {
       const prompt = `Write a professional, personalized recruiter outreach email to a candidate for the following:
@@ -220,8 +245,10 @@ Company: ${companyName}
 Candidate: ${candidate.full_name}, ${candidate.candidate_role}, ${candidate.total_years}y experience
 Skills: ${(candidate.skills ?? []).join(', ')}
 Summary: ${candidate.summary ?? ''}
+Sender name: ${senderName || 'the recruiter'}
+Sender title: ${senderTitle}${senderPhone ? `\nSender phone: ${senderPhone}` : ''}
 
-Return the subject line first starting with "SUBJECT: ", then a blank line, then the email body (150-200 words). Be warm, specific to their background, and clear about next steps.`
+Return the subject line first starting with "SUBJECT: ", then a blank line, then the email body (150-200 words). Be warm, specific to their background, and clear about next steps. Sign off with the sender's actual name and title — never use placeholder text like [Your Name].`
 
       const reply = await callClaude([{ role: 'user', content: prompt }], 'You are a professional recruiter writing personalized outreach emails.', 600)
       const lines = reply.trim().split('\n')
@@ -280,8 +307,9 @@ Return the subject line first starting with "SUBJECT: ", then a blank line, then
     if (!token) {
       token = crypto.randomUUID()
       const table = candidate._fromPool ? 'job_matches' : 'candidates'
-      await supabase.from(table).update({ interview_invite_token: token }).eq('id', candidate.id)
-      setCandidates(p => p.map(c => c.id === candidate.id ? { ...c, interview_invite_token: token } : c))
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+      await supabase.from(table).update({ interview_invite_token: token, interview_token_expires_at: expiresAt }).eq('id', candidate.id)
+      setCandidates(p => p.map(c => c.id === candidate.id ? { ...c, interview_invite_token: token, interview_token_expires_at: expiresAt } : c))
     }
 
     const companyName = clients.find(c => c.id === clientId)?.company_name ?? ''
@@ -349,7 +377,7 @@ Return the subject line first starting with "SUBJECT: ", then a blank line, then
   async function saveDecision(decision) {
     const { candidate, notes } = decisionModal
     const table = candidate._fromPool ? 'job_matches' : 'candidates'
-    const updatePayload = { final_decision: decision, decision_notes: notes }
+    const updatePayload = { final_decision: decision, decision_notes: notes, decided_at: new Date().toISOString() }
 
     // DPDPA: remove raw CV text when candidate is no longer in consideration
     if (decision === 'rejected') updatePayload.raw_text = null
@@ -381,6 +409,18 @@ Return the subject line first starting with "SUBJECT: ", then a blank line, then
     }
 
     if (decision === 'rejected' && candidate.email) {
+      // Generate personalised AI feedback paragraph
+      let feedbackNotes = notes || ''
+      try {
+        const feedbackReply = await callClaude([{ role: 'user', content:
+          `Write one paragraph of specific, constructive, kind feedback for a candidate rejected for a ${activeJob?.title ?? 'position'} role.
+Candidate: ${candidate.full_name}, ${candidate.total_years ?? 0}y experience, skills: ${(candidate.skills ?? []).slice(0, 6).join(', ')}.
+Screening score: ${candidate.match_score ?? 'n/a'}/100. Screening reason: ${candidate.match_reason ?? 'n/a'}.
+Be specific about why they weren't a fit this time and what might improve their chances elsewhere. 60-80 words. No platitudes.` }],
+          'You write honest, specific, encouraging rejection feedback. No generic phrases.', 250)
+        feedbackNotes = feedbackReply.trim() + (notes ? `\n\n${notes}` : '')
+      } catch { /* feedback generation is best-effort */ }
+
       fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-rejection-email`, {
         method: 'POST', headers: authHeader,
         body: JSON.stringify({
@@ -388,7 +428,7 @@ Return the subject line first starting with "SUBJECT: ", then a blank line, then
           candidateEmail: candidate.email,
           jobTitle:       activeJob?.title,
           companyName:    clients.find(c => c.id === clientId)?.company_name,
-          notes:          notes || '',
+          notes:          feedbackNotes,
         }),
       }).catch(() => {})
     }
@@ -545,8 +585,13 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
   async function runFullPipeline() {
     if (!activeJob || !files.filter(f => f.status === 'pending').length) return
     setPipelineRunning(true)
+    setPipelinePaused(false)
+    runnerStart(activeJob.id)
     setLog([])
 
+    let stopped = false
+
+    try {
     // Mark job as processing
     await supabase.from('jobs').update({ pipeline_status: 'processing' }).eq('id', activeJob.id)
 
@@ -555,6 +600,7 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
 
     // ── Phase 1: Parse ────────────────────────────────────────────────────
     for (const entry of files.filter(f => f.status === 'pending')) {
+      if (await awaitResume()) { tsLog('▣ Pipeline stopped.', 'err'); stopped = true; break }
       patchFile(entry.id, { status: 'parsing' })
       tsLog(`Parsing ${entry.file.name}…`, 'info')
       try {
@@ -572,6 +618,12 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
           : [{ role: 'user', content: `Parse this CV:\n\n${content.text}` }]
         const reply = await callClaude(msgs, CV_PARSE_SYSTEM, 1024)
         const parsed = JSON.parse(reply.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, ''))
+
+        // Duplicate check — same email already exists for this job
+        if (parsed.email) {
+          const { data: dup } = await supabase.from('candidates').select('id, full_name').eq('job_id', activeJob.id).ilike('email', parsed.email).maybeSingle()
+          if (dup) { tsLog(`⚠ Skipped ${entry.file.name} — ${dup.full_name} already exists for this job`, 'err'); patchFile(entry.id, { status: 'error', error: `Duplicate — ${dup.full_name} already exists` }); continue }
+        }
 
         const { data: saved, error } = await supabase.from('candidates').insert({
           job_id:        activeJob.id,
@@ -607,13 +659,14 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
     const passedCandidates = []
 
     for (const c of parsedCandidates) {
+      if (await awaitResume()) { tsLog('▣ Pipeline stopped.', 'err'); stopped = true; break }
       setCandidates(p => p.map(x => x.id === c.id ? { ...x, _status: 'screening' } : x))
       tsLog(`Screening ${c.full_name}…`, 'info')
       try {
         const msg = `Name: ${c.full_name}\nRole: ${c.candidate_role}\nYears: ${c.total_years}\nSkills: ${(c.skills ?? []).join(', ')}\nSummary: ${c.summary}`
         const reply = await callClaude([{ role: 'user', content: msg }], system, 512)
         const s = JSON.parse(reply.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, ''))
-        await supabase.from('candidates').update({ match_score: s.matchScore, match_pass: s.pass, match_reason: s.reason, match_rank: s.rank }).eq('id', c.id)
+        await supabase.from('candidates').update({ match_score: s.matchScore, match_pass: s.pass, match_reason: s.reason, match_rank: s.rank, screened_at: new Date().toISOString() }).eq('id', c.id)
         const updated = { ...c, _status: 'screened', match_score: s.matchScore, match_pass: s.pass, match_reason: s.reason, match_rank: s.rank }
         setCandidates(p => p.map(x => x.id === c.id ? updated : x))
         if (s.pass) {
@@ -632,31 +685,28 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
       }
     }
 
-    // ── Phase 2.5: Optional Assessment ────────────────────────────────────
-    if (assessmentEnabled && passedCandidates.length > 0) {
-      tsLog(`Generating assessment for ${activeJob.title}…`, 'info')
+    // ── Phase 2.5: Real async assessments ────────────────────────────────
+    if (assessmentEnabled && passedCandidates.length > 0 && !stopped) {
+      tsLog(`Generating assessment questions for ${activeJob.title}…`, 'info')
       try {
         const { questions } = await generateAssessment(activeJob.title, activeJob.required_skills ?? [], callClaude)
-        tsLog(`✓ ${questions.length} assessment questions generated`, 'ok')
+        tsLog(`✓ ${questions.length} questions generated — sending to candidates`, 'ok')
         for (const c of passedCandidates) {
-          tsLog(`Assessing ${c.full_name}…`, 'info')
+          if (await awaitResume()) { tsLog('▣ Pipeline stopped.', 'err'); stopped = true; break }
+          if (!c.email) { tsLog(`⚠ No email for ${c.full_name} — skipping assessment`, 'err'); continue }
           try {
-            // Simulate answers based on candidate's CV
-            const simSystem = `You are simulating a job candidate answering written assessment questions based on their CV. Answer as the candidate would, drawing on their actual experience.`
-            const simPrompt = `Candidate: ${c.full_name}, ${c.candidate_role}, ${c.total_years}y exp.\nSkills: ${(c.skills ?? []).join(', ')}\nSummary: ${c.summary ?? ''}\n\nAnswer each question as this candidate would:\n${questions.map((q, i) => `Q${i + 1}: ${q.question}`).join('\n\n')}\n\nReturn ONLY a JSON array of answer strings matching the question order: ["answer1","answer2",...]`
-            const simRaw = await callClaude([{ role: 'user', content: simPrompt }], simSystem, 2000)
-            const answers = JSON.parse(simRaw.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, ''))
-            const answersMap = Object.fromEntries(questions.map((q, i) => [q.id, answers[i] ?? '']))
-            const scored = await scoreAssessment(questions, answersMap, activeJob.title, callClaude)
-            if (scored) {
-              await supabase.from('candidates').update({
-                assessment_score: scored.overallScore,
-                assessment_data:  { questions, answers: answersMap, scores: scored.scores, summary: scored.summary },
-              }).eq('id', c.id)
-              tsLog(`✓ ${c.full_name}: assessment ${scored.overallScore}/100`, 'ok')
-            }
+            const expiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString()
+            const { data: tokenRow, error: tokenErr } = await supabase.from('assessment_tokens').insert({
+              candidate_id: c.id, job_id: activeJob.id, questions, expires_at: expiresAt,
+            }).select('token').single()
+            if (tokenErr) throw new Error(tokenErr.message)
+            const assessmentUrl = `${appUrl}/assessment/${tokenRow.token}`
+            await supabase.functions.invoke('send-assessment-invite', {
+              body: { email: c.email, name: c.full_name, jobTitle: activeJob.title, assessmentUrl },
+            })
+            tsLog(`✉ Assessment sent to ${c.full_name}`, 'ok')
           } catch (err) {
-            tsLog(`⚠ Assessment failed for ${c.full_name}: ${err.message}`, 'err')
+            tsLog(`⚠ Assessment invite failed for ${c.full_name}: ${err.message}`, 'err')
           }
         }
       } catch (err) {
@@ -664,62 +714,201 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
       }
     }
 
-    // ── Phase 3: Auto-interview all passing candidates ─────────────────────
-    tsLog(`Auto-interviewing ${passedCandidates.length} passing candidate${passedCandidates.length !== 1 ? 's' : ''}…`, 'info')
+    // ── Client approval gate — pause for shortlist review ─────────────────
+    if (!stopped) {
+      await supabase.from('jobs').update({ pipeline_status: 'pending_client_approval' }).eq('id', activeJob.id)
+      const msg = assessmentEnabled
+        ? `Screening + assessments complete — ${passedCandidates.length} passed. Review shortlist in Client portal, then run interviews.`
+        : `Screening complete — ${passedCandidates.length} candidate${passedCandidates.length !== 1 ? 's' : ''} passed. Review shortlist in Client portal, then run interviews.`
+      tsLog(msg, 'ok')
+      stopped = true
+      await refreshCandidates()
+    }
 
-    for (const c of passedCandidates) {
-      tsLog(`Interviewing ${c.full_name}…`, 'info')
-      try {
-        const result = await runAutomatedInterview(c, activeJob)
-        await supabase.from('candidates').update({
-          interview_transcript: result.transcript,
-          scores: result.scores,
-        }).eq('id', c.id)
-        setCandidates(p => p.map(x => x.id === c.id ? { ...x, interview_transcript: result.transcript, scores: result.scores } : x))
-        tsLog(`✓ ${c.full_name}: ${result.scores.overallScore}/100 — ${result.scores.recommendation}`, 'ok')
-      } catch (err) {
-        tsLog(`✗ ${c.full_name} interview error: ${err.message}`, 'err')
+    // ── Phase 3: Run via "Run Interviews →" button (runInterviewsPhase) ───
+    if (!stopped) {
+      for (const c of passedCandidates) {
+        if (await awaitResume()) { tsLog('▣ Pipeline stopped.', 'err'); stopped = true; break }
+        tsLog(`Interviewing ${c.full_name}…`, 'info')
+        try {
+          const result = await runAutomatedInterview(c, activeJob)
+          await supabase.from('candidates').update({
+            interview_transcript: result.transcript,
+            scores: result.scores,
+          }).eq('id', c.id)
+          setCandidates(p => p.map(x => x.id === c.id ? { ...x, interview_transcript: result.transcript, scores: result.scores } : x))
+          tsLog(`✓ ${c.full_name}: ${result.scores.overallScore}/100 — ${result.scores.recommendation}`, 'ok')
+        } catch (err) {
+          tsLog(`✗ ${c.full_name} interview error: ${err.message}`, 'err')
+        }
       }
     }
 
     // ── Phase 4: Mark complete + notify client ─────────────────────────────
-    await supabase.from('jobs').update({ pipeline_status: 'complete' }).eq('id', activeJob.id)
-    tsLog(`Pipeline complete — ${parsedCandidates.length} processed, ${passedCandidates.length} passed`, 'ok')
+    if (!stopped) {
+      await supabase.from('jobs').update({ pipeline_status: 'complete' }).eq('id', activeJob.id)
+      tsLog(`Pipeline complete — ${parsedCandidates.length} processed, ${passedCandidates.length} passed`, 'ok')
 
-    const clientProfile = clients.find(c => c.id === clientId)
-    if (clientProfile?.email) {
-      try {
-        const topCandidates = [...passedCandidates]
-          .sort((a, b) => (b.scores?.overallScore ?? 0) - (a.scores?.overallScore ?? 0))
-          .slice(0, 3)
-          .map(c => ({
-            name:           c.full_name,
-            role:           c.candidate_role,
-            overallScore:   c.scores?.overallScore ?? 0,
-            recommendation: c.scores?.recommendation ?? '',
-            matchScore:     c.match_score ?? 0,
-          }))
+      const clientProfile = clients.find(c => c.id === clientId)
+      if (clientProfile?.email) {
+        try {
+          const topCandidates = [...passedCandidates]
+            .sort((a, b) => (b.scores?.overallScore ?? 0) - (a.scores?.overallScore ?? 0))
+            .slice(0, 3)
+            .map(c => ({
+              name:           c.full_name,
+              role:           c.candidate_role,
+              overallScore:   c.scores?.overallScore ?? 0,
+              recommendation: c.scores?.recommendation ?? '',
+              matchScore:     c.match_score ?? 0,
+            }))
 
-        const { error: emailErr } = await supabase.functions.invoke('send-pipeline-complete', {
-          body: {
-            clientEmail:     clientProfile.email,
-            clientName:      clientProfile.full_name || clientProfile.company_name,
-            jobTitle:        activeJob.title,
-            totalProcessed:  parsedCandidates.length,
-            totalPassed:     passedCandidates.length,
-            topCandidates,
-          },
-        })
-        if (emailErr) throw new Error(emailErr.message)
-        await supabase.from('jobs').update({ pipeline_status: 'notified' }).eq('id', activeJob.id)
-        tsLog(`✉ Client notified — ${clientProfile.email}`, 'ok')
-      } catch (err) {
-        tsLog(`⚠ Email notification failed: ${err.message}`, 'err')
+          const { error: emailErr } = await supabase.functions.invoke('send-pipeline-complete', {
+            body: {
+              clientEmail:     clientProfile.email,
+              clientName:      clientProfile.full_name || clientProfile.company_name,
+              jobTitle:        activeJob.title,
+              totalProcessed:  parsedCandidates.length,
+              totalPassed:     passedCandidates.length,
+              topCandidates,
+            },
+          })
+          if (emailErr) throw new Error(emailErr.message)
+          await supabase.from('jobs').update({ pipeline_status: 'notified' }).eq('id', activeJob.id)
+          tsLog(`✉ Client notified — ${clientProfile.email}`, 'ok')
+        } catch (err) {
+          tsLog(`⚠ Email notification failed: ${err.message}`, 'err')
+        }
       }
+
+      await refreshCandidates()
     }
 
-    await refreshCandidates()
-    setPipelineRunning(false)
+    } finally {
+      runnerComplete()
+      setPipelineRunning(false)
+      setPipelinePaused(false)
+    }
+  }
+
+  // ── Run interviews for approved shortlist (Phase 3 + 4) ─────────────────
+  async function runInterviewsPhase() {
+    if (!activeJob || pipelineRunning) return
+    setPipelineRunning(true)
+    setPipelinePaused(false)
+    runnerStart(activeJob.id)
+    setLog([])
+    let stopped = false
+    try {
+      await supabase.from('jobs').update({ pipeline_status: 'processing' }).eq('id', activeJob.id)
+
+      const { data: allPassed } = await supabase.from('candidates').select('*').eq('job_id', activeJob.id).eq('match_pass', true)
+      const pool = allPassed ?? []
+      const hasExplicit = pool.some(c => c.client_approved === true)
+      const toInterview = hasExplicit ? pool.filter(c => c.client_approved === true) : pool
+
+      tsLog(`Running interviews for ${toInterview.length} candidate${toInterview.length !== 1 ? 's' : ''}${hasExplicit ? ' (client-approved)' : ''}…`, 'info')
+
+      for (const c of toInterview) {
+        if (await awaitResume()) { tsLog('▣ Pipeline stopped.', 'err'); stopped = true; break }
+        tsLog(`Interviewing ${c.full_name}…`, 'info')
+        try {
+          const result = await runAutomatedInterview(c, activeJob)
+          await supabase.from('candidates').update({
+            interview_transcript: result.transcript,
+            scores: result.scores,
+            interviewed_at: new Date().toISOString(),
+          }).eq('id', c.id)
+          setCandidates(p => p.map(x => x.id === c.id ? { ...x, interview_transcript: result.transcript, scores: result.scores } : x))
+          tsLog(`✓ ${c.full_name}: ${result.scores.overallScore}/100 — ${result.scores.recommendation}`, 'ok')
+        } catch (err) {
+          tsLog(`✗ ${c.full_name} interview error: ${err.message}`, 'err')
+        }
+      }
+
+      if (!stopped) {
+        await supabase.from('jobs').update({ pipeline_status: 'complete' }).eq('id', activeJob.id)
+        tsLog(`Interviews complete — ${toInterview.length} processed`, 'ok')
+
+        const clientProfile = clients.find(c => c.id === clientId)
+        if (clientProfile?.email) {
+          try {
+            const topCandidates = [...toInterview]
+              .sort((a, b) => (b.scores?.overallScore ?? 0) - (a.scores?.overallScore ?? 0))
+              .slice(0, 3)
+              .map(c => ({ name: c.full_name, role: c.candidate_role, overallScore: c.scores?.overallScore ?? 0, recommendation: c.scores?.recommendation ?? '', matchScore: c.match_score ?? 0 }))
+            const { error: emailErr } = await supabase.functions.invoke('send-pipeline-complete', {
+              body: { clientEmail: clientProfile.email, clientName: clientProfile.full_name || clientProfile.company_name, jobTitle: activeJob.title, totalProcessed: toInterview.length, totalPassed: toInterview.length, topCandidates },
+            })
+            if (emailErr) throw new Error(emailErr.message)
+            await supabase.from('jobs').update({ pipeline_status: 'notified' }).eq('id', activeJob.id)
+            tsLog(`✉ Client notified — ${clientProfile.email}`, 'ok')
+          } catch (err) {
+            tsLog(`⚠ Email notification failed: ${err.message}`, 'err')
+          }
+        }
+
+        // In-app notification for client
+        if (clientId) {
+          supabase.from('notifications').insert({
+            recipient_id: clientId,
+            type: 'pipeline_complete',
+            title: `Pipeline complete — ${activeJob.title}`,
+            body: `${toInterview.length} candidate${toInterview.length !== 1 ? 's' : ''} interviewed. Review results in Candidates.`,
+            link: '/client/candidates',
+          }).catch(() => {})
+        }
+
+        await refreshCandidates()
+      }
+    } finally {
+      runnerComplete()
+      setPipelineRunning(false)
+      setPipelinePaused(false)
+    }
+  }
+
+  // ── Score submitted real assessments ────────────────────────────────────
+  const [scoringAssessments, setScoringAssessments] = useState(false)
+
+  async function scoreAssessmentSubmissions() {
+    if (!activeJob) return
+    setScoringAssessments(true)
+    tsLog('Fetching submitted assessments…', 'info')
+    try {
+      const { data: tokens } = await supabase
+        .from('assessment_tokens')
+        .select('*, candidates(id, full_name)')
+        .eq('job_id', activeJob.id)
+        .not('submitted_at', 'is', null)
+        .eq('scored', false)
+
+      if (!tokens?.length) { tsLog('No unscored submissions found.', 'info'); setScoringAssessments(false); return }
+      tsLog(`Scoring ${tokens.length} submission${tokens.length !== 1 ? 's' : ''}…`, 'info')
+
+      for (const t of tokens) {
+        const name = t.candidates?.full_name ?? 'Candidate'
+        try {
+          const scored = await scoreAssessment(t.questions, t.answers, activeJob.title, callClaude)
+          if (scored) {
+            await supabase.from('candidates').update({
+              assessment_score: scored.overallScore,
+              assessment_data: { questions: t.questions, answers: t.answers, scores: scored.scores, summary: scored.summary },
+            }).eq('id', t.candidate_id)
+            await supabase.from('assessment_tokens').update({ scored: true }).eq('id', t.id)
+            tsLog(`✓ ${name}: assessment ${scored.overallScore}/100`, 'ok')
+          }
+        } catch (err) {
+          tsLog(`⚠ Scoring failed for ${name}: ${err.message}`, 'err')
+        }
+      }
+      tsLog('Assessment scoring complete.', 'ok')
+      await refreshCandidates()
+    } catch (err) {
+      tsLog(`⚠ Error fetching submissions: ${err.message}`, 'err')
+    } finally {
+      setScoringAssessments(false)
+    }
   }
 
   // ── Derived state ─────────────────────────────────────────────────────────
@@ -835,6 +1024,18 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
               )}
             </div>
           )}
+          {activeJob?.pipeline_status === 'pending_client_approval' && (
+            <div style={{ padding: '10px 14px', background: 'rgba(184,146,74,0.07)', borderLeft: '2px solid var(--accent)', fontSize: 13, color: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span>⏸ Awaiting client shortlist approval — client can Approve/Reject candidates in their portal.</span>
+              {!pipelineRunning && (
+                <button
+                  className="btn btn-primary"
+                  style={{ fontSize: 12, padding: '4px 12px', background: 'var(--green)', borderColor: 'var(--green)', whiteSpace: 'nowrap' }}
+                  onClick={runInterviewsPhase}
+                >▶ Run Interviews →</button>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -895,9 +1096,27 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
                     <div className="file-list-header">
                       <span>{files.length} file{files.length !== 1 ? 's' : ''}</span>
                       {pipelineRunning && <div style={{ flex: 1 }}><div className="progress-track"><div className="progress-fill" style={{ width: `${parseProgress}%` }} /></div></div>}
+                      {pipelineRunning && (
+                        <>
+                          {pipelinePaused
+                            ? <button onClick={runnerResume} style={{ padding: '5px 12px', fontSize: 12, background: 'var(--green)', color: '#fff', border: 'none', borderRadius: 'var(--r)', cursor: 'pointer', fontFamily: 'var(--font-body)' }}>▶ Resume</button>
+                            : <button onClick={runnerPause}  style={{ padding: '5px 12px', fontSize: 12, background: 'var(--amber)', color: '#fff', border: 'none', borderRadius: 'var(--r)', cursor: 'pointer', fontFamily: 'var(--font-body)' }}>⏸ Pause</button>
+                          }
+                          <button onClick={runnerStop} style={{ padding: '5px 12px', fontSize: 12, background: 'var(--red)', color: '#fff', border: 'none', borderRadius: 'var(--r)', cursor: 'pointer', fontFamily: 'var(--font-body)' }}>◼ Stop</button>
+                        </>
+                      )}
                       <button className="btn btn-primary" style={{ padding: '5px 12px', fontSize: 12 }} disabled={!pendingCount || pipelineRunning || !activeJob} onClick={runFullPipeline}>
-                        {pipelineRunning ? <><span className="spinner" style={{ width: 11, height: 11 }} /> Running Pipeline…</> : '▶ Upload & Run Full Pipeline'}
+                        {pipelineRunning ? <><span className="spinner" style={{ width: 11, height: 11 }} />{pipelinePaused ? ' Paused…' : ' Running Pipeline…'}</> : '▶ Upload & Run Full Pipeline'}
                       </button>
+                      {activeJob?.pipeline_status === 'pending_client_approval' && !pipelineRunning && (
+                        <button
+                          className="btn btn-primary"
+                          style={{ padding: '5px 12px', fontSize: 12, background: 'var(--green)', borderColor: 'var(--green)', whiteSpace: 'nowrap' }}
+                          onClick={runInterviewsPhase}
+                        >
+                          ▶ Run Interviews →
+                        </button>
+                      )}
                     </div>
                     {files.map(f => (
                       <div key={f.id} className="file-row">
@@ -944,7 +1163,10 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
                 <div className="c-rank">#{i + 1}</div>
                 <div className="c-info">
                   <div className="c-name">{c.full_name}{c.source === 'manually_added' && <span className="badge badge-blue" style={{ fontSize: 9, marginLeft: 6 }}>Manual</span>}</div>
-                  <div className="c-meta">{c.candidate_role} · {c.total_years}y</div>
+                  <div className="c-meta">
+                    {c.candidate_role} · {c.total_years}y
+                    {daysAgo(c.screened_at) && <span style={{ marginLeft: 6, color: 'var(--text-3)', fontSize: 10, fontFamily: 'var(--font-mono)' }}>screened {daysAgo(c.screened_at)} ago</span>}
+                  </div>
                   {c.match_reason && <div style={{ fontSize: 11, color: 'var(--text-2)', marginTop: 3 }}>{c.match_reason}</div>}
                 </div>
                 <div className="c-score">
@@ -978,7 +1200,19 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
         <div className="section-card">
           <div className="section-card-head">
             <h3>4 · AI Video Interview</h3>
-            <span className="mono text-muted" style={{ fontSize: 11 }}>{passedCandidates.length} passed screening</span>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              {activeJob?.assessment_enabled && !isClient && (
+                <button
+                  className="btn btn-secondary"
+                  style={{ fontSize: 11, padding: '4px 10px', whiteSpace: 'nowrap' }}
+                  disabled={scoringAssessments || pipelineRunning}
+                  onClick={scoreAssessmentSubmissions}
+                >
+                  {scoringAssessments ? <><span className="spinner" style={{ width: 10, height: 10 }} /> Scoring…</> : '✓ Score Submissions'}
+                </button>
+              )}
+              <span className="mono text-muted" style={{ fontSize: 11 }}>{passedCandidates.length} passed screening</span>
+            </div>
           </div>
           <div className="candidate-list">
             {srch(passedCandidates).map(c => {
@@ -989,7 +1223,10 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
                 <div key={c.id} className="candidate-row" style={{ cursor: 'default' }}>
                   <div className="c-info">
                     <div className="c-name">{c.full_name}{c.source === 'manually_added' && <span className="badge badge-blue" style={{ fontSize: 9, marginLeft: 6 }}>Manual</span>}</div>
-                    <div className="c-meta">{c.candidate_role} · {c.total_years}y</div>
+                    <div className="c-meta">
+                      {c.candidate_role} · {c.total_years}y
+                      {daysAgo(c.interviewed_at) && <span style={{ marginLeft: 6, color: 'var(--text-3)', fontSize: 10, fontFamily: 'var(--font-mono)' }}>iv {daysAgo(c.interviewed_at)} ago</span>}
+                    </div>
                   </div>
                   <div className="c-score" style={{ gap: 6, flexWrap: 'wrap' }}>
                     {!hasVideo && !hasScores && (

@@ -4,6 +4,17 @@ import { supabase } from '../../lib/supabase'
 
 const PAGE_SIZE = 20
 
+function derivePrefix(name) {
+  if (!name) return ''
+  const cleaned = name.replace(/\s+(Ltd\.?|Limited|Inc\.?|LLC|Corp\.?|PLC|GmbH|LLP)\.?\s*$/i, '').trim()
+  const words = cleaned.split(/(?=[A-Z])|\s+/).filter(w => /^[a-zA-Z]/.test(w))
+  let p
+  if (words.length >= 3)      p = words[0][0] + words[1][0] + words[2][0]
+  else if (words.length === 2) p = words[0][0] + (words[0][1] || 'X') + words[1][0]
+  else                         p = cleaned.replace(/[^a-zA-Z]/g, '').substring(0, 3).padEnd(3, 'X')
+  return p.toUpperCase()
+}
+
 function reqLabel(st) {
   if (st === 'active')   return { label: 'Active',   cls: 'badge-green' }
   if (st === 'pending')  return { label: 'Pending',  cls: 'badge-amber' }
@@ -38,6 +49,7 @@ export default function AdminClients() {
   const [invEmail,   setInvEmail]   = useState('')
   const [invCompany, setInvCompany] = useState('')
   const [invContact, setInvContact] = useState('')
+  const [invPrefix,  setInvPrefix]  = useState('')
   const [inviting,   setInviting]   = useState(false)
   const [invError,   setInvError]   = useState('')
   const [invResult,  setInvResult]  = useState(null)
@@ -144,7 +156,7 @@ export default function AdminClients() {
 
   // ── Invite handlers ───────────────────────────────────────────────────────────
   function openInvite() {
-    setInvEmail(''); setInvCompany(''); setInvContact(''); setInvError('')
+    setInvEmail(''); setInvCompany(''); setInvContact(''); setInvPrefix(''); setInvError('')
     setShowInvite(true)
   }
 
@@ -171,11 +183,13 @@ export default function AdminClients() {
       if (!res.ok) throw new Error(result.error || result.message || 'Invite failed')
       // Force-correct the role — deployed edge function may be stale and use wrong default
       if (result.userId) {
+        const prefix = (invPrefix.trim() || derivePrefix(invCompany)).toUpperCase().replace(/[^A-Z]/g, '').substring(0, 3)
         await supabase.from('profiles').update({
-          user_role:    'client',
-          company_name: invCompany.trim() || null,
-          full_name:    invContact.trim() || null,
-          first_login:  true,
+          user_role:     'client',
+          company_name:  invCompany.trim() || null,
+          full_name:     invContact.trim() || null,
+          client_prefix: prefix || null,
+          first_login:   true,
         }).eq('id', result.userId)
       }
       setInvResult({ email: invEmail.trim().toLowerCase(), password: result.tempPassword, emailSent: result.emailSent })
@@ -375,6 +389,7 @@ export default function AdminClients() {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                       <span style={{ fontWeight: 500, fontSize: 13, color: 'var(--text)' }}>{c.company_name ?? '—'}</span>
+                      {c.client_prefix && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--accent)', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 'var(--r)', padding: '1px 6px', letterSpacing: '0.1em' }}>{c.client_prefix}</span>}
                       {c.full_name && <span style={{ fontSize: 11, color: 'var(--text-3)' }}>{c.full_name}</span>}
                       <span className={`badge ${scfg.cls}`} style={{ fontSize: 10, ...(st === 'inactive' ? { color: 'var(--text-3)', background: 'var(--surface2)' } : {}) }}>{scfg.label}</span>
                     </div>
@@ -548,13 +563,28 @@ export default function AdminClients() {
               <div className="form-grid">
                 <div className="field">
                   <label>Company Name *</label>
-                  <input type="text" placeholder="Acme Corp" value={invCompany} onChange={e => setInvCompany(e.target.value)} autoFocus />
+                  <input type="text" placeholder="Acme Corp" value={invCompany} autoFocus
+                    onChange={e => { setInvCompany(e.target.value); setInvPrefix(derivePrefix(e.target.value)) }} />
+                </div>
+                <div className="field">
+                  <label>
+                    Client Code
+                    <span style={{ fontWeight: 300, color: 'var(--text-3)', marginLeft: 6 }}>3 letters — used for job IDs</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={invPrefix}
+                    maxLength={3}
+                    placeholder="e.g. TEV"
+                    onChange={e => setInvPrefix(e.target.value.toUpperCase().replace(/[^A-Z]/g, '').substring(0, 3))}
+                    style={{ fontFamily: 'var(--font-mono)', letterSpacing: '0.15em', textTransform: 'uppercase', width: 100 }}
+                  />
                 </div>
                 <div className="field">
                   <label>Contact Name</label>
                   <input type="text" placeholder="Jane Smith" value={invContact} onChange={e => setInvContact(e.target.value)} />
                 </div>
-                <div className="field span-2">
+                <div className="field">
                   <label>Email Address *</label>
                   <input
                     type="email" placeholder="jane@acmecorp.com"

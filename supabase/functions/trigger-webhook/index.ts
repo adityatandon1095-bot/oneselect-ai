@@ -64,18 +64,34 @@ serve(async (req) => {
       source:         'oneselect',
     }
 
-    const webhookRes = await fetch(clientProfile.webhook_url, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json', 'X-OneSelect-Event': 'candidate.hired' },
-      body:    JSON.stringify(payload),
-      signal:  AbortSignal.timeout(8000),
-    })
+    let delivered = false
+    let deliveryError = ''
+    try {
+      const webhookRes = await fetch(clientProfile.webhook_url, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', 'X-OneSelect-Event': 'candidate.hired' },
+        body:    JSON.stringify(payload),
+        signal:  AbortSignal.timeout(8000),
+      })
+      delivered = webhookRes.ok
+      if (!webhookRes.ok) deliveryError = `HTTP ${webhookRes.status}`
+    } catch (fetchErr) {
+      deliveryError = String(fetchErr)
+    }
 
-    return new Response(JSON.stringify({ delivered: webhookRes.ok, status: webhookRes.status }), {
+    if (!delivered) {
+      await admin.from('webhook_failures').insert({
+        job_id:        jobId,
+        candidate_id:  candidateId,
+        error_message: deliveryError,
+        payload,
+      }).catch(e => console.error('Failed to log webhook failure:', e))
+    }
+
+    return new Response(JSON.stringify({ delivered, error: deliveryError || null }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   } catch (err) {
-    // Webhook delivery failures are non-fatal — log but don't error
     console.error('trigger-webhook error:', err)
     return new Response(JSON.stringify({ delivered: false, error: String(err) }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

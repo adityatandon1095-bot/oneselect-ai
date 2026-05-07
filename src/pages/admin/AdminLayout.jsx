@@ -1,5 +1,6 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../lib/AuthContext'
+import NotificationBell from '../../components/NotificationBell'
 
 const NAV = [
   { to: '/admin/dashboard',   label: 'Dashboard',       icon: '◈' },
@@ -48,7 +49,10 @@ export default function AdminLayout() {
         </nav>
 
         <div className="sidebar-footer">
-          <div className="sidebar-user-email">{user?.email}</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+            <div className="sidebar-user-email" style={{ margin: 0 }}>{user?.email}</div>
+            <NotificationBell />
+          </div>
           <button
             className="btn btn-secondary"
             style={{ width: '100%', justifyContent: 'center' }}

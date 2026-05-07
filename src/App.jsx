@@ -32,6 +32,7 @@ import ClientChat from './pages/client/ClientChat'
 import PublicVideoInterview from './pages/PublicVideoInterview'
 import PublicLiveInterview from './pages/PublicLiveInterview'
 import PublicScheduleConfirm from './pages/PublicScheduleConfirm'
+import PublicAssessment from './pages/PublicAssessment'
 import PublicJobs from './pages/PublicJobs'
 import CandidateLayout from './pages/candidate/CandidateLayout'
 import CandidateLogin from './pages/candidate/CandidateLogin'
@@ -93,6 +94,7 @@ export default function App() {
           <Route path="/interview/:token" element={<PublicVideoInterview />} />
           <Route path="/live/:token" element={<PublicLiveInterview />} />
           <Route path="/schedule/:token" element={<PublicScheduleConfirm />} />
+          <Route path="/assessment/:token" element={<PublicAssessment />} />
           <Route path="/jobs" element={<PublicJobs />} />
           <Route path="/candidate/login"    element={<CandidateLogin />} />
           <Route path="/candidate/register" element={<CandidateRegister />} />

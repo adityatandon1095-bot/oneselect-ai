@@ -30,12 +30,22 @@ function matchStatus(m) {
   return { label: 'Under Review', cls: 'badge-amber' }
 }
 
+function appStatus(c) {
+  if (c.final_decision === 'hired')    return { label: 'Offer Extended',     cls: 'badge-green' }
+  if (c.final_decision === 'rejected') return { label: 'Not Progressed',     cls: 'badge-red'   }
+  if (c.scores?.overallScore != null)  return { label: 'Interview Reviewed', cls: 'badge-blue'  }
+  if (c.match_pass === true)           return { label: 'Passed Screening',   cls: 'badge-blue'  }
+  if (c.match_pass === false)          return { label: 'Not Selected',       cls: 'badge-red'   }
+  return                                      { label: 'Under Review',        cls: 'badge-amber' }
+}
+
 export default function CandidateDashboard() {
   const { user } = useAuth()
   const navigate = useNavigate()
-  const [poolEntry, setPoolEntry] = useState(null)
-  const [matches,   setMatches]   = useState([])
-  const [loading,   setLoading]   = useState(true)
+  const [poolEntry,     setPoolEntry]     = useState(null)
+  const [matches,       setMatches]       = useState([])
+  const [applications,  setApplications]  = useState([])
+  const [loading,       setLoading]       = useState(true)
 
   useEffect(() => { if (user) load() }, [user])
 
@@ -48,15 +58,15 @@ export default function CandidateDashboard() {
 
     setPoolEntry(pool)
 
-    if (pool) {
-      const { data: matchData } = await supabase
-        .from('job_matches')
-        .select('*, jobs(id, title, experience_years, required_skills)')
-        .eq('talent_id', pool.id)
-        .order('match_score', { ascending: false })
-      setMatches(matchData ?? [])
-    }
+    const [matchRes, appRes] = await Promise.all([
+      pool
+        ? supabase.from('job_matches').select('*, jobs(id, title, experience_years, required_skills)').eq('talent_id', pool.id).order('match_score', { ascending: false })
+        : Promise.resolve({ data: [] }),
+      supabase.from('candidates').select('id, full_name, candidate_role, match_pass, match_score, scores, final_decision, created_at, jobs(id, title)').eq('candidate_user_id', user.id).order('created_at', { ascending: false }),
+    ])
 
+    setMatches(matchRes.data ?? [])
+    setApplications(appRes.data ?? [])
     setLoading(false)
   }
 
@@ -105,6 +115,32 @@ export default function CandidateDashboard() {
         <div style={{ padding: '12px 16px', background: 'var(--surface)', border: '1px solid var(--border)', borderLeft: '3px solid var(--accent)', borderRadius: 8, marginBottom: 20, fontSize: 13, color: 'var(--text-2)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span>Your profile is {score}% complete — a complete profile improves your matching quality.</span>
           <button className="btn btn-secondary" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => navigate('/candidate/profile')}>Complete Profile →</button>
+        </div>
+      )}
+
+      {/* Direct Applications */}
+      {applications.length > 0 && (
+        <div className="section-card">
+          <div className="section-card-head">
+            <h3>Your Applications</h3>
+          </div>
+          {applications.map(c => {
+            const st = appStatus(c)
+            return (
+              <div key={c.id} className="table-row" style={{ cursor: 'default' }}>
+                <div className="col-main">
+                  <div className="col-name">{c.jobs?.title ?? 'Role'}</div>
+                  <div className="col-sub">{c.candidate_role} · Applied {new Date(c.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: '2-digit' })}</div>
+                </div>
+                <div className="col-right">
+                  {c.match_score != null && (
+                    <span className="mono" style={{ fontSize: 11, color: 'var(--text-3)' }}>Score {c.match_score}</span>
+                  )}
+                  <span className={`badge ${st.cls}`}>{st.label}</span>
+                </div>
+              </div>
+            )
+          })}
         </div>
       )}
 

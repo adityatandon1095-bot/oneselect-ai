@@ -26,6 +26,10 @@ export default function PublicVideoInterview() {
 
     if (cRow) {
       if (cRow.video_urls?.length > 0) { setDone(true); setLoading(false); return }
+      if (cRow.interview_token_expires_at && new Date(cRow.interview_token_expires_at) < new Date()) {
+        setError(`expired:${new Date(cRow.interview_token_expires_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`)
+        setLoading(false); return
+      }
       setData({ candidate: cRow, job: cRow.jobs, table: 'candidates' })
       setLoading(false)
       return
@@ -40,6 +44,10 @@ export default function PublicVideoInterview() {
 
     if (mRow) {
       if (mRow.video_urls?.length > 0) { setDone(true); setLoading(false); return }
+      if (mRow.interview_token_expires_at && new Date(mRow.interview_token_expires_at) < new Date()) {
+        setError(`expired:${new Date(mRow.interview_token_expires_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`)
+        setLoading(false); return
+      }
       const candidate = {
         id: mRow.id,
         full_name: mRow.talent_pool?.full_name ?? '',
@@ -75,12 +83,20 @@ export default function PublicVideoInterview() {
   }
 
   if (error) {
+    const isExpired = error.startsWith('expired:')
+    const expiryDate = isExpired ? error.replace('expired:', '') : null
     return (
       <div style={pageStyle}>
-        <div style={{ textAlign: 'center', maxWidth: 400 }}>
-          <div style={{ fontSize: 36, marginBottom: 16, opacity: 0.3 }}>◈</div>
-          <h2 style={{ fontFamily: 'var(--font-head)', fontWeight: 300, marginBottom: 8 }}>Link not found</h2>
-          <p style={{ color: 'var(--text-3)', fontSize: 14 }}>{error}</p>
+        <div style={{ textAlign: 'center', maxWidth: 440, padding: '0 24px' }}>
+          <div style={{ fontSize: 36, marginBottom: 16, opacity: 0.3 }}>{isExpired ? '⏱' : '◈'}</div>
+          <h2 style={{ fontFamily: 'var(--font-head)', fontWeight: 300, marginBottom: 8 }}>
+            {isExpired ? 'This link has expired' : 'Link not found'}
+          </h2>
+          <p style={{ color: 'var(--text-3)', fontSize: 14, lineHeight: 1.7 }}>
+            {isExpired
+              ? <>This interview link expired on <strong>{expiryDate}</strong>. Please contact your recruiter to request a new invitation link.</>
+              : 'This interview link is invalid. Please check the link in your email or contact your recruiter.'}
+          </p>
         </div>
       </div>
     )

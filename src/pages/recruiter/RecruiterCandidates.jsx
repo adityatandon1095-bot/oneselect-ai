@@ -7,6 +7,7 @@ import { callClaude } from '../../utils/api'
 import { mapMatchToCandidate } from '../../utils/talentPool'
 import { extractContent, isSupported, fileExt, ACCEPT_ATTR } from '../../utils/fileExtract'
 import { parseExperience } from '../../utils/parseExperience'
+import { downloadCsv, candidateRows } from '../../utils/exportCsv'
 
 const REC_COLOR = { 'Strong Hire': 'var(--green)', 'Hire': 'var(--accent)', 'Borderline': 'var(--amber)', 'Reject': 'var(--red)' }
 const DIMS = [
@@ -453,6 +454,12 @@ export default function RecruiterCandidates() {
           : [{ role: 'user', content: `Parse this CV:\n\n${content.text}` }]
         const reply = await callClaude(msgs, CV_PARSE_SYSTEM, 1024)
         const parsed = JSON.parse(reply.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, ''))
+        // Duplicate check
+        if (parsed.email && uploadJobId) {
+          const { data: existing } = await supabase.from('candidates').select('id, full_name').eq('job_id', uploadJobId).ilike('email', parsed.email).maybeSingle()
+          if (existing) { patchFile(entry.id, { status: 'error', error: `Duplicate — ${existing.full_name} already exists for this job` }); continue }
+        }
+
         const { data: saved, error } = await supabase.from('candidates').insert({
           job_id:         uploadJobId || null,
           full_name:      parsed.name,
@@ -560,6 +567,16 @@ export default function RecruiterCandidates() {
           >
             + Add Manually
           </button>
+          {activeList.length > 0 && (
+            <button
+              className="btn btn-secondary"
+              style={{ whiteSpace: 'nowrap' }}
+              onClick={() => {
+                const jTitle = jobFilter !== 'all' ? (jobs.find(j => j.id === jobFilter)?.title ?? '') : ''
+                downloadCsv(`candidates-${Date.now()}.csv`, candidateRows(activeList, jTitle))
+              }}
+            >↓ CSV</button>
+          )}
         </div>
       </div>
 

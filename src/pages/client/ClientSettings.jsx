@@ -20,6 +20,9 @@ export default function ClientSettings() {
   }, [profile?.plan_id])
   const [saving,      setSaving]      = useState(false)
   const [saved,       setSaved]       = useState(false)
+  const [fullName,    setFullName]    = useState(profile?.full_name    ?? '')
+  const [jobTitle,    setJobTitle]    = useState(profile?.job_title    ?? '')
+  const [phone,       setPhone]       = useState(profile?.phone        ?? '')
   const [companyName, setCompanyName] = useState(profile?.company_name ?? '')
   const [webhookUrl,  setWebhookUrl]  = useState(profile?.webhook_url ?? '')
   const [webhookSaving,  setWebhookSaving]  = useState(false)
@@ -30,7 +33,12 @@ export default function ClientSettings() {
   async function handleSave(e) {
     e.preventDefault()
     setSaving(true); setSaved(false)
-    await supabase.from('profiles').update({ company_name: companyName }).eq('id', user.id)
+    await supabase.from('profiles').update({
+      full_name:    fullName.trim()    || null,
+      job_title:    jobTitle.trim()    || null,
+      phone:        phone.trim()       || null,
+      company_name: companyName.trim() || null,
+    }).eq('id', user.id)
     setSaving(false); setSaved(true)
     setTimeout(() => setSaved(false), 3000)
   }
@@ -76,6 +84,18 @@ export default function ClientSettings() {
               <div className="field">
                 <label>Email</label>
                 <input type="email" value={user?.email ?? ''} readOnly style={{ opacity: 0.5, cursor: 'not-allowed' }} />
+              </div>
+              <div className="field">
+                <label>Full Name</label>
+                <input type="text" value={fullName} onChange={e => setFullName(e.target.value)} placeholder="Your full name" />
+              </div>
+              <div className="field">
+                <label>Job Title</label>
+                <input type="text" value={jobTitle} onChange={e => setJobTitle(e.target.value)} placeholder="e.g. HR Manager" />
+              </div>
+              <div className="field">
+                <label>Phone</label>
+                <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+44 7700 000000" />
               </div>
               <div className="field">
                 <label>Company Name</label>
