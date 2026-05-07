@@ -23,7 +23,7 @@ CREATE POLICY "auth_insert_audit" ON audit_log FOR INSERT
 -- Admins and recruiters can read all audit logs
 CREATE POLICY "staff_read_audit" ON audit_log FOR SELECT
   USING (
-    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('admin', 'recruiter'))
+    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND user_role IN ('admin', 'recruiter'))
   );
 
 -- Clients can read audit logs only for their own jobs
