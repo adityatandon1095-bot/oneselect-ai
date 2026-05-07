@@ -47,6 +47,7 @@ import AdminBoard from './pages/admin/AdminBoard'
 import AdminBilling from './pages/admin/AdminBilling'
 import Privacy from './pages/Privacy'
 import Terms from './pages/Terms'
+import TrialSignup from './pages/trial/TrialSignup'
 import './App.css'
 
 
@@ -91,6 +92,7 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/client/register" element={<ClientRegister />} />
+          <Route path="/trial" element={<TrialSignup />} />
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/terms"   element={<Terms />} />
           <Route path="/interview/:token" element={<PublicVideoInterview />} />
