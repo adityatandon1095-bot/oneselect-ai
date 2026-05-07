@@ -13,32 +13,35 @@ export default function AdminDashboard() {
   useEffect(() => { load() }, [])
 
   async function load() {
-    const ms = (() => { const d = new Date(); d.setDate(1); d.setHours(0,0,0,0); return d.toISOString() })()
-    const [
-      { count: clients },
-      { count: jobs },
-      { count: candidates },
-      { count: interviews },
-      { data: recent },
-      { count: poolTotal },
-      { count: poolAvailable },
-      { data: clientProfiles },
-      { count: placements },
-    ] = await Promise.all([
-      supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('user_role', 'client'),
-      supabase.from('jobs').select('*', { count: 'exact', head: true }).eq('status', 'active'),
-      supabase.from('candidates').select('*', { count: 'exact', head: true }),
-      supabase.from('candidates').select('*', { count: 'exact', head: true }).not('scores', 'is', null),
-      supabase.from('jobs').select('id, title, status, created_at, profiles(company_name)').order('created_at', { ascending: false }).limit(8),
-      supabase.from('talent_pool').select('*', { count: 'exact', head: true }),
-      supabase.from('talent_pool').select('*', { count: 'exact', head: true }).eq('availability', 'available'),
-      supabase.from('profiles').select('plan').eq('user_role', 'client'),
-      supabase.from('candidates').select('*', { count: 'exact', head: true }).eq('final_decision', 'hired').gte('updated_at', ms),
-    ])
-    const mrr = (clientProfiles ?? []).reduce((s, c) => s + (c.plan === 'growth' ? 1500 : 0), 0)
-    setStats({ clients: clients ?? 0, jobs: jobs ?? 0, candidates: candidates ?? 0, interviews: interviews ?? 0, poolTotal: poolTotal ?? 0, poolAvailable: poolAvailable ?? 0, mrr, placements: placements ?? 0 })
-    setRecentJobs(recent ?? [])
-    setLoading(false)
+    try {
+      const ms = (() => { const d = new Date(); d.setDate(1); d.setHours(0,0,0,0); return d.toISOString() })()
+      const [
+        { count: clients },
+        { count: jobs },
+        { count: candidates },
+        { count: interviews },
+        { data: recent },
+        { count: poolTotal },
+        { count: poolAvailable },
+        { data: clientProfiles },
+        { count: placements },
+      ] = await Promise.all([
+        supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('user_role', 'client'),
+        supabase.from('jobs').select('*', { count: 'exact', head: true }).eq('status', 'active'),
+        supabase.from('candidates').select('*', { count: 'exact', head: true }),
+        supabase.from('candidates').select('*', { count: 'exact', head: true }).not('scores', 'is', null),
+        supabase.from('jobs').select('id, title, status, created_at, profiles(company_name)').order('created_at', { ascending: false }).limit(8),
+        supabase.from('talent_pool').select('*', { count: 'exact', head: true }),
+        supabase.from('talent_pool').select('*', { count: 'exact', head: true }).eq('availability', 'available'),
+        supabase.from('profiles').select('plan').eq('user_role', 'client'),
+        supabase.from('candidates').select('*', { count: 'exact', head: true }).eq('final_decision', 'hired').gte('updated_at', ms),
+      ])
+      const mrr = (clientProfiles ?? []).reduce((s, c) => s + (c.plan === 'growth' ? 1500 : 0), 0)
+      setStats({ clients: clients ?? 0, jobs: jobs ?? 0, candidates: candidates ?? 0, interviews: interviews ?? 0, poolTotal: poolTotal ?? 0, poolAvailable: poolAvailable ?? 0, mrr, placements: placements ?? 0 })
+      setRecentJobs(recent ?? [])
+    } finally {
+      setLoading(false)
+    }
   }
 
   async function sendWeeklyUpdates() {

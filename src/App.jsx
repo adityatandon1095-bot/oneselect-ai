@@ -1,4 +1,3 @@
-import { Component } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './lib/AuthContext'
 import ErrorBoundary from './components/ErrorBoundary'
@@ -48,35 +47,6 @@ import Privacy from './pages/Privacy'
 import Terms from './pages/Terms'
 import './App.css'
 
-class ErrorBoundary extends Component {
-  constructor(props) {
-    super(props)
-    this.state = { hasError: false, error: null }
-  }
-  static getDerivedStateFromError(error) {
-    return { hasError: true, error }
-  }
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', gap: 16, background: 'var(--bg)', color: 'var(--text)', fontFamily: 'var(--font-body)' }}>
-          <div style={{ fontSize: 32, opacity: 0.2 }}>◈</div>
-          <h2 style={{ fontFamily: 'var(--font-head)', fontWeight: 300, margin: 0 }}>Something went wrong</h2>
-          <p style={{ fontSize: 13, color: 'var(--text-3)', margin: 0, maxWidth: 400, textAlign: 'center' }}>
-            {this.state.error?.message ?? 'An unexpected error occurred.'}
-          </p>
-          <button
-            className="btn btn-primary"
-            onClick={() => window.location.reload()}
-          >
-            Reload
-          </button>
-        </div>
-      )
-    }
-    return this.props.children
-  }
-}
 
 function Loader() {
   return (

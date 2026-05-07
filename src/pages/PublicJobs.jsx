@@ -228,6 +228,7 @@ export default function PublicJobs() {
   useEffect(() => {
     supabase.from('jobs').select('id, title, experience_years, required_skills, preferred_skills, description').eq('status', 'active').order('created_at', { ascending: false })
       .then(({ data }) => { setJobs(data ?? []); setLoading(false) })
+      .catch(() => setLoading(false))
   }, [])
 
   const filtered = jobs.filter(j => {

@@ -25,8 +25,14 @@ export default function CandidateLogin() {
       return
     }
 
-    const { data: profile } = await supabase.from('profiles').select('user_role').eq('id', data.user.id).single()
-    if (!profile || profile.user_role !== 'candidate') {
+    const { data: profile, error: profileErr } = await supabase.from('profiles').select('user_role').eq('id', data.user.id).single()
+    if (profileErr || !profile) {
+      await supabase.auth.signOut()
+      setError('Could not load your account. Please try again.')
+      setLoading(false)
+      return
+    }
+    if (profile.user_role !== 'candidate') {
       await supabase.auth.signOut()
       setError('This account is not a candidate account. Use the main login page instead.')
       setLoading(false)

@@ -208,7 +208,7 @@ export function useChat(userId, endpoint = 'hiring-chat') {
         setConversations(prev => prev.map(c => c.id === convId ? { ...c, title } : c))
       } else {
         const now = new Date().toISOString()
-        supabase.from('conversations').update({ updated_at: now }).eq('id', convId).then()
+        supabase.from('conversations').update({ updated_at: now }).eq('id', convId)
         setConversations(prev => {
           const conv = prev.find(c => c.id === convId)
           if (!conv) return prev

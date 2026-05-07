@@ -108,7 +108,7 @@ export default function AdminPipeline({ allowedClientIds } = {}) {
     if (!clientJobs.length || jobId) return
     const urlJob = new URLSearchParams(location.search).get('job')
     if (urlJob && clientJobs.some(j => j.id === urlJob)) selectJob(urlJob)
-  }, [clientJobs])
+  }, [clientJobs, jobId, location.search])
 
   useEffect(() => { logRef.current?.scrollTo(0, logRef.current.scrollHeight) }, [log])
 
