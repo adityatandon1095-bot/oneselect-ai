@@ -11,6 +11,7 @@ import mammoth from 'mammoth'
 import { extractContent, isSupported, fileExt, ACCEPT_ATTR } from '../../utils/fileExtract'
 import { parseExperience } from '../../utils/parseExperience'
 import { triggerTalentPoolMatch, mapMatchToCandidate } from '../../utils/talentPool'
+import { logAudit } from '../../utils/audit'
 import TagInput from '../../components/TagInput'
 import VideoPlayer from '../../components/VideoPlayer'
 
@@ -57,7 +58,7 @@ const EMPTY_MANUAL = { full_name:'', email:'', phone:'', candidate_role:'', tota
 const appUrl = 'https://oneselect-ai-t6uo-phi.vercel.app'
 
 export default function AdminPipeline({ allowedClientIds } = {}) {
-  const { profile } = useAuth()
+  const { profile, user } = useAuth()
   const isClient = profile?.user_role === 'client'
   const location = useLocation()
 
@@ -321,6 +322,7 @@ Return the subject line first starting with "SUBJECT: ", then a blank line, then
     } else {
       setAiInviteModal(m => ({ ...m, sending: false, sent: true }))
       addLog(`✉ AI interview invite sent to ${email.trim()}`, 'ok')
+      logAudit(supabase, { actorId: user?.id, actorRole: profile?.role ?? 'recruiter', action: 'interview_invited', entityType: 'candidate', entityId: candidate.id, jobId: activeJob?.id, metadata: { candidate_name: candidate.full_name, email: email.trim(), job_title: activeJob?.title } })
     }
   }
 
@@ -385,6 +387,7 @@ Return the subject line first starting with "SUBJECT: ", then a blank line, then
     await supabase.from(table).update(updatePayload).eq('id', candidate.id)
     setDecisionModal(null)
     addLog(`✓ Decision saved: ${candidate.full_name} → ${decision}`, 'ok')
+    logAudit(supabase, { actorId: user?.id, actorRole: profile?.role ?? 'recruiter', action: `decision_${decision}`, entityType: 'candidate', entityId: candidate.id, jobId: activeJob?.id, metadata: { candidate_name: candidate.full_name, decision, notes } })
     await refreshCandidates()
 
     const { data: { session } } = await supabase.auth.getSession()

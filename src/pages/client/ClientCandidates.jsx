@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../lib/AuthContext'
 import { downloadCsv, candidateRows } from '../../utils/exportCsv'
+import { logAudit } from '../../utils/audit'
 
 const REC_COLOR = { 'Strong Hire': 'var(--green)', 'Hire': 'var(--accent)', 'Borderline': 'var(--amber)', 'Reject': 'var(--red)' }
 
@@ -408,11 +409,15 @@ export default function ClientCandidates() {
   async function approveCandidate(id) {
     await supabase.from('candidates').update({ client_approved: true }).eq('id', id)
     setCandidates(prev => prev.map(c => c.id === id ? { ...c, client_approved: true } : c))
+    const c = candidates.find(x => x.id === id)
+    logAudit(supabase, { actorId: user?.id, actorRole: 'client', action: 'client_approved', entityType: 'candidate', entityId: id, jobId: c?.job_id, metadata: { candidate_name: c?.full_name } })
   }
 
   async function rejectCandidate(id) {
     await supabase.from('candidates').update({ client_approved: false }).eq('id', id)
     setCandidates(prev => prev.map(c => c.id === id ? { ...c, client_approved: false } : c))
+    const c = candidates.find(x => x.id === id)
+    logAudit(supabase, { actorId: user?.id, actorRole: 'client', action: 'client_rejected', entityType: 'candidate', entityId: id, jobId: c?.job_id, metadata: { candidate_name: c?.full_name } })
   }
 
   async function sendOffer() {

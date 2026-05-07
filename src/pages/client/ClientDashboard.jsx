@@ -10,6 +10,7 @@ export default function ClientDashboard() {
   const [stats, setStats]                   = useState({ jobs: 0, candidates: 0, screened: 0, passed: 0, interviewed: 0 })
   const [recentCandidates, setRecentCandidates] = useState([])
   const [recentJobs, setRecentJobs]         = useState([])
+  const [recentActivity, setRecentActivity] = useState([])
   const [loading, setLoading]               = useState(true)
   const [showWelcome, setShowWelcome]       = useState(false)
 
@@ -68,6 +69,15 @@ export default function ClientDashboard() {
       interviewed: all.filter(c => c.scores != null).length,
     })
     setRecentCandidates(all.slice(0, 6))
+
+    const { data: activity } = await supabase
+      .from('audit_log')
+      .select('id, action, entity_type, metadata, created_at')
+      .in('job_id', jobIds)
+      .order('created_at', { ascending: false })
+      .limit(10)
+    setRecentActivity(activity ?? [])
+
     setLoading(false)
   }
 
@@ -307,6 +317,40 @@ export default function ClientDashboard() {
                   <div style={{ marginTop: 12, width: '60%', height: 3, background: 'var(--border)', borderRadius: 2, overflow: 'hidden' }}>
                     <div style={{ height: '100%', width: `${pct}%`, background: step.color, borderRadius: 2 }} />
                   </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {recentActivity.length > 0 && (
+        <div className="section-card" style={{ marginBottom: 20 }}>
+          <div className="section-card-head"><h3>Recent Activity</h3></div>
+          <div style={{ padding: '4px 0 8px' }}>
+            {recentActivity.map(entry => {
+              const meta = entry.metadata ?? {}
+              let icon = '◌'
+              let text = ''
+              if (entry.action === 'interview_invited') { icon = '✉'; text = `Interview invite sent to ${meta.candidate_name ?? 'a candidate'}` }
+              else if (entry.action === 'decision_hired')    { icon = '✓'; text = `${meta.candidate_name ?? 'Candidate'} marked as hired` }
+              else if (entry.action === 'decision_rejected') { icon = '✕'; text = `${meta.candidate_name ?? 'Candidate'} was not progressed` }
+              else if (entry.action === 'client_approved')   { icon = '✓'; text = `You approved ${meta.candidate_name ?? 'a candidate'}` }
+              else if (entry.action === 'client_rejected')   { icon = '✕'; text = `You rejected ${meta.candidate_name ?? 'a candidate'}` }
+              else { text = entry.action.replace(/_/g, ' ') }
+              const when = new Date(entry.created_at)
+              const ago = (() => {
+                const diff = Date.now() - when.getTime()
+                if (diff < 60000)  return 'just now'
+                if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`
+                if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`
+                return when.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+              })()
+              return (
+                <div key={entry.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 20px', borderBottom: '1px solid var(--border)' }}>
+                  <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--surface2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, flexShrink: 0, color: 'var(--text-3)' }}>{icon}</div>
+                  <div style={{ flex: 1, fontSize: 13, color: 'var(--text-2)' }}>{text}</div>
+                  <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-3)', flexShrink: 0 }}>{ago}</div>
                 </div>
               )
             })}

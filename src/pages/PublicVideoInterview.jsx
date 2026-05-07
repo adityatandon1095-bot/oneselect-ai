@@ -10,6 +10,7 @@ export default function PublicVideoInterview() {
   const [error, setError] = useState('')
   const [done, setDone] = useState(false)
   const [showInterview, setShowInterview] = useState(false)
+  const [resendState, setResendState] = useState('idle') // 'idle' | 'sending' | 'sent' | 'error'
 
   useEffect(() => { load() }, [token])
 
@@ -82,6 +83,21 @@ export default function PublicVideoInterview() {
     )
   }
 
+  async function requestNewLink() {
+    setResendState('sending')
+    try {
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/resend-interview-invite`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY },
+        body: JSON.stringify({ token }),
+      })
+      const json = await res.json()
+      setResendState(json.success ? 'sent' : 'error')
+    } catch {
+      setResendState('error')
+    }
+  }
+
   if (error) {
     const isExpired = error.startsWith('expired:')
     const expiryDate = isExpired ? error.replace('expired:', '') : null
@@ -94,9 +110,40 @@ export default function PublicVideoInterview() {
           </h2>
           <p style={{ color: 'var(--text-3)', fontSize: 14, lineHeight: 1.7 }}>
             {isExpired
-              ? <>This interview link expired on <strong>{expiryDate}</strong>. Please contact your recruiter to request a new invitation link.</>
+              ? <>This interview link expired on <strong>{expiryDate}</strong>.</>
               : 'This interview link is invalid. Please check the link in your email or contact your recruiter.'}
           </p>
+          {isExpired && resendState === 'idle' && (
+            <button
+              onClick={requestNewLink}
+              style={{ marginTop: 20, padding: '10px 28px', background: '#B8924A', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontFamily: 'var(--font-mono)', letterSpacing: '0.06em', textTransform: 'uppercase' }}
+            >
+              Request New Link
+            </button>
+          )}
+          {isExpired && resendState === 'sending' && (
+            <div style={{ marginTop: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, color: 'var(--text-3)', fontSize: 13 }}>
+              <span className="spinner" style={{ width: 14, height: 14 }} /> Sending…
+            </div>
+          )}
+          {isExpired && resendState === 'sent' && (
+            <p style={{ marginTop: 20, color: 'var(--green)', fontSize: 13, lineHeight: 1.6 }}>
+              A new link has been sent to your email address. Check your inbox (and spam folder).
+            </p>
+          )}
+          {isExpired && resendState === 'error' && (
+            <div style={{ marginTop: 20 }}>
+              <p style={{ color: 'var(--red)', fontSize: 13, marginBottom: 12 }}>
+                Something went wrong. Please contact your recruiter directly.
+              </p>
+              <button
+                onClick={() => setResendState('idle')}
+                style={{ padding: '8px 20px', background: 'transparent', color: 'var(--text-3)', border: '1px solid var(--border)', borderRadius: 8, cursor: 'pointer', fontSize: 12 }}
+              >
+                Try again
+              </button>
+            </div>
+          )}
         </div>
       </div>
     )
