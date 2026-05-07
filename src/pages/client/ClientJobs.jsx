@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../lib/AuthContext'
 import { triggerTalentPoolMatch } from '../../utils/talentPool'
@@ -8,10 +7,177 @@ import JDWizard from '../../components/JDWizard'
 import InstantPost from '../../components/InstantPost'
 
 const DEFAULT = { title: '', experience_years: 3, required_skills: [], preferred_skills: [], description: '', tech_weight: 60, comm_weight: 40 }
+const REC_COLOR = { 'Strong Hire': 'var(--green)', 'Hire': 'var(--accent)', 'Borderline': 'var(--amber)', 'Reject': 'var(--red)' }
+const mono = { fontFamily: 'var(--font-mono)' }
+
+function dimColor(v) { return v >= 70 ? 'var(--green)' : v >= 50 ? 'var(--accent)' : 'var(--red)' }
+
+function getStage(c) {
+  if (c.final_decision === 'hired' || c.offer_status === 'sent') return 'Hired'
+  if (c.scores?.overallScore != null) return 'Interview Done'
+  if (c.match_pass === true) return 'Interview Pending'
+  if (c.match_pass === false) return 'Screened Out'
+  return 'Applied'
+}
+
+function PipelineFunnel({ candidates, activeStage, onStageClick }) {
+  const stages = [
+    { key: 'all',              label: 'Total',            color: 'var(--accent)',  count: candidates.length },
+    { key: 'Interview Pending',label: 'Interview Pending',color: 'var(--amber)',   count: candidates.filter(c => getStage(c) === 'Interview Pending').length },
+    { key: 'Interview Done',   label: 'Interview Done',   color: 'var(--accent)',  count: candidates.filter(c => getStage(c) === 'Interview Done').length },
+    { key: 'Screened Out',     label: 'Screened Out',     color: 'var(--red)',     count: candidates.filter(c => getStage(c) === 'Screened Out').length },
+    { key: 'Hired',            label: 'Hired',            color: 'var(--green)',   count: candidates.filter(c => getStage(c) === 'Hired').length },
+  ]
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8, marginBottom: 20 }}>
+      {stages.map(s => (
+        <div
+          key={s.key}
+          onClick={() => onStageClick(s.key)}
+          style={{
+            padding: '14px 12px', background: 'var(--surface)', border: `1px solid ${activeStage === s.key ? s.color : 'var(--border)'}`,
+            borderTop: `3px solid ${s.color}`, cursor: 'pointer', textAlign: 'center',
+            boxShadow: activeStage === s.key ? `0 0 0 1px ${s.color}` : 'none',
+          }}
+        >
+          <div style={{ fontSize: 26, fontFamily: 'var(--font-head)', fontWeight: 300, color: s.color, lineHeight: 1 }}>{s.count}</div>
+          <div style={{ fontSize: 10, ...mono, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-3)', marginTop: 4 }}>{s.label}</div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function JobDetail({ job, onBack }) {
+  const [candidates, setCandidates] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [stageFilter, setStageFilter] = useState('all')
+  const [selectedId, setSelectedId] = useState(null)
+
+  useEffect(() => {
+    supabase.from('candidates').select('*').eq('job_id', job.id)
+      .order('match_score', { ascending: false, nullsFirst: false })
+      .then(({ data }) => { setCandidates(data ?? []); setLoading(false) })
+      .catch(() => setLoading(false))
+  }, [job.id])
+
+  const filtered = stageFilter === 'all' ? candidates : candidates.filter(c => getStage(c) === stageFilter)
+  const selected = candidates.find(c => c.id === selectedId)
+
+  if (selected) {
+    const s = selected.scores ?? {}
+    const rec = s.recommendation
+    return (
+      <div className="page">
+        <button className="btn btn-secondary" style={{ marginBottom: 20 }} onClick={() => setSelectedId(null)}>← Back to pipeline</button>
+        <div className="profile-hero">
+          <div className="profile-avatar">{(selected.full_name ?? '?')[0].toUpperCase()}</div>
+          <div className="profile-id" style={{ flex: 1 }}>
+            <h3>{selected.full_name}</h3>
+            <p>{selected.candidate_role}{selected.total_years ? ` · ${selected.total_years}y exp` : ''}</p>
+            {selected.match_score != null && (
+              <div style={{ marginTop: 8 }}>
+                <span className={`badge ${selected.match_pass ? 'badge-green' : 'badge-red'}`}>Screen {selected.match_score}/100</span>
+              </div>
+            )}
+          </div>
+          {s.overallScore != null && (
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: 32, fontWeight: 700, color: dimColor(s.overallScore), lineHeight: 1 }}>{s.overallScore}</div>
+              {rec && <div style={{ fontSize: 11, ...mono, textTransform: 'uppercase', color: REC_COLOR[rec] ?? 'var(--text-3)' }}>{rec}</div>}
+            </div>
+          )}
+        </div>
+        {selected.match_reason && (
+          <div style={{ margin: '16px 0', padding: '12px 16px', background: 'var(--surface)', border: '1px solid var(--border)', borderLeft: `2px solid ${selected.match_pass ? 'var(--green)' : 'var(--red)'}`, fontSize: 13, color: 'var(--text-2)' }}>
+            <div style={{ fontSize: 10, ...mono, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-3)', marginBottom: 4 }}>Screening verdict</div>
+            {selected.match_reason}
+          </div>
+        )}
+        {s.overallScore != null && (
+          <div className="section-card">
+            <div className="section-card-head"><h3>Interview Assessment</h3></div>
+            <div className="section-card-body">
+              {[['technicalAbility','Technical'],['communication','Communication'],['roleFit','Role Fit'],['problemSolving','Problem Solving'],['experienceRelevance','Experience']].map(([key, label]) => (
+                <div key={key} className="score-dim" style={{ marginBottom: 10 }}>
+                  <span className="dim-label">{label}</span>
+                  <div className="dim-track"><div className="dim-fill" style={{ width: `${s[key] ?? 0}%`, background: dimColor(s[key] ?? 0) }} /></div>
+                  <span className="dim-val">{s[key] ?? '—'}</span>
+                </div>
+              ))}
+              {s.insight && <p style={{ marginTop: 12, fontSize: 13, color: 'var(--text-2)', lineHeight: 1.7, fontStyle: 'italic' }}>{s.insight}</p>}
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div className="page">
+      <div className="page-head">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button className="btn btn-secondary" onClick={onBack}>← My Jobs</button>
+          <div>
+            <h2 style={{ margin: 0 }}>{job.title}</h2>
+            <p style={{ margin: 0 }}>{job.experience_years}+ yrs{job.required_skills?.length ? ` · ${job.required_skills.slice(0, 4).join(', ')}` : ''}</p>
+          </div>
+        </div>
+        <span className={`badge ${job.status === 'active' ? 'badge-green' : 'badge-amber'}`}>{job.status}</span>
+      </div>
+
+      {loading ? <div style={{ textAlign: 'center', padding: 40 }}><span className="spinner" /></div> : (
+        <>
+          <PipelineFunnel candidates={candidates} activeStage={stageFilter} onStageClick={setStageFilter} />
+
+          <div className="section-card">
+            <div className="section-card-head">
+              <h3>{stageFilter === 'all' ? 'All Candidates' : stageFilter}</h3>
+              <span className="badge">{filtered.length}</span>
+            </div>
+            {filtered.length === 0 ? (
+              <div className="empty-state">No candidates in this stage yet</div>
+            ) : filtered.map(c => {
+              const s = c.scores ?? {}
+              const stage = getStage(c)
+              const stageColor = { 'Hired': 'badge-green', 'Interview Done': 'badge-green', 'Interview Pending': 'badge-amber', 'Screened Out': 'badge-red', 'Applied': '' }
+              return (
+                <div key={c.id} className="table-row clickable" onClick={() => setSelectedId(c.id)}>
+                  <div className="col-main">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div className="profile-avatar" style={{ width: 32, height: 32, fontSize: 13, borderRadius: 'var(--r)', flexShrink: 0 }}>
+                        {(c.full_name ?? '?')[0].toUpperCase()}
+                      </div>
+                      <div>
+                        <div className="col-name">{c.full_name}</div>
+                        <div className="col-sub">{c.candidate_role}{c.total_years ? ` · ${c.total_years}y` : ''}</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="col-right">
+                    {c.match_score != null && (
+                      <span style={{ fontSize: 11, ...mono, color: 'var(--text-3)' }}>Screen {c.match_score}</span>
+                    )}
+                    {s.overallScore != null && (
+                      <span style={{ fontSize: 13, fontWeight: 700, ...mono, color: dimColor(s.overallScore) }}>{s.overallScore}</span>
+                    )}
+                    {s.recommendation && (
+                      <span style={{ fontSize: 11, fontWeight: 600, ...mono, color: REC_COLOR[s.recommendation] ?? 'var(--text-3)' }}>{s.recommendation}</span>
+                    )}
+                    <span className={`badge ${stageColor[stage] ?? ''}`} style={{ fontSize: 10 }}>{stage}</span>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
 
 export default function ClientJobs() {
   const { user } = useAuth()
-  const navigate = useNavigate()
   const [jobs, setJobs] = useState([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -22,6 +188,7 @@ export default function ClientJobs() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [poolStatus, setPoolStatus] = useState({})
+  const [selectedJob, setSelectedJob] = useState(null)
 
   useEffect(() => { if (user) load() }, [user])
 
@@ -119,6 +286,8 @@ export default function ClientJobs() {
 
   if (loading) return <div className="page"><span className="spinner" /></div>
 
+  if (selectedJob) return <JobDetail job={selectedJob} onBack={() => setSelectedJob(null)} />
+
   return (
     <div className="page">
       <div className="page-head">
@@ -211,7 +380,7 @@ export default function ClientJobs() {
             <div className="section-card" style={{ marginBottom: 16 }}>
               <div className="section-card-head"><h3>Active</h3><span className="badge badge-green">{activeJobs.length}</span></div>
               {activeJobs.map(j => (
-                <div key={j.id} className="table-row clickable" onClick={() => navigate('/client/candidates')}>
+                <div key={j.id} className="table-row clickable" onClick={() => setSelectedJob(j)}>
                   <div className="col-main">
                     <div className="col-name">
                       {j.job_code && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-3)', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 'var(--r)', padding: '1px 6px', marginRight: 7, letterSpacing: '0.04em' }}>{j.job_code}</span>}
