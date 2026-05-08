@@ -9,10 +9,141 @@ import TagInput from '../../components/TagInput'
 const CV_PARSE_SYSTEM = `You are a CV parser. Return ONLY valid JSON — no markdown:
 {"name":"string","email":"string","currentRole":"string","totalYears":number,"skills":["..."],"education":"string","summary":"string","highlights":["..."],"linkedinUrl":"string or null"}`
 
+// ── Styles injected once into <head> via React 19 hoisting ─────────────────
+const REG_STYLES = `
+  .cr-field { display: flex; flex-direction: column; gap: 6px; }
+  .cr-label {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #999;
+  }
+  .cr-input {
+    width: 100%;
+    border: none;
+    border-bottom: 1px solid var(--border);
+    background: transparent;
+    padding: 10px 0;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    color: var(--text);
+    outline: none;
+    box-sizing: border-box;
+    transition: border-color 0.15s;
+    border-radius: 0;
+  }
+  .cr-input:focus { border-bottom-color: var(--accent); }
+  .cr-input::placeholder { color: #bbb; }
+  .cr-tag-wrap .tag-input-container {
+    border: none !important;
+    border-bottom: 1px solid var(--border) !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    padding: 8px 0 !important;
+    box-shadow: none !important;
+  }
+  .cr-tag-wrap .tag-input-container:focus-within {
+    border-bottom-color: var(--accent) !important;
+  }
+  .cr-tag-wrap input {
+    font-family: 'DM Sans', sans-serif !important;
+    font-size: 14px !important;
+    background: transparent !important;
+  }
+`
+
+// ── Shared left panel ──────────────────────────────────────────────────────
+function LeftPanel() {
+  const TRUST = [
+    'AI-matched to relevant roles',
+    'Screened by expert recruiters',
+    'DPDPA compliant — your data is safe',
+  ]
+  return (
+    <div style={{
+      width: '40%',
+      minHeight: '100vh',
+      background: '#1A1814',
+      display: 'flex',
+      flexDirection: 'column',
+      padding: '48px 44px',
+      position: 'sticky',
+      top: 0,
+      alignSelf: 'flex-start',
+      boxSizing: 'border-box',
+      flexShrink: 0,
+    }}>
+      <img
+        src="/oneselect-logo.png"
+        alt="One Select"
+        style={{ height: 30, objectFit: 'contain', objectPosition: 'left', marginBottom: 0, filter: 'brightness(0) invert(1)', opacity: 0.9 }}
+      />
+
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', paddingTop: 48, paddingBottom: 48 }}>
+        <h1 style={{
+          fontFamily: 'var(--font-head)',
+          fontWeight: 300,
+          fontSize: 44,
+          color: '#F8F4EE',
+          lineHeight: 1.1,
+          margin: '0 0 16px',
+          letterSpacing: '-0.01em',
+        }}>
+          Find Your<br />Next Role
+        </h1>
+        <p style={{
+          fontStyle: 'italic',
+          fontSize: 14,
+          color: 'rgba(248,244,238,0.45)',
+          margin: '0 0 48px',
+          lineHeight: 1.6,
+          fontFamily: 'var(--font-body)',
+        }}>
+          We match you to the right opportunities.
+        </p>
+
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          {TRUST.map((text, i) => (
+            <div key={text}>
+              {i > 0 && (
+                <div style={{ height: 1, background: 'rgba(184,146,74,0.25)', margin: '18px 0' }} />
+              )}
+              <p style={{
+                fontSize: 13,
+                color: 'rgba(248,244,238,0.65)',
+                margin: 0,
+                fontFamily: 'var(--font-body)',
+                lineHeight: 1.5,
+                paddingLeft: 14,
+                borderLeft: '2px solid rgba(184,146,74,0.5)',
+              }}>
+                {text}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <p style={{
+        fontSize: 11,
+        color: 'rgba(248,244,238,0.25)',
+        fontFamily: 'var(--font-mono)',
+        margin: 0,
+        letterSpacing: '0.04em',
+      }}>
+        © One Select 2026
+      </p>
+    </div>
+  )
+}
+
+// ── Main component ─────────────────────────────────────────────────────────
 export default function CandidateRegister() {
   const navigate = useNavigate()
   const fileInputRef = useRef()
 
+  // ── All state — unchanged ────────────────────────────────────────────────
   const [fullName,    setFullName]    = useState('')
   const [email,       setEmail]       = useState('')
   const [phone,       setPhone]       = useState('')
@@ -28,6 +159,7 @@ export default function CandidateRegister() {
   const [statusMsg,   setStatusMsg]   = useState('')
   const [error,       setError]       = useState('')
 
+  // ── All handlers — unchanged ─────────────────────────────────────────────
   const handleFileChange = useCallback((e) => {
     const f = e.target.files[0]
     if (f && isSupported(f)) setCvFile(f)
@@ -47,7 +179,6 @@ export default function CandidateRegister() {
     setStatusMsg('Creating your account…')
 
     try {
-      // Step 1: Create auth user
       const { data: authData, error: authErr } = await supabase.auth.signUp({
         email: email.trim().toLowerCase(),
         password,
@@ -58,7 +189,6 @@ export default function CandidateRegister() {
       const userId = authData.user?.id
       if (!userId) throw new Error('Account creation failed — please try again.')
 
-      // Step 2: Insert profile
       setStatusMsg('Setting up your profile…')
       const { error: profileErr } = await supabase.from('profiles').insert({
         id:        userId,
@@ -70,7 +200,6 @@ export default function CandidateRegister() {
         console.warn('Profile insert warning:', profileErr.message)
       }
 
-      // Step 3: Parse CV if uploaded and user has an active session
       let parsed = null
       let rawText = ''
       if (cvFile) {
@@ -85,7 +214,6 @@ export default function CandidateRegister() {
             content = await extractContent(cvFile)
           }
           rawText = content.kind === 'text' ? content.text : ''
-          // Only call Claude if we have a real user session (not just anon key)
           const { data: sess } = await supabase.auth.getSession()
           if (sess?.session?.access_token) {
             const msgs = content.kind === 'image'
@@ -95,11 +223,10 @@ export default function CandidateRegister() {
             parsed = JSON.parse(reply.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, ''))
           }
         } catch (cvErr) {
-          // Non-fatal — user can complete profile after logging in
+          // Non-fatal
         }
       }
 
-      // Step 4: Insert to talent_pool
       setStatusMsg('Adding you to the talent network…')
       const { error: poolErr } = await supabase.from('talent_pool').insert({
         full_name:          fullName.trim() || parsed?.name || '',
@@ -119,13 +246,11 @@ export default function CandidateRegister() {
       })
       if (poolErr) console.warn('Pool insert warning:', poolErr.message)
 
-      // Step 5: Link any existing candidate records to this user by email
       await supabase.from('candidates')
         .update({ candidate_user_id: userId })
         .ilike('email', email.trim().toLowerCase())
         .is('candidate_user_id', null)
 
-      // Check if session is available (email confirmation may or may not be required)
       const { data: sessionData } = await supabase.auth.getSession()
       if (sessionData?.session) {
         setStep('done')
@@ -138,44 +263,46 @@ export default function CandidateRegister() {
     }
   }
 
+  // ── Processing state ─────────────────────────────────────────────────────
   if (step === 'processing') {
     return (
-      <div className="login-screen">
-        <div className="login-panel-left">
-          <p className="login-tagline-label">Talent Network</p>
-          <div className="login-divider" />
-          <p className="login-quote">Find your next role. We match you to the right opportunities.</p>
-        </div>
-        <div className="login-panel-right">
-          <div className="login-form-wrap" style={{ textAlign: 'center' }}>
-            <img src="/oneselect-logo.png" alt="One Select" style={{ width: 200, height: 'auto', objectFit: 'contain', marginBottom: 36, display: 'block' }} />
-            <span className="spinner" style={{ width: 32, height: 32, margin: '0 auto 20px', display: 'block' }} />
-            <h2 className="login-welcome" style={{ marginBottom: 8 }}>Setting up your profile</h2>
-            <p style={{ fontSize: 14, color: 'var(--text-3)' }}>{statusMsg}</p>
+      <div style={{ display: 'flex', minHeight: '100vh' }}>
+        <style>{REG_STYLES}</style>
+        <LeftPanel />
+        <div style={{ flex: 1, background: 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 40 }}>
+          <div style={{ textAlign: 'center', maxWidth: 360 }}>
+            <span className="spinner" style={{ width: 36, height: 36, margin: '0 auto 28px', display: 'block' }} />
+            <h2 style={{ fontFamily: 'var(--font-head)', fontWeight: 300, fontSize: 28, margin: '0 0 10px', color: 'var(--text)' }}>
+              Setting up your profile
+            </h2>
+            <p style={{ fontSize: 14, color: 'var(--text-3)', fontFamily: 'var(--font-body)', margin: 0 }}>{statusMsg}</p>
           </div>
         </div>
       </div>
     )
   }
 
+  // ── Done state ───────────────────────────────────────────────────────────
   if (step === 'done') {
     return (
-      <div className="login-screen">
-        <div className="login-panel-left">
-          <p className="login-tagline-label">Talent Network</p>
-          <div className="login-divider" />
-          <p className="login-quote">Find your next role. We match you to the right opportunities.</p>
-        </div>
-        <div className="login-panel-right">
-          <div className="login-form-wrap" style={{ textAlign: 'center' }}>
-            <img src="/oneselect-logo.png" alt="One Select" style={{ width: 200, height: 'auto', objectFit: 'contain', marginBottom: 36, display: 'block' }} />
-            <div style={{ fontSize: 40, marginBottom: 16, opacity: 0.3, fontFamily: 'var(--font-head)' }}>◈</div>
-            <h2 className="login-welcome">You're in the network.</h2>
-            <p className="login-sub" style={{ marginBottom: 28, lineHeight: 1.7 }}>
+      <div style={{ display: 'flex', minHeight: '100vh' }}>
+        <style>{REG_STYLES}</style>
+        <LeftPanel />
+        <div style={{ flex: 1, background: 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 40 }}>
+          <div style={{ textAlign: 'center', maxWidth: 400 }}>
+            <div style={{ fontSize: 36, marginBottom: 20, fontFamily: 'var(--font-head)', color: 'var(--accent)', opacity: 0.7 }}>◈</div>
+            <h2 style={{ fontFamily: 'var(--font-head)', fontWeight: 300, fontSize: 32, margin: '0 0 14px', color: 'var(--text)' }}>
+              You're in the network.
+            </h2>
+            <p style={{ fontSize: 14, color: 'var(--text-3)', lineHeight: 1.8, marginBottom: 32, fontFamily: 'var(--font-body)' }}>
               Your profile has been created. You'll be matched to relevant roles automatically.
               We'll be in touch when you match a role.
             </p>
-            <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }} onClick={() => navigate('/candidate/dashboard')}>
+            <button
+              className="btn btn-primary"
+              style={{ width: '100%', justifyContent: 'center', padding: '13px 0', fontSize: 12, letterSpacing: '0.08em', textTransform: 'uppercase' }}
+              onClick={() => navigate('/candidate/dashboard')}
+            >
               Go to your dashboard →
             </button>
           </div>
@@ -184,23 +311,27 @@ export default function CandidateRegister() {
     )
   }
 
+  // ── Confirm email state ──────────────────────────────────────────────────
   if (step === 'confirm_email') {
     return (
-      <div className="login-screen">
-        <div className="login-panel-left">
-          <p className="login-tagline-label">Talent Network</p>
-          <div className="login-divider" />
-          <p className="login-quote">Find your next role. We match you to the right opportunities.</p>
-        </div>
-        <div className="login-panel-right">
-          <div className="login-form-wrap" style={{ textAlign: 'center' }}>
-            <img src="/oneselect-logo.png" alt="One Select" style={{ width: 200, height: 'auto', objectFit: 'contain', marginBottom: 36, display: 'block' }} />
-            <div style={{ fontSize: 40, marginBottom: 16 }}>✉</div>
-            <h2 className="login-welcome">Check your email</h2>
-            <p className="login-sub" style={{ marginBottom: 28, lineHeight: 1.7 }}>
-              We've sent a confirmation link to <strong>{email}</strong>. Click the link to activate your account, then sign in to see your matches.
+      <div style={{ display: 'flex', minHeight: '100vh' }}>
+        <style>{REG_STYLES}</style>
+        <LeftPanel />
+        <div style={{ flex: 1, background: 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 40 }}>
+          <div style={{ textAlign: 'center', maxWidth: 400 }}>
+            <div style={{ fontSize: 36, marginBottom: 20, color: 'var(--accent)' }}>✉</div>
+            <h2 style={{ fontFamily: 'var(--font-head)', fontWeight: 300, fontSize: 32, margin: '0 0 14px', color: 'var(--text)' }}>
+              Check your email
+            </h2>
+            <p style={{ fontSize: 14, color: 'var(--text-3)', lineHeight: 1.8, marginBottom: 32, fontFamily: 'var(--font-body)' }}>
+              We've sent a confirmation link to <strong style={{ color: 'var(--text)' }}>{email}</strong>.
+              Click the link to activate your account, then sign in to see your matches.
             </p>
-            <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }} onClick={() => navigate('/candidate/login')}>
+            <button
+              className="btn btn-primary"
+              style={{ width: '100%', justifyContent: 'center', padding: '13px 0', fontSize: 12, letterSpacing: '0.08em', textTransform: 'uppercase' }}
+              onClick={() => navigate('/candidate/login')}
+            >
               Sign in →
             </button>
           </div>
@@ -209,103 +340,217 @@ export default function CandidateRegister() {
     )
   }
 
+  // ── Main form ────────────────────────────────────────────────────────────
   return (
-    <div className="login-screen" style={{ alignItems: 'flex-start', overflowY: 'auto' }}>
-      <div className="login-panel-left" style={{ position: 'sticky', top: 0, alignSelf: 'flex-start' }}>
-        <p className="login-tagline-label">Talent Network</p>
-        <div className="login-divider" />
-        <p className="login-quote">Find your next role. We match you to the right opportunities.</p>
-      </div>
+    <div style={{ display: 'flex', minHeight: '100vh', alignItems: 'flex-start' }}>
+      <style>{REG_STYLES}</style>
+      <LeftPanel />
 
-      <div className="login-panel-right" style={{ overflowY: 'auto', maxHeight: '100vh' }}>
-        <div className="login-form-wrap" style={{ paddingTop: 40, paddingBottom: 40 }}>
-          <img src="/oneselect-logo.png" alt="One Select" style={{ width: 200, height: 'auto', objectFit: 'contain', marginBottom: 32, display: 'block' }} />
+      {/* Right panel */}
+      <div style={{
+        flex: 1,
+        background: 'var(--bg)',
+        overflowY: 'auto',
+        maxHeight: '100vh',
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'flex-start',
+      }}>
+        <div style={{ width: '100%', maxWidth: 480, padding: '48px 32px 48px', boxSizing: 'border-box' }}>
 
-          <h2 className="login-welcome">Join our talent network</h2>
-          <p className="login-sub">Create your profile to get matched to relevant roles</p>
+          {/* Logo — visible only on mobile */}
+          <img
+            src="/oneselect-logo.png"
+            alt="One Select"
+            style={{ height: 28, objectFit: 'contain', objectPosition: 'left', marginBottom: 32, display: 'block' }}
+            className="cr-mobile-logo"
+          />
 
-          {error && <div className="error-banner">{error}</div>}
+          {/* Heading */}
+          <h1 style={{
+            fontFamily: 'var(--font-head)',
+            fontWeight: 300,
+            fontSize: 32,
+            color: 'var(--text)',
+            margin: '0 0 8px',
+            letterSpacing: '-0.01em',
+            lineHeight: 1.15,
+          }}>
+            Join Our Talent Network
+          </h1>
+          <p style={{
+            fontSize: 14,
+            color: 'var(--text-3)',
+            fontFamily: 'var(--font-body)',
+            margin: '0 0 18px',
+            lineHeight: 1.6,
+          }}>
+            Create your profile to get matched to relevant roles
+          </p>
+          <div style={{ height: 2, width: 40, background: 'var(--accent)', marginBottom: 32, opacity: 0.8 }} />
 
-          <form className="login-form" onSubmit={handleSubmit} style={{ gap: 14 }}>
-            <div className="field">
-              <label>Full Name *</label>
-              <input type="text" required autoFocus value={fullName} onChange={e => setFullName(e.target.value)} placeholder="Jane Smith" />
+          {error && (
+            <div style={{
+              fontSize: 13,
+              color: 'var(--red)',
+              padding: '11px 14px',
+              background: 'rgba(239,68,68,0.06)',
+              border: '1px solid var(--red)',
+              borderRadius: 'var(--r)',
+              marginBottom: 24,
+              fontFamily: 'var(--font-body)',
+              lineHeight: 1.5,
+            }}>
+              {error}
             </div>
-            <div className="field">
-              <label>Email *</label>
-              <input type="email" required autoComplete="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="jane@example.com" />
+          )}
+
+          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+
+            {/* Full Name */}
+            <div className="cr-field">
+              <label className="cr-label">Full Name *</label>
+              <input className="cr-input" type="text" required autoFocus value={fullName} onChange={e => setFullName(e.target.value)} placeholder="Jane Smith" />
             </div>
-            <div className="field">
-              <label>Phone</label>
-              <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+44 7700 900123" />
+
+            {/* Email */}
+            <div className="cr-field">
+              <label className="cr-label">Email *</label>
+              <input className="cr-input" type="email" required autoComplete="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="jane@example.com" />
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 10 }}>
-              <div className="field">
-                <label>Current Role / Title</label>
-                <input type="text" value={currentRole} onChange={e => setCurrentRole(e.target.value)} placeholder="Senior Software Engineer" />
+
+            {/* Phone */}
+            <div className="cr-field">
+              <label className="cr-label">Phone</label>
+              <input className="cr-input" type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+91 98765 43210" />
+            </div>
+
+            {/* Current Role + Years Experience */}
+            <div style={{ display: 'grid', gridTemplateColumns: '7fr 3fr', gap: 20 }}>
+              <div className="cr-field">
+                <label className="cr-label">Current Role / Title</label>
+                <input className="cr-input" type="text" value={currentRole} onChange={e => setCurrentRole(e.target.value)} placeholder="Senior Software Engineer" />
               </div>
-              <div className="field">
-                <label>Years Experience</label>
-                <input type="number" min={0} max={40} value={totalYears} onChange={e => setTotalYears(e.target.value)} placeholder="5" />
+              <div className="cr-field">
+                <label className="cr-label">Years Exp.</label>
+                <input className="cr-input" type="number" min={0} max={40} value={totalYears} onChange={e => setTotalYears(e.target.value)} placeholder="5" />
               </div>
             </div>
-            <div className="field">
-              <label>Skills</label>
-              <TagInput value={skills} onChange={setSkills} placeholder="Type a skill and press Enter…" />
-            </div>
-            <div className="field">
-              <label>LinkedIn URL (optional)</label>
-              <input type="url" value={linkedinUrl} onChange={e => setLinkedinUrl(e.target.value)} placeholder="https://linkedin.com/in/yourname" />
+
+            {/* Skills */}
+            <div className="cr-field">
+              <label className="cr-label">Skills</label>
+              <div className="cr-tag-wrap">
+                <TagInput value={skills} onChange={setSkills} placeholder="Type a skill and press Enter…" />
+              </div>
             </div>
 
-            <div className="field">
-              <label>Upload CV (optional)</label>
+            {/* LinkedIn */}
+            <div className="cr-field">
+              <label className="cr-label">LinkedIn URL <span style={{ textTransform: 'none', letterSpacing: 0, fontSize: 10, color: '#bbb' }}>(optional)</span></label>
+              <input className="cr-input" type="url" value={linkedinUrl} onChange={e => setLinkedinUrl(e.target.value)} placeholder="https://linkedin.com/in/yourname" />
+            </div>
+
+            {/* CV Upload */}
+            <div className="cr-field">
+              <label className="cr-label">Upload CV <span style={{ textTransform: 'none', letterSpacing: 0, fontSize: 10, color: '#bbb' }}>(optional)</span></label>
               <div
-                style={{ border: '1px dashed var(--border)', borderRadius: 8, padding: '14px 16px', cursor: 'pointer', fontSize: 13, color: 'var(--text-3)', textAlign: 'center' }}
                 onClick={() => fileInputRef.current?.click()}
+                style={{
+                  border: '1px dashed var(--border)',
+                  borderRadius: 'var(--r)',
+                  padding: '22px 16px',
+                  cursor: 'pointer',
+                  textAlign: 'center',
+                  transition: 'border-color 0.15s',
+                  marginTop: 4,
+                }}
+                onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--accent)'}
+                onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
               >
                 {cvFile ? (
-                  <span style={{ color: 'var(--text)' }}>📄 {cvFile.name} <span style={{ color: 'var(--green)', marginLeft: 6 }}>✓</span></span>
+                  <div style={{ fontSize: 13, color: 'var(--text)', fontFamily: 'var(--font-body)' }}>
+                    <span style={{ marginRight: 8 }}>📄</span>
+                    {cvFile.name}
+                    <span style={{ color: 'var(--green)', marginLeft: 8, fontWeight: 600 }}>✓</span>
+                  </div>
                 ) : (
-                  <>Drop or <span style={{ color: 'var(--accent)', textDecoration: 'underline' }}>browse</span> — PDF, DOCX or TXT</>
+                  <>
+                    <div style={{ fontSize: 20, marginBottom: 8, opacity: 0.3 }}>↑</div>
+                    <div style={{ fontSize: 13, color: 'var(--text-3)', fontFamily: 'var(--font-body)' }}>
+                      Drop CV here or{' '}
+                      <span style={{ color: 'var(--accent)' }}>browse</span>
+                    </div>
+                    <div style={{ fontSize: 11, color: '#bbb', fontFamily: 'var(--font-mono)', marginTop: 6, letterSpacing: '0.04em' }}>
+                      PDF · DOCX · TXT
+                    </div>
+                  </>
                 )}
               </div>
               <input ref={fileInputRef} type="file" accept={ACCEPT_ATTR} style={{ display: 'none' }} onChange={handleFileChange} />
-              <p style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 5 }}>We'll use your CV to auto-fill your profile and improve job matching</p>
+              <p style={{ fontSize: 11, color: '#bbb', marginTop: 6, fontFamily: 'var(--font-body)', lineHeight: 1.5 }}>
+                We'll use your CV to auto-fill your profile and improve job matching
+              </p>
             </div>
 
-            <div className="field">
-              <label>Password *</label>
-              <input type="password" required autoComplete="new-password" value={password} onChange={e => setPassword(e.target.value)} placeholder="At least 8 characters" />
-            </div>
-            <div className="field">
-              <label>Confirm Password *</label>
-              <input type="password" required autoComplete="new-password" value={confirmPw} onChange={e => setConfirmPw(e.target.value)} placeholder="Repeat your password" />
+            {/* Password */}
+            <div className="cr-field">
+              <label className="cr-label">Password *</label>
+              <input className="cr-input" type="password" required autoComplete="new-password" value={password} onChange={e => setPassword(e.target.value)} placeholder="At least 8 characters" />
             </div>
 
-            <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer', marginTop: 4 }}>
+            {/* Confirm Password */}
+            <div className="cr-field">
+              <label className="cr-label">Confirm Password *</label>
+              <input className="cr-input" type="password" required autoComplete="new-password" value={confirmPw} onChange={e => setConfirmPw(e.target.value)} placeholder="Repeat your password" />
+            </div>
+
+            {/* Privacy consent */}
+            <label style={{ display: 'flex', gap: 12, alignItems: 'center', cursor: 'pointer' }}>
               <input
                 type="checkbox"
                 checked={consent}
                 onChange={e => setConsent(e.target.checked)}
-                style={{ marginTop: 3, flexShrink: 0 }}
+                style={{ flexShrink: 0, accentColor: 'var(--accent)', width: 15, height: 15 }}
               />
-              <span style={{ fontSize: 12, color: 'var(--text-3)', lineHeight: 1.6 }}>
+              <span style={{ fontSize: 13, color: 'var(--text-3)', lineHeight: 1.6, fontFamily: 'var(--font-body)' }}>
                 I agree to the{' '}
                 <Link to="/privacy" target="_blank" style={{ color: 'var(--accent)', textDecoration: 'none' }}>Privacy Policy</Link>
                 {' '}and consent to my personal data and CV being processed for job matching purposes under the Digital Personal Data Protection Act 2023.
               </span>
             </label>
 
-            <button type="submit" className="btn btn-primary" style={{ marginTop: 4 }} disabled={!consent}>
-              Create Profile
-            </button>
-          </form>
+            {/* Submit */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 4 }}>
+              <button
+                type="submit"
+                disabled={!consent}
+                style={{
+                  width: '100%',
+                  background: consent ? 'var(--accent)' : 'var(--border)',
+                  color: consent ? 'white' : '#999',
+                  border: 'none',
+                  padding: '13px 0',
+                  fontFamily: "'DM Sans', sans-serif",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  letterSpacing: '0.1em',
+                  textTransform: 'uppercase',
+                  cursor: consent ? 'pointer' : 'not-allowed',
+                  borderRadius: 'var(--r)',
+                  transition: 'background 0.15s, opacity 0.15s',
+                }}
+              >
+                Join Talent Network
+              </button>
 
-          <p style={{ marginTop: 20, fontSize: 13, color: 'var(--text-3)', textAlign: 'center' }}>
-            Already have an account?{' '}
-            <Link to="/candidate/login" style={{ color: 'var(--accent)', textDecoration: 'none' }}>Sign in</Link>
-          </p>
+              <p style={{ textAlign: 'center', fontSize: 13, color: 'var(--text-3)', margin: 0, fontFamily: 'var(--font-body)' }}>
+                Already registered?{' '}
+                <Link to="/candidate/login" style={{ color: 'var(--accent)', textDecoration: 'none' }}>Sign in →</Link>
+              </p>
+            </div>
+
+          </form>
         </div>
       </div>
     </div>
