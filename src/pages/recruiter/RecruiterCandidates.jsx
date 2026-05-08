@@ -3,7 +3,7 @@ import { useLocation } from 'react-router-dom'
 import mammoth from 'mammoth'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../lib/AuthContext'
-import { callClaude } from '../../utils/api'
+import { callClaude, analyzeCandidate, generateReengagementEmail, generateReferenceQuestions } from '../../utils/api'
 import { mapMatchToCandidate } from '../../utils/talentPool'
 import { extractContent, isSupported, fileExt, ACCEPT_ATTR } from '../../utils/fileExtract'
 import { parseExperience } from '../../utils/parseExperience'
@@ -61,10 +61,61 @@ function ScoreRing({ score, size = 72 }) {
   )
 }
 
-function CandidateProfile({ candidate, onBack }) {
+function CandidateProfile({ candidate, job, onBack }) {
   const s = candidate.scores ?? {}
   const transcript = candidate.interview_transcript ?? []
   const rec = s.recommendation
+
+  const [aiAnalysis,        setAiAnalysis]        = useState(null)
+  const [aiLoading,         setAiLoading]          = useState(false)
+  const [aiError,           setAiError]            = useState('')
+  const [reengageEmail,     setReengageEmail]      = useState(null)
+  const [reengageLoading,   setReengageLoading]    = useState(false)
+  const [refQuestions,      setRefQuestions]       = useState(null)
+  const [refQLoading,       setRefQLoading]        = useState(false)
+  const [emailCopied,       setEmailCopied]        = useState(false)
+
+  const requiredSkills = job?.required_skills ?? []
+  const candSkillsLow  = (candidate.skills ?? []).map(s => s.toLowerCase())
+  const matchedSkills  = requiredSkills.filter(sk => candSkillsLow.includes(sk.toLowerCase()))
+  const missingSkills  = requiredSkills.filter(sk => !candSkillsLow.includes(sk.toLowerCase()))
+  const showSkillsGap  = requiredSkills.length > 0
+
+  async function handleAiAnalysis() {
+    setAiLoading(true); setAiError('')
+    try {
+      const result = await analyzeCandidate(candidate, job)
+      setAiAnalysis(result)
+    } catch (e) {
+      setAiError(e.message)
+    }
+    setAiLoading(false)
+  }
+
+  async function handleReeengage() {
+    setReengageLoading(true)
+    try {
+      const result = await generateReengagementEmail(candidate, job)
+      setReengageEmail(result)
+    } catch {}
+    setReengageLoading(false)
+  }
+
+  async function handleRefQuestions() {
+    setRefQLoading(true)
+    try {
+      const result = await generateReferenceQuestions(candidate)
+      setRefQuestions(result)
+    } catch {}
+    setRefQLoading(false)
+  }
+
+  function copyEmail() {
+    if (!reengageEmail) return
+    navigator.clipboard.writeText(`Subject: ${reengageEmail.subject}\n\n${reengageEmail.body}`)
+    setEmailCopied(true)
+    setTimeout(() => setEmailCopied(false), 2000)
+  }
 
   return (
     <div>
@@ -111,7 +162,7 @@ function CandidateProfile({ candidate, onBack }) {
         </div>
       )}
 
-      {/* ── Candidate summary — always shown ── */}
+      {/* ── Candidate summary ── */}
       {(candidate.summary || (candidate.skills ?? []).length > 0 || candidate.education || (candidate.highlights ?? []).length > 0) && (
         <div className="profile-grid" style={{ marginBottom: 16 }}>
           {candidate.summary && (
@@ -147,78 +198,240 @@ function CandidateProfile({ candidate, onBack }) {
         </div>
       )}
 
-      {s.overallScore == null && candidate.match_pass && (
-        <div style={{ padding: '32px 24px', textAlign: 'center', background: 'var(--surface)', border: '1px solid var(--border)', marginBottom: 16 }}>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--text-3)', marginBottom: 8 }}>Interview Status</div>
-          <div style={{ fontSize: 15, color: 'var(--amber)', fontFamily: 'var(--font-mono)' }}>Awaiting Interview</div>
-          <div style={{ fontSize: 13, color: 'var(--text-3)', marginTop: 6, fontWeight: 300 }}>This candidate passed screening and is scheduled for an AI interview.</div>
+      {/* ── Skills Gap ── */}
+      {showSkillsGap && (
+        <div className="profile-section" style={{ marginBottom: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <h4 style={{ margin: 0 }}>Skills Match vs. Job Requirements</h4>
+            <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-3)' }}>
+              {matchedSkills.length}/{requiredSkills.length} matched
+            </span>
+          </div>
+          {matchedSkills.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+              {matchedSkills.map(sk => (
+                <span key={sk} style={{ fontSize: 11, padding: '3px 8px', background: 'rgba(16,185,129,0.1)', border: '1px solid var(--green)', borderRadius: 'var(--r)', color: 'var(--green)' }}>✓ {sk}</span>
+              ))}
+            </div>
+          )}
+          {missingSkills.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {missingSkills.map(sk => (
+                <span key={sk} style={{ fontSize: 11, padding: '3px 8px', background: 'rgba(239,68,68,0.08)', border: '1px solid var(--red)', borderRadius: 'var(--r)', color: 'var(--red)' }}>✗ {sk}</span>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
-      {s.overallScore != null && (
-        <div className="profile-grid">
-          <div className="profile-section">
-            <h4>Dimension Scores</h4>
-            {DIMS.map(([key, label]) => (
-              <div key={key} className="score-dim">
-                <span className="dim-label">{label}</span>
-                <div className="dim-track"><div className="dim-fill" style={{ width: `${s[key] ?? 0}%`, background: dimColor(s[key] ?? 0) }} /></div>
-                <span className="dim-val">{s[key] ?? '—'}</span>
+      {/* ── AI CV Analysis ── */}
+      <div style={{ marginBottom: 16 }}>
+        {!aiAnalysis && (
+          <button
+            className="btn btn-secondary"
+            style={{ fontSize: 11, padding: '6px 14px' }}
+            disabled={aiLoading}
+            onClick={handleAiAnalysis}
+          >
+            {aiLoading ? <><span className="spinner" style={{ width: 11, height: 11 }} /> Analysing…</> : '✦ Analyse with AI'}
+          </button>
+        )}
+        {aiError && <div style={{ fontSize: 12, color: 'var(--red)', marginTop: 6 }}>⚠ {aiError}</div>}
+        {aiAnalysis && (
+          <div style={{ padding: '14px 16px', background: 'var(--surface)', border: '1px solid var(--border)', borderLeft: '2px solid var(--accent)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--accent)' }}>AI Analysis</span>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                {aiAnalysis.persona && (
+                  <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', padding: '2px 8px', background: 'var(--surface2)', border: '1px solid var(--border)', color: 'var(--text-2)' }}>
+                    {aiAnalysis.persona}
+                  </span>
+                )}
+                {aiAnalysis.hiringRisk && (
+                  <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', padding: '2px 8px', background: aiAnalysis.hiringRisk === 'Low' ? 'rgba(16,185,129,0.1)' : aiAnalysis.hiringRisk === 'High' ? 'rgba(239,68,68,0.1)' : 'rgba(245,158,11,0.1)', border: `1px solid ${aiAnalysis.hiringRisk === 'Low' ? 'var(--green)' : aiAnalysis.hiringRisk === 'High' ? 'var(--red)' : 'var(--amber)'}`, color: aiAnalysis.hiringRisk === 'Low' ? 'var(--green)' : aiAnalysis.hiringRisk === 'High' ? 'var(--red)' : 'var(--amber)' }}>
+                    {aiAnalysis.hiringRisk} Risk
+                  </span>
+                )}
+                <button className="btn btn-ghost" style={{ fontSize: 11, padding: '1px 6px' }} onClick={() => setAiAnalysis(null)}>×</button>
               </div>
-            ))}
-            {s.confidence != null && (
-              <div style={{ marginTop: 12, fontSize: 11, color: 'var(--text-3)' }}>
-                Confidence: <span className="mono" style={{ color: 'var(--text-2)' }}>{s.confidence}%</span>
-              </div>
-            )}
-          </div>
-
-          <div className="profile-section">
-            {s.insight && (
-              <>
-                <h4>AI Insight</h4>
-                <p className="insight-text">{s.insight}</p>
-              </>
-            )}
-            {s.strengths?.length > 0 && (
-              <>
-                <h4 style={{ marginTop: 16 }}>Strengths</h4>
-                <ul className="strength-list">
-                  {s.strengths.map((str, i) => <li key={i}><span className="dot-green" />{str}</li>)}
-                </ul>
-              </>
-            )}
-            {s.flags?.length > 0 && (
-              <>
-                <h4 style={{ marginTop: 16 }}>Red Flags</h4>
-                <ul className="flag-list">
-                  {s.flags.map((f, i) => <li key={i}><span className="dot-red" />{f}</li>)}
-                </ul>
-              </>
-            )}
-          </div>
-
-          {s.bestAnswer && (
-            <div className="profile-section full">
-              <h4>Best Answer</h4>
-              <blockquote className="best-answer">{s.bestAnswer}</blockquote>
             </div>
-          )}
+            {aiAnalysis.careerTrajectory && (
+              <p style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.7, margin: '0 0 10px' }}>{aiAnalysis.careerTrajectory}</p>
+            )}
+            {aiAnalysis.skillsGapNarrative && (
+              <p style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.7, margin: '0 0 10px', fontStyle: 'italic' }}>{aiAnalysis.skillsGapNarrative}</p>
+            )}
+            {aiAnalysis.hiringRiskReason && (
+              <p style={{ fontSize: 12, color: 'var(--text-3)', margin: 0 }}>Risk note: {aiAnalysis.hiringRiskReason}</p>
+            )}
+          </div>
+        )}
+      </div>
 
-          {transcript.length > 0 && (
-            <div className="profile-section full">
-              <h4>Interview Transcript</h4>
-              <div className="transcript-wrap">
-                {transcript.map((msg, i) => (
-                  <div key={i} className={`bubble ${msg.role}`}>
-                    <div className="bubble-who">{msg.role === 'assistant' ? 'Interviewer' : 'Candidate'}</div>
-                    <div className="bubble-body">{msg.content.replace(INTERVIEW_COMPLETE, '').trim()}</div>
-                  </div>
-                ))}
+      {/* ── Interview Pending: re-engagement ── */}
+      {s.overallScore == null && candidate.match_pass && (
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ padding: '24px', background: 'var(--surface)', border: '1px solid var(--border)', marginBottom: 12 }}>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--text-3)', marginBottom: 8 }}>Interview Status</div>
+            <div style={{ fontSize: 15, color: 'var(--amber)', fontFamily: 'var(--font-mono)', marginBottom: 6 }}>Awaiting Interview</div>
+            <div style={{ fontSize: 13, color: 'var(--text-3)', fontWeight: 300 }}>This candidate passed screening and is scheduled for an AI interview.</div>
+          </div>
+          {!reengageEmail && (
+            <button
+              className="btn btn-secondary"
+              style={{ fontSize: 11, padding: '6px 14px' }}
+              disabled={reengageLoading}
+              onClick={handleReeengage}
+            >
+              {reengageLoading ? <><span className="spinner" style={{ width: 11, height: 11 }} /> Drafting…</> : '✉ Draft Re-engagement Email'}
+            </button>
+          )}
+          {reengageEmail && (
+            <div style={{ padding: '14px 16px', background: 'var(--surface)', border: '1px solid var(--border)', borderLeft: '2px solid var(--amber)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--amber)' }}>Re-engagement Draft</span>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button className="btn btn-secondary" style={{ fontSize: 10, padding: '3px 10px' }} onClick={copyEmail}>
+                    {emailCopied ? '✓ Copied' : 'Copy'}
+                  </button>
+                  <button className="btn btn-ghost" style={{ fontSize: 11, padding: '1px 6px' }} onClick={() => setReengageEmail(null)}>×</button>
+                </div>
               </div>
+              <div style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 6 }}>Subject: <strong style={{ color: 'var(--text-2)' }}>{reengageEmail.subject}</strong></div>
+              <p style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.7, margin: 0, whiteSpace: 'pre-wrap' }}>{reengageEmail.body}</p>
             </div>
           )}
         </div>
+      )}
+
+      {/* ── Interview scores + reference questions ── */}
+      {s.overallScore != null && (
+        <>
+          <div className="profile-grid">
+            <div className="profile-section">
+              <h4>Dimension Scores</h4>
+              {DIMS.map(([key, label]) => (
+                <div key={key} className="score-dim">
+                  <span className="dim-label">{label}</span>
+                  <div className="dim-track"><div className="dim-fill" style={{ width: `${s[key] ?? 0}%`, background: dimColor(s[key] ?? 0) }} /></div>
+                  <span className="dim-val">{s[key] ?? '—'}</span>
+                </div>
+              ))}
+              {s.confidence != null && (
+                <div style={{ marginTop: 12, fontSize: 11, color: 'var(--text-3)' }}>
+                  Confidence: <span className="mono" style={{ color: 'var(--text-2)' }}>{s.confidence}%</span>
+                </div>
+              )}
+              {s.offerProbability != null && (
+                <div style={{ marginTop: 8, fontSize: 11, color: 'var(--text-3)' }}>
+                  Offer Probability: <span className="mono" style={{ color: dimColor(s.offerProbability) }}>{s.offerProbability}%</span>
+                </div>
+              )}
+            </div>
+
+            <div className="profile-section">
+              {s.insight && (
+                <>
+                  <h4>AI Insight</h4>
+                  <p className="insight-text">{s.insight}</p>
+                </>
+              )}
+              {(s.highlights ?? s.strengths ?? []).length > 0 && (
+                <>
+                  <h4 style={{ marginTop: 16 }}>Strengths</h4>
+                  <ul className="strength-list">
+                    {(s.highlights ?? s.strengths).map((str, i) => <li key={i}><span className="dot-green" />{str}</li>)}
+                  </ul>
+                </>
+              )}
+              {(s.redFlags ?? s.flags ?? []).length > 0 && (
+                <>
+                  <h4 style={{ marginTop: 16 }}>Red Flags</h4>
+                  <ul className="flag-list">
+                    {(s.redFlags ?? s.flags).map((f, i) => <li key={i}><span className="dot-red" />{f}</li>)}
+                  </ul>
+                </>
+              )}
+            </div>
+
+            {s.skillsVerification && (
+              <div className="profile-section full">
+                <h4>Skills Verification</h4>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginTop: 8 }}>
+                  {[
+                    { label: 'Verified', items: s.skillsVerification.verified ?? [], color: 'var(--green)' },
+                    { label: 'Questionable', items: s.skillsVerification.questionable ?? [], color: 'var(--amber)' },
+                    { label: 'Not Demonstrated', items: s.skillsVerification.notDemonstrated ?? [], color: 'var(--red)' },
+                  ].map(({ label, items, color }) => (
+                    <div key={label}>
+                      <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.08em', color, marginBottom: 6 }}>{label}</div>
+                      {items.length === 0
+                        ? <div style={{ fontSize: 12, color: 'var(--text-3)' }}>—</div>
+                        : items.map((sk, i) => <div key={i} style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.8 }}>· {sk}</div>)
+                      }
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {s.bestAnswer && (
+              <div className="profile-section full">
+                <h4>Best Answer</h4>
+                <blockquote className="best-answer">{s.bestAnswer}</blockquote>
+              </div>
+            )}
+
+            {transcript.length > 0 && (
+              <div className="profile-section full">
+                <h4>Interview Transcript</h4>
+                <div className="transcript-wrap">
+                  {transcript.map((msg, i) => (
+                    <div key={i} className={`bubble ${msg.role}`}>
+                      <div className="bubble-who">{msg.role === 'assistant' ? 'Interviewer' : 'Candidate'}</div>
+                      <div className="bubble-body">{msg.content.replace(INTERVIEW_COMPLETE, '').trim()}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Reference Check Questions */}
+          <div style={{ marginTop: 16 }}>
+            {!refQuestions && (
+              <button
+                className="btn btn-secondary"
+                style={{ fontSize: 11, padding: '6px 14px' }}
+                disabled={refQLoading}
+                onClick={handleRefQuestions}
+              >
+                {refQLoading ? <><span className="spinner" style={{ width: 11, height: 11 }} /> Generating…</> : '✦ Reference Check Questions'}
+              </button>
+            )}
+            {refQuestions?.questions?.length > 0 && (
+              <div style={{ padding: '14px 16px', background: 'var(--surface)', border: '1px solid var(--border)', borderLeft: '2px solid var(--accent)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--accent)' }}>Reference Check Questions</span>
+                  <button className="btn btn-ghost" style={{ fontSize: 11, padding: '1px 6px' }} onClick={() => setRefQuestions(null)}>×</button>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {refQuestions.questions.map((q, i) => (
+                    <div key={i} style={{ borderBottom: i < refQuestions.questions.length - 1 ? '1px solid var(--border)' : 'none', paddingBottom: i < refQuestions.questions.length - 1 ? 12 : 0 }}>
+                      <div style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.6, marginBottom: 4 }}>
+                        <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent)', marginRight: 8 }}>{i + 1}.</span>
+                        {q.question}
+                      </div>
+                      {q.rationale && (
+                        <div style={{ fontSize: 11, color: 'var(--text-3)', lineHeight: 1.5, paddingLeft: 20 }}>↳ {q.rationale}</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </>
       )}
     </div>
   )
@@ -527,14 +740,15 @@ export default function RecruiterCandidates() {
     'Screened Out': searchFiltered.filter(c => getStatus(c) === 'Screened Out').length,
   }
 
-  const selected = [...candidates, ...poolCandidates].find(c => c.id === selectedId)
+  const selected    = [...candidates, ...poolCandidates].find(c => c.id === selectedId)
+  const selectedJob = jobs.find(j => j.id === selected?.job_id)
 
   if (loading) return <div className="page"><span className="spinner" /></div>
 
   if (selected) {
     return (
       <div className="page">
-        <CandidateProfile candidate={selected} onBack={() => setSelectedId(null)} />
+        <CandidateProfile candidate={selected} job={selectedJob} onBack={() => setSelectedId(null)} />
       </div>
     )
   }

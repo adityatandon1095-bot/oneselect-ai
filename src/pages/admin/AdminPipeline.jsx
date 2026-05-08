@@ -4,7 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../lib/AuthContext'
 import { usePersistentState } from '../../hooks/usePersistentState'
 
-import { callClaude, runAutomatedInterview } from '../../utils/api'
+import { callClaude, runAutomatedInterview, generateShortlistSummary, diagnosePipelineHealth } from '../../utils/api'
 import { subscribeRunner, runnerStart, runnerComplete, runnerPause, runnerResume, runnerStop, awaitResume, getRunnerState } from '../../utils/pipelineRunner'
 import { generateAssessment, scoreAssessment } from '../../utils/assessments'
 import mammoth from 'mammoth'
@@ -109,6 +109,12 @@ export default function AdminPipeline({ allowedClientIds } = {}) {
   // Delete + Add Manually
   const [deleteModal, setDeleteModal]           = useState(null)
   const [addManuallyModal, setAddManuallyModal] = useState(null)
+
+  // AI shortlist + pipeline health
+  const [shortlistSummary,        setShortlistSummary]        = useState(null)
+  const [shortlistSummaryLoading, setShortlistSummaryLoading] = useState(false)
+  const [pipelineHealth,          setPipelineHealth]          = useState(null)
+  const [pipelineHealthLoading,   setPipelineHealthLoading]   = useState(false)
 
   const running = pipelineRunning || poolMatchLoading
   const fileInputRef = useRef()
@@ -1216,7 +1222,7 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
         <div className="section-card">
           <div className="section-card-head">
             <h3>4 · AI Video Interview</h3>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
               {activeJob?.assessment_enabled && !isClient && (
                 <button
                   className="btn btn-secondary"
@@ -1227,9 +1233,92 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
                   {scoringAssessments ? <><span className="spinner" style={{ width: 10, height: 10 }} /> Scoring…</> : '✓ Score Submissions'}
                 </button>
               )}
+              {!isClient && passedCandidates.filter(c => c.scores?.overallScore != null).length > 0 && (
+                <button
+                  className="btn btn-secondary"
+                  style={{ fontSize: 11, padding: '4px 10px', whiteSpace: 'nowrap' }}
+                  disabled={shortlistSummaryLoading}
+                  onClick={async () => {
+                    setShortlistSummaryLoading(true); setShortlistSummary(null)
+                    try {
+                      const scored = passedCandidates.filter(c => c.scores?.overallScore != null)
+                      const result = await generateShortlistSummary(scored, activeJob)
+                      setShortlistSummary(result)
+                    } catch {}
+                    setShortlistSummaryLoading(false)
+                  }}
+                >
+                  {shortlistSummaryLoading ? <><span className="spinner" style={{ width: 10, height: 10 }} /> Summarising…</> : '✦ Shortlist Summary'}
+                </button>
+              )}
+              {!isClient && (
+                <button
+                  className="btn btn-secondary"
+                  style={{ fontSize: 11, padding: '4px 10px', whiteSpace: 'nowrap' }}
+                  disabled={pipelineHealthLoading}
+                  onClick={async () => {
+                    setPipelineHealthLoading(true); setPipelineHealth(null)
+                    try {
+                      const result = await diagnosePipelineHealth(activeJob, candidates)
+                      setPipelineHealth(result)
+                    } catch {}
+                    setPipelineHealthLoading(false)
+                  }}
+                >
+                  {pipelineHealthLoading ? <><span className="spinner" style={{ width: 10, height: 10 }} /> Diagnosing…</> : '⚡ Pipeline Health'}
+                </button>
+              )}
               <span className="mono text-muted" style={{ fontSize: 11 }}>{passedCandidates.length} passed screening</span>
             </div>
           </div>
+
+          {/* Shortlist Summary */}
+          {shortlistSummary && (
+            <div style={{ margin: '0 0 12px', padding: '14px 16px', background: 'var(--bg)', border: '1px solid var(--border)', borderLeft: '2px solid var(--accent)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--accent)' }}>Shortlist Summary</span>
+                <button className="btn btn-ghost" style={{ fontSize: 11, padding: '1px 6px' }} onClick={() => setShortlistSummary(null)}>×</button>
+              </div>
+              <p style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.7, margin: '0 0 10px' }}>{shortlistSummary.summary}</p>
+              {shortlistSummary.topPick && (
+                <div style={{ fontSize: 12, color: 'var(--green)', padding: '6px 10px', background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.2)', marginBottom: 6 }}>
+                  <strong>Top Pick:</strong> {shortlistSummary.topPick}
+                </div>
+              )}
+              {shortlistSummary.watchOut && (
+                <div style={{ fontSize: 12, color: 'var(--amber)', padding: '6px 10px', background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.2)' }}>
+                  <strong>Watch out:</strong> {shortlistSummary.watchOut}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Pipeline Health */}
+          {pipelineHealth && (
+            <div style={{ margin: '0 0 12px', padding: '14px 16px', background: 'var(--bg)', border: '1px solid var(--border)', borderLeft: `2px solid ${pipelineHealth.urgency === 'Critical' ? 'var(--red)' : pipelineHealth.urgency === 'High' ? 'var(--amber)' : 'var(--accent)'}` }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-3)' }}>Pipeline Health</span>
+                  <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', padding: '2px 8px', background: pipelineHealth.urgency === 'Critical' ? 'rgba(239,68,68,0.1)' : pipelineHealth.urgency === 'High' ? 'rgba(245,158,11,0.1)' : 'rgba(16,185,129,0.1)', border: `1px solid ${pipelineHealth.urgency === 'Critical' ? 'var(--red)' : pipelineHealth.urgency === 'High' ? 'var(--amber)' : 'var(--green)'}`, color: pipelineHealth.urgency === 'Critical' ? 'var(--red)' : pipelineHealth.urgency === 'High' ? 'var(--amber)' : 'var(--green)' }}>{pipelineHealth.urgency}</span>
+                  {pipelineHealth.bottleneck && <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--text-3)' }}>Bottleneck: {pipelineHealth.bottleneck}</span>}
+                </div>
+                <button className="btn btn-ghost" style={{ fontSize: 11, padding: '1px 6px' }} onClick={() => setPipelineHealth(null)}>×</button>
+              </div>
+              <p style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.7, margin: '0 0 10px' }}>{pipelineHealth.diagnosis}</p>
+              {pipelineHealth.actions?.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {pipelineHealth.actions.map((a, i) => (
+                    <div key={i} style={{ fontSize: 12, color: 'var(--text-2)', display: 'flex', gap: 8 }}>
+                      <span style={{ color: 'var(--accent)', flexShrink: 0 }}>→</span>{a}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {pipelineHealth.estimatedTimeToFill && (
+                <div style={{ marginTop: 8, fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>Est. time to fill: {pipelineHealth.estimatedTimeToFill}</div>
+              )}
+            </div>
+          )}
           <div className="candidate-list">
             {srch(passedCandidates).map(c => {
               const hasVideo  = c.video_urls?.length > 0

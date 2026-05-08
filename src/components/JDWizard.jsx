@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { callClaude } from '../utils/api'
+import { callClaude, analyzeJDQuality } from '../utils/api'
 import TagInput from './TagInput'
 
 const DRAFT_KEY = 'os_jdwizard_draft'
@@ -128,10 +128,12 @@ export default function JDWizard({ onClose, onSave, showAssign = false, recruite
   const [assignedTo, setAssignedTo] = useState('')
 
   // ── UI state ──────────────────────────────────────────────────────────────
-  const [loading,    setLoading]    = useState(false)
-  const [error,      setError]      = useState('')
-  const [copied,     setCopied]     = useState(false)
-  const [draftSaved, setDraftSaved] = useState(false)
+  const [loading,         setLoading]         = useState(false)
+  const [error,           setError]           = useState('')
+  const [copied,          setCopied]          = useState(false)
+  const [draftSaved,      setDraftSaved]      = useState(false)
+  const [jdQuality,       setJdQuality]       = useState(null)
+  const [jdQualityLoading,setJdQualityLoading]= useState(false)
 
   // ── Auto-save draft to localStorage whenever form state changes ───────────
   useEffect(() => {
@@ -214,11 +216,13 @@ export default function JDWizard({ onClose, onSave, showAssign = false, recruite
     try {
       const reply = await callClaude([{ role: 'user', content: ctx }], JD_GEN_SYSTEM, 2000)
       const parsed = JSON.parse(stripFences(reply))
-      setTitle(parsed.title ?? brief)
-      setDescription(parsed.description ?? '')
-      setRequiredSkills(parsed.required_skills ?? [])
-      setPreferredSkills(parsed.preferred_skills ?? [])
+      const t = parsed.title ?? brief
+      const d = parsed.description ?? ''
+      const rs = parsed.required_skills ?? []
+      const ps = parsed.preferred_skills ?? []
+      setTitle(t); setDescription(d); setRequiredSkills(rs); setPreferredSkills(ps)
       setStep('review')
+      runJdQuality({ parsedTitle: t, parsedRequired: rs, parsedPreferred: ps, parsedDescription: d })
     } catch (e) { setError('Failed to generate JD: ' + e.message) }
     setLoading(false)
   }
@@ -230,15 +234,17 @@ export default function JDWizard({ onClose, onSave, showAssign = false, recruite
     try {
       const reply = await callClaude([{ role: 'user', content: pastedJD }], PARSE_SYSTEM, 1000)
       const parsed = JSON.parse(stripFences(reply))
-      setTitle(parsed.title ?? '')
-      setDescription(parsed.description ?? pastedJD)
-      setRequiredSkills(parsed.required_skills ?? [])
-      setPreferredSkills(parsed.preferred_skills ?? [])
+      const t = parsed.title ?? ''
+      const d = parsed.description ?? pastedJD
+      const rs = parsed.required_skills ?? []
+      const ps = parsed.preferred_skills ?? []
+      setTitle(t); setDescription(d); setRequiredSkills(rs); setPreferredSkills(ps)
       if (parsed.experience_years) setExpYears(parsed.experience_years)
       if (parsed.industry)         setIndustry(parsed.industry)
       if (parsed.location)         setLocation(parsed.location)
       if (parsed.work_mode)        setWorkMode(parsed.work_mode)
       setStep('review')
+      runJdQuality({ parsedTitle: t, parsedRequired: rs, parsedPreferred: ps, parsedDescription: d })
     } catch (e) { setError('Failed to parse JD: ' + e.message) }
     setLoading(false)
   }
@@ -272,6 +278,25 @@ export default function JDWizard({ onClose, onSave, showAssign = false, recruite
       assigned_to:          assignedTo || null,
       interview_questions:  iqFormatted,
     })
+  }
+
+  // ── JD quality analysis (fire-and-forget) ────────────────────────────────
+  async function runJdQuality({ parsedTitle, parsedRequired, parsedPreferred, parsedDescription }) {
+    setJdQuality(null); setJdQualityLoading(true)
+    try {
+      const result = await analyzeJDQuality({
+        title:           parsedTitle,
+        experience_years: expYears,
+        required_skills: parsedRequired,
+        preferred_skills: parsedPreferred,
+        salary_min:      compMode === 'manual' ? compMin : null,
+        salary_max:      compMode === 'manual' ? compMax : null,
+        salary_currency: 'INR',
+        description:     parsedDescription,
+      })
+      setJdQuality(result)
+    } catch { /* non-blocking */ }
+    setJdQualityLoading(false)
   }
 
   // ── Copy JD text ──────────────────────────────────────────────────────────
@@ -592,6 +617,42 @@ export default function JDWizard({ onClose, onSave, showAssign = false, recruite
         {/* ── REVIEW ── */}
         {step === 'review' && (
           <div>
+            {/* JD Quality Scorecard */}
+            {(jdQualityLoading || jdQuality) && (
+              <div style={{ marginBottom: 20, padding: '12px 16px', background: 'var(--bg)', border: '1px solid var(--border)', borderLeft: '2px solid var(--accent)' }}>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--accent)', marginBottom: 10 }}>
+                  JD Quality Score {jdQualityLoading && <span className="spinner" style={{ width: 10, height: 10, marginLeft: 6 }} />}
+                </div>
+                {jdQuality && (
+                  <>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 10 }}>
+                      {[
+                        { label: 'Clarity',          score: jdQuality.clarity,          feedback: jdQuality.clarityFeedback },
+                        { label: 'Realism',          score: jdQuality.realism,          feedback: jdQuality.realismFeedback },
+                        { label: 'Competitiveness',  score: jdQuality.competitiveness,  feedback: jdQuality.competitivenessFeedback },
+                      ].map(({ label, score, feedback }) => (
+                        <div key={label} style={{ padding: '10px 12px', background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                            <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', color: 'var(--text-3)' }}>{label}</span>
+                            <span style={{ fontSize: 13, fontWeight: 700, color: score >= 70 ? 'var(--green)' : score >= 50 ? 'var(--amber)' : 'var(--red)' }}>{score}</span>
+                          </div>
+                          <div style={{ height: 3, background: 'var(--border)', borderRadius: 2, marginBottom: 6 }}>
+                            <div style={{ height: 3, borderRadius: 2, width: `${score}%`, background: score >= 70 ? 'var(--green)' : score >= 50 ? 'var(--amber)' : 'var(--red)', transition: 'width 0.4s' }} />
+                          </div>
+                          {feedback && <div style={{ fontSize: 11, color: 'var(--text-3)', lineHeight: 1.5 }}>{feedback}</div>}
+                        </div>
+                      ))}
+                    </div>
+                    {jdQuality.topSuggestion && (
+                      <div style={{ fontSize: 12, color: 'var(--text-2)', padding: '8px 12px', background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.2)', lineHeight: 1.6 }}>
+                        <strong style={{ color: 'var(--accent)' }}>Top suggestion:</strong> {jdQuality.topSuggestion}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
             <div style={S.field}>
               <label style={S.label}>Job Title</label>
               <input type="text" value={title} onChange={e => setTitle(e.target.value)} style={S.input} />
