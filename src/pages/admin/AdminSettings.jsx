@@ -14,6 +14,65 @@ export default function AdminSettings() {
   const [phone,       setPhone]       = useState(profile?.phone        ?? '')
   const [companyName, setCompanyName] = useState(profile?.company_name ?? '')
 
+  // ── Integrations ──────────────────────────────────────────────────────────
+  const [linkedinEnabled,      setLinkedinEnabled]     = useState(true)
+  const [linkedinMaxProfiles,  setLinkedinMaxProfiles] = useState(20)
+  const [netrowsKey,           setNetrowsKey]          = useState('')
+  const [integrationsSaving,   setIntegrationsSaving]  = useState(false)
+  const [integrationsSaved,    setIntegrationsSaved]   = useState(false)
+  const [sourcingStats,        setSourcingStats]       = useState({ total: 0, inPipeline: 0, talentPool: 0, runsThisMonth: 0 })
+  const [sourcingLog,          setSourcingLog]         = useState([])
+  const [sourcingLogLoading,   setSourcingLogLoading]  = useState(true)
+
+  useEffect(() => { loadIntegrationSettings() }, [])
+
+  async function loadIntegrationSettings() {
+    setSourcingLogLoading(true)
+    const ms = (() => { const d = new Date(); d.setDate(1); d.setHours(0,0,0,0); return d.toISOString() })()
+    const [
+      { data: settings },
+      { count: totalSourced },
+      { count: inPipeline },
+      { count: talentPool },
+      { count: runsThisMonth },
+      { data: logRows },
+    ] = await Promise.all([
+      supabase.from('platform_settings').select('key, value').in('key', ['linkedin_sourcing_enabled', 'linkedin_max_profiles']),
+      supabase.from('candidates').select('*', { count: 'exact', head: true }).eq('source', 'linkedin'),
+      supabase.from('candidates').select('*', { count: 'exact', head: true }).eq('source', 'linkedin').not('job_id', 'is', null),
+      supabase.from('candidates').select('*', { count: 'exact', head: true }).eq('source', 'linkedin').is('job_id', null),
+      supabase.from('linkedin_sourcing_log').select('*', { count: 'exact', head: true }).gte('triggered_at', ms),
+      supabase.from('linkedin_sourcing_log').select('*, jobs(title)').order('triggered_at', { ascending: false }).limit(50),
+    ])
+    if (settings) {
+      const enabled = settings.find(s => s.key === 'linkedin_sourcing_enabled')
+      const max     = settings.find(s => s.key === 'linkedin_max_profiles')
+      if (enabled) setLinkedinEnabled(enabled.value === 'true')
+      if (max)     setLinkedinMaxProfiles(Number(max.value) || 20)
+    }
+    setSourcingStats({ total: totalSourced ?? 0, inPipeline: inPipeline ?? 0, talentPool: talentPool ?? 0, runsThisMonth: runsThisMonth ?? 0 })
+    setSourcingLog(logRows ?? [])
+    setSourcingLogLoading(false)
+  }
+
+  async function saveIntegrationSettings() {
+    setIntegrationsSaving(true)
+    const upserts = [
+      supabase.from('platform_settings').upsert({ key: 'linkedin_sourcing_enabled', value: String(linkedinEnabled), updated_at: new Date().toISOString() }, { onConflict: 'key' }),
+      supabase.from('platform_settings').upsert({ key: 'linkedin_max_profiles', value: String(linkedinMaxProfiles), updated_at: new Date().toISOString() }, { onConflict: 'key' }),
+    ]
+    if (netrowsKey.trim()) {
+      upserts.push(
+        supabase.from('platform_settings').upsert({ key: 'netrows_api_key', value: netrowsKey.trim(), updated_at: new Date().toISOString() }, { onConflict: 'key' })
+      )
+    }
+    await Promise.all(upserts)
+    setNetrowsKey('')
+    setIntegrationsSaving(false)
+    setIntegrationsSaved(true)
+    setTimeout(() => setIntegrationsSaved(false), 3000)
+  }
+
   // ── Plans ─────────────────────────────────────────────────────────────────
   const [plans,       setPlans]       = useState([])
   const [plansLoading, setPlansLoading] = useState(true)
@@ -189,6 +248,125 @@ export default function AdminSettings() {
             </table>
           </div>
         )}
+      </div>
+
+      {/* ── Integrations ── */}
+      <div className="section-card" style={{ marginBottom: 16 }}>
+        <div className="section-card-head"><h3>Integrations</h3></div>
+        <div className="section-card-body">
+
+          {/* LinkedIn Sourcing */}
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)', marginBottom: 4 }}>LinkedIn Sourcing</div>
+            <div style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 16 }}>
+              Automatically search LinkedIn for matching Indian candidates when a job is created, using the Netrows API.
+            </div>
+
+            <div className="form-grid">
+              <div className="field span-2">
+                <label>Netrows API Key
+                  <span style={{ fontWeight: 300, color: 'var(--text-3)', marginLeft: 6 }}>(write-only — never displayed)</span>
+                </label>
+                <input
+                  type="password"
+                  placeholder="Enter new key to update…"
+                  value={netrowsKey}
+                  onChange={e => setNetrowsKey(e.target.value)}
+                  autoComplete="new-password"
+                />
+              </div>
+              <div className="field">
+                <label>Max Profiles per Job</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={50}
+                  value={linkedinMaxProfiles}
+                  onChange={e => setLinkedinMaxProfiles(Math.min(50, Math.max(1, Number(e.target.value))))}
+                />
+              </div>
+              <div className="field" style={{ display: 'flex', alignItems: 'center', gap: 10, paddingTop: 24 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', margin: 0 }}>
+                  <input
+                    type="checkbox"
+                    checked={linkedinEnabled}
+                    onChange={e => setLinkedinEnabled(e.target.checked)}
+                  />
+                  <span style={{ fontSize: 13 }}>Enable LinkedIn sourcing globally</span>
+                </label>
+              </div>
+            </div>
+
+            <div className="form-actions" style={{ marginTop: 16 }}>
+              <button className="btn btn-primary" disabled={integrationsSaving} onClick={saveIntegrationSettings}>
+                {integrationsSaving ? <><span className="spinner" style={{ width: 12, height: 12 }} /> Saving…</> : 'Save Settings'}
+              </button>
+              {integrationsSaved && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--green)', letterSpacing: '0.06em' }}>✓ Saved</span>}
+            </div>
+          </div>
+
+          {/* Live stats */}
+          <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
+            <div style={{ flex: '1 1 140px', padding: '12px 16px', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 'var(--r)' }}>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 22, fontWeight: 700, color: 'var(--accent)' }}>{sourcingStats.total}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2 }}>Total sourced</div>
+            </div>
+            <div style={{ flex: '1 1 140px', padding: '12px 16px', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 'var(--r)' }}>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 22, fontWeight: 700, color: 'var(--text)' }}>{sourcingStats.inPipeline}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2 }}>In job pipelines</div>
+            </div>
+            <div style={{ flex: '1 1 140px', padding: '12px 16px', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 'var(--r)' }}>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 22, fontWeight: 700, color: 'var(--text)' }}>{sourcingStats.talentPool}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2 }}>LinkedIn Pool</div>
+            </div>
+            <div style={{ flex: '1 1 140px', padding: '12px 16px', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 'var(--r)' }}>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 22, fontWeight: 700, color: 'var(--text)' }}>{sourcingStats.runsThisMonth}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2 }}>Runs this month</div>
+            </div>
+          </div>
+
+          {/* Sourcing log */}
+          <div style={{ fontSize: 12, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-3)', marginBottom: 8 }}>
+            Recent Sourcing Runs
+          </div>
+          {sourcingLogLoading ? (
+            <div style={{ padding: '16px 0' }}><span className="spinner" /></div>
+          ) : sourcingLog.length === 0 ? (
+            <div style={{ fontSize: 12, color: 'var(--text-3)', padding: '12px 0' }}>No sourcing runs yet.</div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                    {['Job', 'Date', 'Found', 'Added', 'Status'].map(h => (
+                      <th key={h} style={{ padding: '6px 10px', textAlign: 'left', fontSize: 10, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-3)', fontWeight: 400 }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {sourcingLog.map(row => (
+                    <tr key={row.id} style={{ borderBottom: '1px solid var(--border2)' }}>
+                      <td style={{ padding: '7px 10px', color: 'var(--text-2)' }}>{row.jobs?.title ?? '—'}</td>
+                      <td style={{ padding: '7px 10px', fontFamily: 'var(--font-mono)', color: 'var(--text-3)', whiteSpace: 'nowrap' }}>
+                        {new Date(row.triggered_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                      </td>
+                      <td style={{ padding: '7px 10px', fontFamily: 'var(--font-mono)', textAlign: 'center' }}>{row.candidates_found}</td>
+                      <td style={{ padding: '7px 10px', fontFamily: 'var(--font-mono)', textAlign: 'center', color: row.candidates_added > 0 ? 'var(--green)' : 'var(--text-3)' }}>{row.candidates_added}</td>
+                      <td style={{ padding: '7px 10px' }}>
+                        <span className={`badge ${row.status === 'success' ? 'badge-green' : 'badge-red'}`} style={{ fontSize: 9 }}>
+                          {row.status}
+                        </span>
+                        {row.error_message && (
+                          <span style={{ fontSize: 10, color: 'var(--red)', marginLeft: 6 }} title={row.error_message}>⚠</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
 
       <TwoFactorSection />

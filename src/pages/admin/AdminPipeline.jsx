@@ -125,6 +125,9 @@ export default function AdminPipeline({ allowedClientIds } = {}) {
   const [pipelineHealth,          setPipelineHealth]          = useState(null)
   const [pipelineHealthLoading,   setPipelineHealthLoading]   = useState(false)
 
+  // LinkedIn sourced candidates
+  const [movingToScreening, setMovingToScreening] = useState(new Set())
+
   const running = pipelineRunning || poolMatchLoading
   const fileInputRef = useRef()
   const logRef = useRef()
@@ -241,6 +244,13 @@ export default function AdminPipeline({ allowedClientIds } = {}) {
       addLog(`✗ Match error: ${err.message}`, 'err')
     }
     setPoolMatchLoading(false)
+  }
+
+  async function moveToScreening(candidateId) {
+    setMovingToScreening(prev => new Set([...prev, candidateId]))
+    await supabase.from('candidates').update({ source: 'cv_upload' }).eq('id', candidateId)
+    setCandidates(prev => prev.map(c => c.id === candidateId ? { ...c, source: 'cv_upload' } : c))
+    setMovingToScreening(prev => { const n = new Set(prev); n.delete(candidateId); return n })
   }
 
   const addLog  = (msg, type = '') => setLog(p => [...p, { id: Date.now() + Math.random(), msg, type }])
@@ -967,12 +977,14 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
       return words.every(w => hay.includes(w))
     })
   }
-  const passedCandidates = candidates.filter(c => c.match_pass)
+  const sourcedCandidates  = candidates.filter(c => c.source === 'linkedin')
+  const pipelineCandidates = candidates.filter(c => c.source !== 'linkedin')
+  const passedCandidates = pipelineCandidates.filter(c => c.match_pass)
   const doneCount      = files.filter(f => f.status === 'done').length
   const pendingCount   = files.filter(f => f.status === 'pending').length
-  const screenedCount  = candidates.filter(c => c._status === 'screened').length
+  const screenedCount  = pipelineCandidates.filter(c => c._status === 'screened').length
   const parseProgress  = files.length ? (doneCount / files.length) * 100 : 0
-  const screenProgress = candidates.length ? (screenedCount / candidates.length) * 100 : 0
+  const screenProgress = pipelineCandidates.length ? (screenedCount / pipelineCandidates.length) * 100 : 0
   const liveInterviewCandidates = passedCandidates.filter(c => c.scores?.overallScore != null)
   const decisionCandidates      = passedCandidates.filter(c => c.live_interview_status === 'completed')
   const clientLabel = (c) => c.company_name || c.full_name || c.email
@@ -1085,13 +1097,93 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
         </div>
       </div>
 
+      {/* ── LinkedIn Sourced ── */}
+      {activeJob && (
+        <div className="section-card">
+          <div className="section-card-head">
+            <h3>Sourced · LinkedIn</h3>
+            <span className="mono text-muted" style={{ fontSize: 11 }}>{sourcedCandidates.length} profile{sourcedCandidates.length !== 1 ? 's' : ''}</span>
+          </div>
+          {sourcedCandidates.length === 0 ? (
+            <div className="empty-state" style={{ color: 'var(--text-3)', fontSize: 13 }}>
+              Sourcing in progress… LinkedIn profiles will appear here shortly.
+            </div>
+          ) : (
+            <div className="candidate-list">
+              {sourcedCandidates.map(c => {
+                const ld       = c.linkedin_data ?? {}
+                const skills   = (c.skills ?? []).slice(0, 5)
+                const moving   = movingToScreening.has(c.id)
+                const headline = ld.headline ?? c.candidate_role ?? ''
+                const company  = (ld.experience?.[0]?.company) ?? ''
+                const location = ld.location ?? c.location ?? 'India'
+                const education = c.education ?? ''
+                return (
+                  <div key={c.id} className="candidate-row" style={{ cursor: 'default', alignItems: 'flex-start', gap: 12 }}>
+                    <div className="c-info" style={{ flex: 1 }}>
+                      <div className="c-name" style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                        {c.full_name}
+                        <span className="badge badge-blue" style={{ fontSize: 9 }}>LinkedIn</span>
+                        {ld.match_score != null && (
+                          <span style={{ fontSize: 10, padding: '1px 6px', background: 'var(--accent)', color: '#fff', borderRadius: 'var(--r)', fontWeight: 600 }}>
+                            {ld.match_score}/10
+                          </span>
+                        )}
+                      </div>
+                      <div className="c-meta" style={{ marginTop: 2 }}>
+                        {headline}{company ? ` · ${company}` : ''}
+                      </div>
+                      {ld.match_reason && (
+                        <div style={{ fontSize: 11, color: 'var(--text-2)', marginTop: 2, fontStyle: 'italic' }}>{ld.match_reason}</div>
+                      )}
+                      {location && (
+                        <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2 }}>{location}</div>
+                      )}
+                      {skills.length > 0 && (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
+                          {skills.map(sk => (
+                            <span key={sk} style={{ fontSize: 10, padding: '2px 6px', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 'var(--r)', color: 'var(--text-3)' }}>{sk}</span>
+                          ))}
+                        </div>
+                      )}
+                      {education && (
+                        <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 4 }}>{education}</div>
+                      )}
+                    </div>
+                    <div className="c-score" style={{ flexShrink: 0, gap: 6, flexDirection: 'column', alignItems: 'flex-end' }}>
+                      {c.linkedin_url && (
+                        <a
+                          href={c.linkedin_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="btn btn-secondary"
+                          style={{ fontSize: 10, padding: '3px 8px', textDecoration: 'none', color: 'var(--text-2)' }}
+                        >↗ View Profile</a>
+                      )}
+                      {!isClient && (
+                        <button
+                          className="btn btn-primary"
+                          style={{ fontSize: 10, padding: '3px 10px' }}
+                          disabled={moving}
+                          onClick={() => moveToScreening(c.id)}
+                        >{moving ? 'Moving…' : '→ Screen'}</button>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ── 2 CV Upload — hidden for clients ── */}
       {activeJob && !isClient && (
         <div className="section-card">
           <div className="section-card-head">
             <h3>{useTalentPool ? '2 · Talent Pool' : '2 · CV Upload'}</h3>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <span className="mono text-muted" style={{ fontSize: 11 }}>{candidates.length} candidates</span>
+              <span className="mono text-muted" style={{ fontSize: 11 }}>{pipelineCandidates.length} candidates</span>
               {!useTalentPool && (
                 <button
                   className="btn btn-secondary"
@@ -1194,17 +1286,17 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
       )}
 
       {/* ── 3 AI Screening — hidden for clients ── */}
-      {activeJob && candidates.length > 0 && !isClient && (
+      {activeJob && pipelineCandidates.length > 0 && !isClient && (
         <div className="section-card">
           <div className="section-card-head">
             <h3>3 · AI Screening</h3>
-            {pipelineRunning && screenedCount < candidates.length && (
+            {pipelineRunning && screenedCount < pipelineCandidates.length && (
               <div style={{ flex: 1, margin: '0 16px' }}><div className="progress-track"><div className="progress-fill" style={{ width: `${screenProgress}%` }} /></div></div>
             )}
-            <span className="mono text-muted" style={{ fontSize: 11 }}>{screenedCount}/{candidates.length} screened</span>
+            <span className="mono text-muted" style={{ fontSize: 11 }}>{screenedCount}/{pipelineCandidates.length} screened</span>
           </div>
           <div className="candidate-list">
-            {srch([...candidates].sort((a, b) => (b.match_score ?? -1) - (a.match_score ?? -1))).map((c, i) => (
+            {srch([...pipelineCandidates].sort((a, b) => (b.match_score ?? -1) - (a.match_score ?? -1))).map((c, i) => (
               <div key={c.id} className={`candidate-row${c.match_pass === false ? ' dimmed' : ''}`} style={{ cursor: 'default' }}>
                 <div className="c-rank">#{i + 1}</div>
                 <div className="c-info">

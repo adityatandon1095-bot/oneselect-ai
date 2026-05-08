@@ -1,0 +1,48 @@
+language: "en-US"
+early_access: false
+
+reviews:
+  profile: "chill"
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: false
+  auto_review:
+    enabled: true
+    drafts: false
+    base_or_head_changed: true
+
+  path_instructions:
+    - path: "src/pages/**/*.jsx"
+      instructions: |
+        This is a React 19 + Vite SaaS app (One Select — recruitment platform).
+        Design system: Cormorant Garamond headings, DM Sans body, --accent: #B8924A, --bg: #F8F7F4, border-radius vars --r (2px) and --r-lg (4px).
+        No TypeScript — plain JSX only. No new npm dependencies without explicit justification.
+        All Supabase calls use the shared client from src/lib/supabase.js.
+        Check for: missing .catch() on fire-and-forget calls, unhandled loading/error states,
+        hardcoded colours outside the design system, and RLS-sensitive data leaks to the frontend.
+
+    - path: "supabase/functions/**/*.ts"
+      instructions: |
+        Deno runtime edge functions. No Node.js imports.
+        Supabase service-role client is used (bypasses RLS) — flag any data returned to the caller
+        that could expose rows the requesting user shouldn't see.
+        Secrets (API keys) must only come from Deno.env or the platform_settings table via service role;
+        never echoed back in responses.
+        Claude API calls use model claude-sonnet-4-6 and direct fetch to https://api.anthropic.com/v1/messages.
+
+    - path: "supabase/migrations/**/*.sql"
+      instructions: |
+        PostgreSQL migrations for Supabase. Check for: missing IF NOT EXISTS guards,
+        RLS policies that could allow cross-tenant data access (tenant = client company),
+        missing indexes on foreign keys used in frequent queries,
+        and ALTER TABLE statements that could lock large tables.
+
+  ignore_title_keywords:
+    - "WIP"
+    - "chore"
+    - "typo"
+
+chat:
+  auto_reply: true

@@ -61,6 +61,88 @@ function ScoreRing({ score, size = 72 }) {
   )
 }
 
+function LinkedInProfileSection({ data, linkedinUrl }) {
+  const [open, setOpen] = useState(false)
+  const d = data ?? {}
+  const experience = Array.isArray(d.experience ?? d.positions) ? (d.experience ?? d.positions) : []
+  const education  = Array.isArray(d.education)  ? d.education  : []
+  const skills     = Array.isArray(d.skills)      ? d.skills     : []
+
+  return (
+    <div style={{ marginBottom: 16, border: '1px solid var(--border)', borderRadius: 'var(--r)' }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{ width: '100%', background: 'var(--surface2)', border: 'none', cursor: 'pointer', padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderRadius: open ? 'var(--r) var(--r) 0 0' : 'var(--r)', fontFamily: 'var(--font-body)' }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span className="badge badge-blue" style={{ fontSize: 9 }}>LinkedIn</span>
+          <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)' }}>LinkedIn Profile</span>
+          {d.headline && <span style={{ fontSize: 12, color: 'var(--text-3)' }}>· {d.headline}</span>}
+        </div>
+        <span style={{ fontSize: 12, color: 'var(--text-3)' }}>{open ? '▲' : '▼'}</span>
+      </button>
+
+      {open && (
+        <div style={{ padding: '14px 16px', borderTop: '1px solid var(--border)' }}>
+          {/* Headline + summary */}
+          {d.headline && (
+            <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)', marginBottom: 4 }}>{d.headline}</div>
+          )}
+          {(d.summary ?? d.about) && (
+            <p style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.7, margin: '0 0 12px' }}>{d.summary ?? d.about}</p>
+          )}
+
+          {/* Current role */}
+          {experience.length > 0 && (() => {
+            const cur = experience.find(e => !e.end_date) ?? experience[0]
+            return cur ? (
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-3)', marginBottom: 4 }}>Current Role</div>
+                <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)' }}>{cur.title}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-3)' }}>{cur.company}{cur.start_date ? ` · ${cur.start_date.slice(0, 7)}` : ''}{!cur.end_date ? ' – Present' : ''}</div>
+              </div>
+            ) : null
+          })()}
+
+          {/* Skills */}
+          {skills.length > 0 && (
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-3)', marginBottom: 6 }}>Skills</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                {skills.map((sk, i) => (
+                  <span key={i} style={{ fontSize: 11, padding: '2px 7px', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 'var(--r)', color: 'var(--text-2)' }}>{String(sk?.name ?? sk)}</span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Education */}
+          {education.length > 0 && (
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-3)', marginBottom: 6 }}>Education</div>
+              {education.map((e, i) => (
+                <div key={i} style={{ fontSize: 12, color: 'var(--text-2)', marginBottom: 3 }}>
+                  <span style={{ fontWeight: 500 }}>{e.school}</span>
+                  {e.degree && <span> · {e.degree}{e.field ? `, ${e.field}` : ''}</span>}
+                  {(e.start_year ?? e.end_year) && (
+                    <span style={{ color: 'var(--text-3)' }}> ({e.start_year ?? ''}–{e.end_year ?? 'Present'})</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {linkedinUrl && (
+            <a href={linkedinUrl} target="_blank" rel="noopener noreferrer"
+              style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--accent)', textDecoration: 'none', padding: '3px 10px', border: '1px solid var(--accent)', borderRadius: 'var(--r)', display: 'inline-block' }}
+            >↗ View on LinkedIn</a>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function CandidateProfile({ candidate, job, onBack }) {
   const s = candidate.scores ?? {}
   const transcript = candidate.interview_transcript ?? []
@@ -199,6 +281,11 @@ function CandidateProfile({ candidate, job, onBack }) {
             </div>
           )}
         </div>
+      )}
+
+      {/* ── LinkedIn Profile ── */}
+      {candidate.linkedin_data && (
+        <LinkedInProfileSection data={candidate.linkedin_data} linkedinUrl={candidate.linkedin_url} />
       )}
 
       {/* ── Skills Gap ── */}

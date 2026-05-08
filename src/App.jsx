@@ -42,12 +42,14 @@ import CandidateDashboard from './pages/candidate/CandidateDashboard'
 import CandidateProfile from './pages/candidate/CandidateProfile'
 import CandidateMatches from './pages/candidate/CandidateMatches'
 import AdminSourcing from './pages/admin/AdminSourcing'
+import AdminLinkedInPool from './pages/admin/AdminLinkedInPool'
 import AdminCompliance from './pages/admin/AdminCompliance'
 import AdminBoard from './pages/admin/AdminBoard'
 import AdminBilling from './pages/admin/AdminBilling'
 import Privacy from './pages/Privacy'
 import Terms from './pages/Terms'
 import TrialSignup from './pages/trial/TrialSignup'
+import { SpeedInsights } from '@vercel/speed-insights/react'
 import './App.css'
 
 
@@ -111,8 +113,9 @@ export default function App() {
             <Route path="recruiters"  element={<ErrorBoundary><AdminRecruiters /></ErrorBoundary>} />
             <Route path="jobs"        element={<ErrorBoundary><AdminJobs /></ErrorBoundary>} />
             <Route path="pipeline"    element={<ErrorBoundary><AdminPipeline /></ErrorBoundary>} />
-            <Route path="talent-pool" element={<ErrorBoundary><AdminTalentPool /></ErrorBoundary>} />
-            <Route path="sourcing"    element={<ErrorBoundary><AdminSourcing /></ErrorBoundary>} />
+            <Route path="talent-pool"   element={<ErrorBoundary><AdminTalentPool /></ErrorBoundary>} />
+            <Route path="linkedin-pool" element={<ErrorBoundary><AdminLinkedInPool /></ErrorBoundary>} />
+            <Route path="sourcing"      element={<ErrorBoundary><AdminSourcing /></ErrorBoundary>} />
             <Route path="board"       element={<ErrorBoundary><AdminBoard /></ErrorBoundary>} />
             <Route path="compliance"  element={<ErrorBoundary><AdminCompliance /></ErrorBoundary>} />
             <Route path="billing"     element={<ErrorBoundary><AdminBilling /></ErrorBoundary>} />
@@ -125,7 +128,8 @@ export default function App() {
             <Route path="dashboard" element={<ErrorBoundary><RecruiterDashboard /></ErrorBoundary>} />
             <Route path="clients"   element={<ErrorBoundary><RecruiterClients /></ErrorBoundary>} />
             <Route path="jobs"      element={<ErrorBoundary><RecruiterJobs /></ErrorBoundary>} />
-            <Route path="talent-pool" element={<ErrorBoundary><AdminTalentPool /></ErrorBoundary>} />
+            <Route path="talent-pool"   element={<ErrorBoundary><AdminTalentPool /></ErrorBoundary>} />
+            <Route path="linkedin-pool" element={<ErrorBoundary><AdminLinkedInPool /></ErrorBoundary>} />
             <Route path="candidates" element={<ErrorBoundary><RecruiterCandidates /></ErrorBoundary>} />
             <Route path="pipeline"  element={<ErrorBoundary><RecruiterPipeline /></ErrorBoundary>} />
             <Route path="reports"   element={<ErrorBoundary><RecruiterReports /></ErrorBoundary>} />
@@ -155,6 +159,7 @@ export default function App() {
         <CookieBanner />
       </AuthProvider>
     </BrowserRouter>
+    <SpeedInsights />
     </ErrorBoundary>
   )
 }
