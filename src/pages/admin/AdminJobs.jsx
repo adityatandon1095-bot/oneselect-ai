@@ -64,15 +64,28 @@ export default function AdminJobs() {
     const { assigned_to, work_mode, comp_min, comp_max, ...rest } = jobData
     const recruiterId = assigned_to ?? null
     if (!recruiterId) { setError('No recruiter assigned — job not saved'); return }
-    const { error: err } = await supabase.from('jobs').insert({
+    const { data: newJob, error: err } = await supabase.from('jobs').insert({
       recruiter_id: recruiterId,
       status: 'active',
       work_mode,
       salary_min: rest.salary_min ?? comp_min ?? null,
       salary_max: rest.salary_max ?? comp_max ?? null,
       ...rest,
-    })
+    }).select().single()
     if (err) { setError(err.message); return }
+    // Fire LinkedIn sourcing in background — never blocks job creation
+    if (newJob) {
+      supabase.functions.invoke('source-linkedin-candidates', {
+        body: {
+          job_id:           newJob.id,
+          job_title:        newJob.title,
+          job_description:  newJob.description ?? '',
+          skills:           newJob.required_skills ?? [],
+          location:         'India',
+          experience_level: newJob.experience_years ? `${newJob.experience_years}+ years` : '',
+        },
+      }).catch(() => {})
+    }
     load()
   }
 

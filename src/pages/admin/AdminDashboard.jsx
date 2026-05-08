@@ -33,10 +33,14 @@ export default function AdminDashboard() {
         supabase.from('jobs').select('id, title, status, created_at, profiles(company_name)').order('created_at', { ascending: false }).limit(8),
         supabase.from('talent_pool').select('*', { count: 'exact', head: true }),
         supabase.from('talent_pool').select('*', { count: 'exact', head: true }).eq('availability', 'available'),
-        supabase.from('profiles').select('plan').eq('user_role', 'client'),
+        supabase.from('profiles').select('subscription_status, price_override, plans(price_monthly)').eq('user_role', 'client'),
         supabase.from('candidates').select('*', { count: 'exact', head: true }).eq('final_decision', 'hired').gte('updated_at', ms),
       ])
-      const mrr = (clientProfiles ?? []).reduce((s, c) => s + (c.plan === 'growth' ? 1500 : 0), 0)
+      const mrr = (clientProfiles ?? []).reduce((sum, c) => {
+        if (c.subscription_status !== 'active') return sum
+        const price = c.price_override ?? c.plans?.price_monthly ?? 0
+        return sum + Number(price)
+      }, 0)
       setStats({ clients: clients ?? 0, jobs: jobs ?? 0, candidates: candidates ?? 0, interviews: interviews ?? 0, poolTotal: poolTotal ?? 0, poolAvailable: poolAvailable ?? 0, mrr, placements: placements ?? 0 })
       setRecentJobs(recent ?? [])
     } finally {

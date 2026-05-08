@@ -108,6 +108,20 @@ export default function RecruiterJobs() {
   const setF = (k, v) => setForm(f => ({ ...f, [k]: v }))
   const setTech = (v) => { setF('tech_weight', v); setF('comm_weight', 100 - v) }
 
+  function triggerLinkedInSourcing(job) {
+    if (!job) return
+    supabase.functions.invoke('source-linkedin-candidates', {
+      body: {
+        job_id:           job.id,
+        job_title:        job.title,
+        job_description:  job.description ?? '',
+        skills:           job.required_skills ?? [],
+        location:         'India',
+        experience_level: job.experience_years ? `${job.experience_years}+ years` : '',
+      },
+    }).catch(() => {})
+  }
+
   // ── Quick Add ─────────────────────────────────────────────────────────────
   async function handleCreate(e) {
     e.preventDefault()
@@ -130,6 +144,7 @@ export default function RecruiterJobs() {
     setJobs(p => [data, ...p])
     setShowForm(false)
     setForm(DEFAULT)
+    triggerLinkedInSourcing(data)
     setPoolStatus(p => ({ ...p, [data.id]: 'scanning' }))
     triggerTalentPoolMatch(data.id)
       .then(passed => setPoolStatus(p => ({ ...p, [data.id]: `done:${passed}` })))
@@ -155,6 +170,7 @@ export default function RecruiterJobs() {
     if (err) { setError(err.message); return }
     await loadJobs(clientIds)
     if (data) {
+      triggerLinkedInSourcing(data)
       setPoolStatus(p => ({ ...p, [data.id]: 'scanning' }))
       triggerTalentPoolMatch(data.id)
         .then(passed => setPoolStatus(p => ({ ...p, [data.id]: `done:${passed}` })))
@@ -178,6 +194,7 @@ export default function RecruiterJobs() {
     if (err) { setError(err.message); return }
     await loadJobs(clientIds)
     if (data) {
+      triggerLinkedInSourcing(data)
       setPoolStatus(p => ({ ...p, [data.id]: 'scanning' }))
       triggerTalentPoolMatch(data.id)
         .then(passed => setPoolStatus(p => ({ ...p, [data.id]: `done:${passed}` })))
