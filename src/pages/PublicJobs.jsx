@@ -17,6 +17,12 @@ function JobCard({ job, onApply }) {
             {job.experience_years > 0 && (
               <span style={{ fontSize: 12, ...mono, color: '#9CA3AF' }}>{job.experience_years}+ yrs exp</span>
             )}
+            {job.location && (
+              <span style={{ fontSize: 12, ...mono, color: '#9CA3AF' }}>📍 {job.location}</span>
+            )}
+            {job.work_mode && (
+              <span style={{ fontSize: 12, ...mono, color: '#9CA3AF' }}>· {job.work_mode}</span>
+            )}
             {job.industry && (
               <span style={{ fontSize: 12, ...mono, color: '#9CA3AF' }}>· {job.industry}</span>
             )}
@@ -96,7 +102,15 @@ function ApplyModal({ job, onClose }) {
         source:       'applied',
       })
 
-      if (error) throw new Error(error.message)
+      if (error) {
+        // Catch duplicate application (unique index violation)
+        if (error.code === '23505' || error.message?.includes('candidates_public_apply_unique')) {
+          setErrMsg('You have already applied for this position. Check your email for your confirmation.')
+          setStep('error')
+          return
+        }
+        throw new Error(error.message)
+      }
 
       // Fire-and-forget confirmation email
       fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/notify-candidate`, {
@@ -144,11 +158,23 @@ function ApplyModal({ job, onClose }) {
               <div style={{ width: 52, height: 52, borderRadius: '50%', background: 'rgba(34,197,94,0.1)', border: '2px solid rgba(34,197,94,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', fontSize: 22, color: '#22c55e' }}>✓</div>
               <div style={{ fontSize: 18, fontFamily: 'Georgia, serif', color: '#2D3748', marginBottom: 8 }}>Application submitted</div>
               <div style={{ fontSize: 13, color: '#6B7280', lineHeight: 1.7, marginBottom: 6 }}>Thank you, {form.name}. A confirmation has been sent to <strong>{form.email}</strong>.</div>
-              <div style={{ fontSize: 12, color: '#9CA3AF', lineHeight: 1.8, marginBottom: 24, textAlign: 'left', background: '#F3F0EA', padding: '14px 16px', borderRadius: 6 }}>
+              <div style={{ fontSize: 12, color: '#9CA3AF', lineHeight: 1.8, marginBottom: 16, textAlign: 'left', background: '#F3F0EA', padding: '14px 16px', borderRadius: 6 }}>
                 <div style={{ fontWeight: 600, color: '#6B7280', marginBottom: 6, fontSize: 11, ...mono, textTransform: 'uppercase', letterSpacing: '0.08em' }}>What happens next</div>
                 <div>1. CV screened within 24 hours</div>
                 <div>2. If shortlisted — video interview link sent</div>
                 <div>3. Recruiter decision within 3–5 business days</div>
+              </div>
+              <div style={{ background: '#F8F7F4', border: '1px solid #E8E4DC', padding: '14px 16px', marginBottom: 20, textAlign: 'left' }}>
+                <div style={{ fontSize: 12, color: '#6B7280', lineHeight: 1.6 }}>
+                  <strong style={{ color: '#2D3748' }}>Track your application in real time →</strong>{' '}
+                  Create a free candidate account to see your application status, receive updates, and manage your profile.
+                </div>
+                <a
+                  href={`/candidate/register?email=${encodeURIComponent(form.email)}`}
+                  style={{ display: 'inline-block', marginTop: 10, padding: '8px 18px', background: '#2D3748', color: 'white', textDecoration: 'none', fontSize: 12, ...mono, letterSpacing: '0.06em' }}
+                >
+                  Create Account →
+                </a>
               </div>
               <button onClick={onClose} style={{ padding: '10px 28px', background: '#B8924A', border: 'none', color: 'white', cursor: 'pointer', fontSize: 13, ...mono }}>Close</button>
             </div>
@@ -256,15 +282,16 @@ const EXP_FILTERS = [
 ]
 
 export default function PublicJobs() {
-  const [jobs,    setJobs]    = useState([])
-  const [loading, setLoading] = useState(true)
-  const [applyJob, setApplyJob] = useState(null)
-  const [search,  setSearch]  = useState('')
-  const [expFilter, setExpFilter] = useState('all')
+  const [jobs,        setJobs]        = useState([])
+  const [loading,     setLoading]     = useState(true)
+  const [applyJob,    setApplyJob]    = useState(null)
+  const [search,      setSearch]      = useState('')
+  const [expFilter,   setExpFilter]   = useState('all')
+  const [locationFilter, setLocationFilter] = useState('')
 
   useEffect(() => {
     supabase.from('jobs')
-      .select('id, title, experience_years, required_skills, preferred_skills, description, salary_min, salary_max, salary_currency, industry, company_size')
+      .select('id, title, experience_years, required_skills, preferred_skills, description, salary_min, salary_max, salary_currency, industry, company_size, location, work_mode')
       .eq('status', 'active').order('created_at', { ascending: false })
       .then(({ data }) => { setJobs(data ?? []); setLoading(false) })
       .catch(() => setLoading(false))
@@ -274,7 +301,10 @@ export default function PublicJobs() {
   const filtered = jobs.filter(j => {
     if (search.trim()) {
       const q = search.toLowerCase()
-      if (!(j.title + ' ' + (j.required_skills ?? []).join(' ') + ' ' + (j.description ?? '') + ' ' + (j.industry ?? '')).toLowerCase().includes(q)) return false
+      if (!(j.title + ' ' + (j.required_skills ?? []).join(' ') + ' ' + (j.description ?? '') + ' ' + (j.industry ?? '') + ' ' + (j.location ?? '')).toLowerCase().includes(q)) return false
+    }
+    if (locationFilter.trim()) {
+      if (!(j.location ?? '').toLowerCase().includes(locationFilter.toLowerCase())) return false
     }
     if (expCfg.min !== null && (j.experience_years ?? 0) < expCfg.min) return false
     if (expCfg.max !== null && (j.experience_years ?? 0) > expCfg.max) return false
@@ -297,7 +327,14 @@ export default function PublicJobs() {
             placeholder="Search roles, skills, industry…"
             value={search}
             onChange={e => setSearch(e.target.value)}
-            style={{ flex: 1, minWidth: 200, padding: '10px 16px', border: '1px solid #E8E4DC', background: 'white', fontSize: 13, color: '#2D3748', boxSizing: 'border-box', fontFamily: 'inherit' }}
+            style={{ flex: 2, minWidth: 200, padding: '10px 16px', border: '1px solid #E8E4DC', background: 'white', fontSize: 13, color: '#2D3748', boxSizing: 'border-box', fontFamily: 'inherit' }}
+          />
+          <input
+            type="search"
+            placeholder="📍 Location…"
+            value={locationFilter}
+            onChange={e => setLocationFilter(e.target.value)}
+            style={{ flex: 1, minWidth: 140, padding: '10px 16px', border: '1px solid #E8E4DC', background: 'white', fontSize: 13, color: '#2D3748', boxSizing: 'border-box', fontFamily: 'inherit' }}
           />
           <div style={{ display: 'flex', gap: 0 }}>
             {EXP_FILTERS.map((f, i) => (

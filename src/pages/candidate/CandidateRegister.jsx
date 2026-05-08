@@ -1,5 +1,5 @@
-import { useState, useCallback, useRef } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useState, useCallback, useRef, useEffect } from 'react'
+import { useNavigate, useLocation, Link } from 'react-router-dom'
 import mammoth from 'mammoth'
 import { supabase } from '../../lib/supabase'
 import { callClaude } from '../../utils/api'
@@ -141,11 +141,12 @@ function LeftPanel() {
 // ── Main component ─────────────────────────────────────────────────────────
 export default function CandidateRegister() {
   const navigate = useNavigate()
+  const location = useLocation()
   const fileInputRef = useRef()
 
   // ── All state — unchanged ────────────────────────────────────────────────
   const [fullName,    setFullName]    = useState('')
-  const [email,       setEmail]       = useState('')
+  const [email,       setEmail]       = useState(new URLSearchParams(location.search).get('email') ?? '')
   const [phone,       setPhone]       = useState('')
   const [currentRole, setCurrentRole] = useState('')
   const [totalYears,  setTotalYears]  = useState('')

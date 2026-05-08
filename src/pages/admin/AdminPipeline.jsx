@@ -38,6 +38,15 @@ function daysAgo(ts) {
   return d === 0 ? 'today' : d === 1 ? '1d' : `${d}d`
 }
 
+function slaDot(c) {
+  const ref = c.stage_entered_at ?? c.screened_at ?? null
+  if (!ref) return null
+  const days = Math.floor((Date.now() - new Date(ref)) / 86_400_000)
+  if (days >= 7) return { color: 'var(--red)',   title: `${days}d in stage — stalling` }
+  if (days >= 3) return { color: 'var(--amber)', title: `${days}d in stage` }
+  return null
+}
+
 function ScoreRing({ score, size = 48 }) {
   const r = size / 2 - 5, circ = 2 * Math.PI * r
   const fill = (score / 100) * circ, color = dimColor(score)
@@ -688,7 +697,7 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
         const msg = `Name: ${c.full_name}\nRole: ${c.candidate_role}\nYears: ${c.total_years}\nSkills: ${(c.skills ?? []).join(', ')}\nSummary: ${c.summary}`
         const reply = await callClaude([{ role: 'user', content: msg }], system, 512)
         const s = JSON.parse(reply.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, ''))
-        await supabase.from('candidates').update({ match_score: s.matchScore, match_pass: s.pass, match_reason: s.reason, match_rank: s.rank, screened_at: new Date().toISOString() }).eq('id', c.id)
+        await supabase.from('candidates').update({ match_score: s.matchScore, match_pass: s.pass, match_reason: s.reason, match_rank: s.rank, screened_at: new Date().toISOString(), stage_entered_at: new Date().toISOString() }).eq('id', c.id)
         const updated = { ...c, _status: 'screened', match_score: s.matchScore, match_pass: s.pass, match_reason: s.reason, match_rank: s.rank }
         setCandidates(p => p.map(x => x.id === c.id ? updated : x))
         if (s.pass) {
@@ -744,6 +753,20 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
         : `Screening complete — ${passedCandidates.length} candidate${passedCandidates.length !== 1 ? 's' : ''} passed. Review shortlist in Client portal, then run interviews.`
       tsLog(msg, 'ok')
       stopped = true
+
+      // Email client so they don't need to be logged in to know the shortlist is ready
+      const clientProfile = clients.find(c => c.id === clientId)
+      if (clientProfile?.email && passedCandidates.length > 0) {
+        supabase.functions.invoke('notify-client-shortlist', {
+          body: {
+            clientEmail:    clientProfile.email,
+            clientName:     clientProfile.full_name || clientProfile.company_name || null,
+            jobTitle:       activeJob.title,
+            candidateCount: passedCandidates.length,
+          },
+        }).catch(() => {})
+      }
+
       await refreshCandidates()
     }
 
@@ -757,6 +780,7 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
           await supabase.from('candidates').update({
             interview_transcript: result.transcript,
             scores: result.scores,
+            stage_entered_at: new Date().toISOString(),
           }).eq('id', c.id)
           setCandidates(p => p.map(x => x.id === c.id ? { ...x, interview_transcript: result.transcript, scores: result.scores } : x))
           tsLog(`✓ ${c.full_name}: ${result.scores.overallScore}/100 — ${result.scores.recommendation}`, 'ok')
@@ -1324,10 +1348,15 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
               const hasVideo  = c.video_urls?.length > 0
               const hasScores = !!c.scores?.overallScore
               const rec       = c.scores?.recommendation
+              const dot       = slaDot(c)
               return (
                 <div key={c.id} className="candidate-row" style={{ cursor: 'default' }}>
                   <div className="c-info">
-                    <div className="c-name">{c.full_name}{c.source === 'manually_added' && <span className="badge badge-blue" style={{ fontSize: 9, marginLeft: 6 }}>Manual</span>}</div>
+                    <div className="c-name" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {dot && <span title={dot.title} style={{ width: 8, height: 8, borderRadius: '50%', background: dot.color, flexShrink: 0, display: 'inline-block' }} />}
+                      {c.full_name}
+                      {c.source === 'manually_added' && <span className="badge badge-blue" style={{ fontSize: 9 }}>Manual</span>}
+                    </div>
                     <div className="c-meta">
                       {c.candidate_role} · {c.total_years}y
                       {daysAgo(c.interviewed_at) && <span style={{ marginLeft: 6, color: 'var(--text-3)', fontSize: 10, fontFamily: 'var(--font-mono)' }}>iv {daysAgo(c.interviewed_at)} ago</span>}

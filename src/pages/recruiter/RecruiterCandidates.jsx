@@ -74,6 +74,9 @@ function CandidateProfile({ candidate, job, onBack }) {
   const [refQuestions,      setRefQuestions]       = useState(null)
   const [refQLoading,       setRefQLoading]        = useState(false)
   const [emailCopied,       setEmailCopied]        = useState(false)
+  const [notes,             setNotes]              = useState(candidate.recruiter_notes ?? '')
+  const [notesSaving,       setNotesSaving]        = useState(false)
+  const [notesSaved,        setNotesSaved]         = useState(false)
 
   const requiredSkills = job?.required_skills ?? []
   const candSkillsLow  = (candidate.skills ?? []).map(s => s.toLowerCase())
@@ -433,6 +436,36 @@ function CandidateProfile({ candidate, job, onBack }) {
           </div>
         </>
       )}
+
+      {/* ── Recruiter Notes ── */}
+      <div style={{ marginTop: 24, padding: '14px 16px', background: 'var(--surface)', border: '1px solid var(--border)' }}>
+        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-3)', marginBottom: 8 }}>Recruiter Notes</div>
+        <textarea
+          value={notes}
+          onChange={e => { setNotes(e.target.value); setNotesSaved(false) }}
+          placeholder="Internal notes visible only to recruiters and admins…"
+          rows={4}
+          style={{ width: '100%', padding: '10px 12px', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)', fontSize: 13, fontFamily: 'var(--font-body)', lineHeight: 1.6, resize: 'vertical', boxSizing: 'border-box' }}
+        />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
+          <button
+            className="btn btn-secondary"
+            style={{ fontSize: 11, padding: '5px 14px' }}
+            disabled={notesSaving}
+            onClick={async () => {
+              setNotesSaving(true)
+              const table = candidate._fromPool ? 'job_matches' : 'candidates'
+              await supabase.from(table).update({ recruiter_notes: notes.trim() || null }).eq('id', candidate.id)
+              setNotesSaving(false)
+              setNotesSaved(true)
+              setTimeout(() => setNotesSaved(false), 2000)
+            }}
+          >
+            {notesSaving ? <><span className="spinner" style={{ width: 10, height: 10 }} /> Saving…</> : 'Save Notes'}
+          </button>
+          {notesSaved && <span style={{ fontSize: 11, color: 'var(--green)', fontFamily: 'var(--font-mono)' }}>✓ Saved</span>}
+        </div>
+      </div>
     </div>
   )
 }

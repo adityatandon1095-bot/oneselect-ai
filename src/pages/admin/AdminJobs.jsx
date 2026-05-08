@@ -39,6 +39,7 @@ export default function AdminJobs() {
   const [candMap,        setCandMap]        = useState({})  // job_id → Candidate[]
   const [webhookFails,   setWebhookFails]   = useState(new Set())  // job_ids with unresolved failures
   const [retryingWebhook, setRetryingWebhook] = useState(new Set()) // job_ids currently retrying
+  const [webhookModal,   setWebhookModal]   = useState(null) // { job, failures, retrying }
   const [loading,        setLoading]        = useState(true)
   const [filter,         setFilter]         = useState('all')
   const [closing,        setClosing]        = useState(null)
@@ -283,22 +284,20 @@ export default function AdminJobs() {
                     {webhookFails.has(j.id) && (
                       <button
                         className="badge badge-red"
-                        style={{ fontSize: 9, cursor: retryingWebhook.has(j.id) ? 'default' : 'pointer', border: 'none', padding: '2px 6px' }}
-                        title="HRIS webhook failed — click to retry"
+                        style={{ fontSize: 9, cursor: 'pointer', border: 'none', padding: '2px 6px' }}
+                        title="HRIS webhook failed — click for details"
                         onClick={async (e) => {
                           e.stopPropagation()
-                          if (retryingWebhook.has(j.id)) return
-                          setRetryingWebhook(prev => new Set(prev).add(j.id))
-                          try {
-                            const cands = candMap[j.id] ?? []
-                            const target = cands.find(c => c.final_decision === 'hired' || c.offer_status === 'sent') ?? cands[0]
-                            if (target) await supabase.functions.invoke('trigger-webhook', { body: { candidateId: target.id, event: 'candidate.hired' } })
-                            setWebhookFails(prev => { const n = new Set(prev); n.delete(j.id); return n })
-                          } catch { /* badge stays */ }
-                          setRetryingWebhook(prev => { const n = new Set(prev); n.delete(j.id); return n })
+                          const { data: failures } = await supabase
+                            .from('webhook_failures')
+                            .select('id, error_message, created_at, payload')
+                            .eq('job_id', j.id)
+                            .eq('resolved', false)
+                            .order('created_at', { ascending: false })
+                          setWebhookModal({ job: j, failures: failures ?? [], retrying: false })
                         }}
                       >
-                        {retryingWebhook.has(j.id) ? '⟳ retrying…' : '⚠ retry webhook'}
+                        ⚠ webhook failed
                       </button>
                     )}
                   </div>
@@ -358,6 +357,70 @@ export default function AdminJobs() {
           </>
         )}
       </div>
+
+      {/* ── Webhook Failure Modal ── */}
+      {webhookModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000 }}>
+          <div style={{ background: 'var(--surface)', borderRadius: 12, padding: 28, width: 500, display: 'flex', flexDirection: 'column', gap: 16, maxHeight: '80vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>Webhook Failure — {webhookModal.job.title}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-3)' }}>{webhookModal.failures.length} unresolved failure{webhookModal.failures.length !== 1 ? 's' : ''}</div>
+              </div>
+              <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--text-3)', lineHeight: 1 }} onClick={() => setWebhookModal(null)}>✕</button>
+            </div>
+
+            {webhookModal.failures.length === 0 ? (
+              <div style={{ fontSize: 13, color: 'var(--text-3)', padding: '16px 0', textAlign: 'center' }}>No failure details found.</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {webhookModal.failures.map((f, i) => (
+                  <div key={f.id} style={{ padding: '12px 14px', background: 'var(--bg)', border: '1px solid var(--border)', borderLeft: '2px solid var(--red)' }}>
+                    <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-3)', marginBottom: 4 }}>
+                      {new Date(f.created_at).toLocaleString('en-GB')}
+                    </div>
+                    <div style={{ fontSize: 13, color: 'var(--red)', lineHeight: 1.5 }}>{f.error_message ?? 'Unknown error'}</div>
+                    {f.payload && (
+                      <details style={{ marginTop: 6 }}>
+                        <summary style={{ fontSize: 11, color: 'var(--text-3)', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>Payload</summary>
+                        <pre style={{ fontSize: 10, color: 'var(--text-3)', marginTop: 4, overflowX: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{JSON.stringify(f.payload, null, 2)}</pre>
+                      </details>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button className="btn btn-secondary" onClick={() => setWebhookModal(null)}>Close</button>
+              <button
+                className="btn btn-primary"
+                disabled={webhookModal.retrying}
+                onClick={async () => {
+                  setWebhookModal(m => ({ ...m, retrying: true }))
+                  try {
+                    const cands = candMap[webhookModal.job.id] ?? []
+                    const target = cands.find(c => c.final_decision === 'hired' || c.offer_status === 'sent') ?? cands[0]
+                    if (target) {
+                      await supabase.functions.invoke('trigger-webhook', {
+                        body: { candidateId: target.id, event: 'candidate.hired' },
+                      })
+                    }
+                    // Mark failures as resolved
+                    await supabase.from('webhook_failures').update({ resolved: true }).eq('job_id', webhookModal.job.id).eq('resolved', false)
+                    setWebhookFails(prev => { const n = new Set(prev); n.delete(webhookModal.job.id); return n })
+                    setWebhookModal(null)
+                  } catch {
+                    setWebhookModal(m => ({ ...m, retrying: false }))
+                  }
+                }}
+              >
+                {webhookModal.retrying ? <><span className="spinner" style={{ width: 11, height: 11 }} /> Retrying…</> : 'Retry Now'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showWizard && (
         <JDWizard
