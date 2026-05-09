@@ -1,10 +1,7 @@
+import { FROM_EMAIL } from "../_shared/email.ts"
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+import { corsHeaders } from "../_shared/cors.ts"
 
 const APP_URL = 'https://oneselect-ai-t6uo-phi.vercel.app'
 
@@ -52,7 +49,7 @@ serve(async (req) => {
   }
 
   try {
-    const { email, company_name, contact_name, role = 'client' } = await req.json()
+    const { email, company_name, contact_name, role = 'client', stakeholder_of = null } = await req.json()
 
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
@@ -60,26 +57,23 @@ serve(async (req) => {
 
     const admin = createClient(supabaseUrl, serviceKey)
 
-    // Generate temp password
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
-    let tempPassword = 'OS-'
-    for (let i = 0; i < 4; i++) tempPassword += chars[Math.floor(Math.random() * chars.length)]
-    tempPassword += '-'
-    for (let i = 0; i < 4; i++) tempPassword += chars[Math.floor(Math.random() * chars.length)]
+    // Internal random password — never sent to the user; they authenticate via magic link.
+    const internalPassword = crypto.randomUUID() + crypto.randomUUID()
 
-    // Try to create the auth user
+    // Try to create the auth user.
     // role is embedded in user_metadata so Login.jsx can self-correct the profile
     // even if a future DB write fails or the profile has a stale role.
     let userId: string
+    let isReInvite = false
     const { data: userData, error: createError } = await admin.auth.admin.createUser({
       email,
-      password: tempPassword,
+      password: internalPassword,
       email_confirm: true,
       user_metadata: { company_name, contact_name, role },
     })
 
     if (createError) {
-      // If user already exists in auth (re-invite), find them and reset their password + profile
+      // If user already exists in auth (re-invite), find them and update their profile
       const isAlreadyExists =
         createError.message.toLowerCase().includes('already been registered') ||
         createError.message.toLowerCase().includes('already exists') ||
@@ -96,9 +90,7 @@ serve(async (req) => {
       )
       if (!existing) throw new Error('User already exists but could not be found: ' + createError.message)
 
-      // Reset their password to the new temp password
       await admin.auth.admin.updateUserById(existing.id, {
-        password: tempPassword,
         email_confirm: true,
         user_metadata: { company_name, contact_name, role },
       })
@@ -110,11 +102,13 @@ serve(async (req) => {
         company_name,
         email,
         full_name: contact_name,
-        first_login: true
+        first_login: true,
+        ...(stakeholder_of ? { stakeholder_of } : {}),
       }, { onConflict: 'id' })
 
       if (upsertError) throw new Error('Profile upsert failed: ' + upsertError.message)
       userId = existing.id
+      isReInvite = true
 
     } else {
       userId = userData.user.id
@@ -125,11 +119,22 @@ serve(async (req) => {
         company_name,
         email,
         full_name: contact_name,
-        first_login: true
+        first_login: true,
+        ...(stakeholder_of ? { stakeholder_of } : {}),
       })
 
       if (profileError) throw new Error('Profile failed: ' + profileError.message)
     }
+
+    // Generate a one-time magic link so the user never handles a plaintext password.
+    // New users get an 'invite' link; re-invites get a 'magiclink'.
+    const { data: linkData, error: linkError } = await admin.auth.admin.generateLink({
+      type: isReInvite ? 'magiclink' : 'invite',
+      email,
+      options: { redirectTo: APP_URL + '/login' },
+    })
+    if (linkError) throw new Error('Failed to generate invite link: ' + linkError.message)
+    const magicLink = linkData.properties?.action_link ?? `${APP_URL}/login`
 
     // ── Email body differs by role ──────────────────────────────────────────
     const isRecruiter = role === 'recruiter'
@@ -137,11 +142,10 @@ serve(async (req) => {
       ? 'Welcome to One Select — Recruiter Access'
       : 'Welcome to One Select — Your Portal is Ready'
 
-    const loginUrl = `${APP_URL}/login?email=${encodeURIComponent(email)}`
     const portalLabel = isRecruiter ? 'Recruiter Portal' : 'Client Portal'
     const bodyIntro = isRecruiter
-      ? `You've been added as a recruiter on One Select. Log in to manage your assigned clients' hiring pipelines.`
-      : `Your AI-powered hiring portal has been set up for <strong style="color:#2D3748;">${company_name}</strong>. Log in to post jobs and track your candidates.`
+      ? `You've been added as a recruiter on One Select. Click the button below to access your portal — no password needed.`
+      : `Your AI-powered hiring portal has been set up for <strong style="color:#2D3748;">${company_name}</strong>. Click the button below to log in and get started.`
 
     const emailHtml = `
       <div style="font-family:Georgia,serif;max-width:600px;margin:0 auto;background:#F8F7F4;padding:40px;">
@@ -152,48 +156,36 @@ serve(async (req) => {
         <div style="background:white;padding:40px;border:1px solid #E8E4DC;">
           <h2 style="font-family:Georgia,serif;color:#2D3748;font-weight:400;font-size:22px;margin:0 0 16px;">Welcome, ${contact_name}</h2>
           <p style="color:#6B7280;line-height:1.8;font-size:15px;margin:0 0 24px;">${bodyIntro}</p>
-          <div style="background:#F8F7F4;border:1px solid #E8E4DC;border-left:4px solid #B8924A;padding:24px;margin:24px 0;">
-            <p style="margin:0 0 16px;color:#6B7280;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;font-family:monospace;">Your Login Details</p>
-            <table style="width:100%;border-collapse:collapse;">
-              <tr>
-                <td style="padding:8px 0;color:#6B7280;font-size:14px;width:120px;">Portal</td>
-                <td style="padding:8px 0;"><a href="${loginUrl}" style="color:#B8924A;">${portalLabel}</a></td>
-              </tr>
-              <tr>
-                <td style="padding:8px 0;color:#6B7280;font-size:14px;">Email</td>
-                <td style="padding:8px 0;color:#2D3748;font-size:14px;">${email}</td>
-              </tr>
-              <tr>
-                <td style="padding:8px 0;color:#6B7280;font-size:14px;">Password</td>
-                <td style="padding:8px 0;">
-                  <span style="font-family:monospace;font-size:22px;color:#B8924A;font-weight:bold;letter-spacing:0.15em;">${tempPassword}</span>
-                </td>
-              </tr>
-            </table>
+          <div style="background:#F8F7F4;border:1px solid #E8E4DC;border-left:4px solid #B8924A;padding:16px 24px;margin:24px 0;">
+            <p style="margin:0 0 8px;color:#6B7280;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;font-family:monospace;">Your account</p>
+            <p style="margin:0;color:#2D3748;font-size:14px;">${email} &mdash; ${portalLabel}</p>
           </div>
           <div style="text-align:center;margin:32px 0;">
-            <a href="${loginUrl}" style="background:#B8924A;color:white;padding:14px 40px;text-decoration:none;font-family:monospace;font-size:12px;letter-spacing:0.1em;text-transform:uppercase;display:inline-block;">ACCESS YOUR PORTAL →</a>
+            <a href="${magicLink}" style="background:#B8924A;color:white;padding:14px 40px;text-decoration:none;font-family:monospace;font-size:12px;letter-spacing:0.1em;text-transform:uppercase;display:inline-block;">ACCESS YOUR PORTAL →</a>
           </div>
           <p style="color:#9CA3AF;font-size:13px;line-height:1.6;margin:24px 0 0;padding-top:24px;border-top:1px solid #E8E4DC;">
-            For security, you will be prompted to set a new password on your first login.
+            This link is valid for 24 hours and can only be used once. After logging in, you can set a permanent password from your account settings.
           </p>
         </div>
         <p style="text-align:center;color:#9CA3AF;font-size:11px;margin-top:24px;letter-spacing:0.08em;">ONE SELECT — STRATEGIC TALENT SOLUTIONS</p>
       </div>
     `
 
-    const { ok: emailSent } = await sendEmail(resendKey, { from: 'One Select <noreply@oneselect.ai>', to: [email], subject, html: emailHtml }, 'invite-user', email)
+    const { ok: emailSent } = await sendEmail(resendKey, { from: FROM_EMAIL, to: [email], subject, html: emailHtml }, 'invite-user', email)
 
-    // Admin notification
-    await sendEmail(resendKey, {
-      from: 'One Select <noreply@oneselect.ai>',
-      to: ['aditya.tandon1095@gmail.com'],
-      subject: `New ${role} invited — ${company_name || contact_name}`,
-      html: `<p>You have successfully invited <strong>${contact_name}</strong> (${email}) as a <strong>${role}</strong>${company_name ? ` for ${company_name}` : ''}.</p>`,
-    }, 'invite-user-admin', 'aditya.tandon1095@gmail.com')
+    // Admin notification — only fires if ADMIN_NOTIFICATION_EMAIL is configured
+    const adminEmail = Deno.env.get('ADMIN_NOTIFICATION_EMAIL') ?? ''
+    if (adminEmail) {
+      await sendEmail(resendKey, {
+        from: FROM_EMAIL,
+        to: [adminEmail],
+        subject: `New ${role} invited — ${company_name || contact_name}`,
+        html: `<p>You have successfully invited <strong>${contact_name}</strong> (${email}) as a <strong>${role}</strong>${company_name ? ` for ${company_name}` : ''}.</p>`,
+      }, 'invite-user-admin', adminEmail)
+    }
 
     return new Response(
-      JSON.stringify({ success: true, userId, emailSent, tempPassword }),
+      JSON.stringify({ success: true, userId, emailSent }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
 

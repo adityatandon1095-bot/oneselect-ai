@@ -121,8 +121,12 @@ export function AuthProvider({ children }) {
     await supabase.auth.signOut({ scope: 'global' })
   }
 
+  // For client portal: use parent client's ID if this user is a stakeholder
+  const effectiveClientId = profile?.stakeholder_of ?? user?.id ?? null
+  const isStakeholder = !!profile?.stakeholder_of
+
   return (
-    <AuthContext.Provider value={{ user, profile, profileLoading, loading, signOut }}>
+    <AuthContext.Provider value={{ user, profile, profileLoading, loading, signOut, effectiveClientId, isStakeholder }}>
       {children}
     </AuthContext.Provider>
   )

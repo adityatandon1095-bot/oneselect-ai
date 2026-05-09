@@ -22,6 +22,7 @@ export default function CandidateProfile() {
   const [githubUrl,    setGithubUrl]    = useState('')
   const [portfolioUrl, setPortfolioUrl] = useState('')
   const [summary,      setSummary]      = useState('')
+  const [highlights,   setHighlights]   = useState([])
   const [visibility,   setVisibility]   = useState('all')
   const [saving,       setSaving]       = useState(false)
   const [saved,        setSaved]        = useState(false)
@@ -51,6 +52,7 @@ export default function CandidateProfile() {
       setGithubUrl(pool.github_url ?? '')
       setPortfolioUrl(pool.portfolio_url ?? '')
       setSummary(pool.summary ?? '')
+      setHighlights(pool.highlights ?? [])
       setVisibility(pool.visibility ?? 'all')
     }
     setLoading(false)
@@ -104,7 +106,14 @@ Return only the summary text, no labels or formatting.`
 
   const handleFileChange = useCallback((e) => {
     const f = e.target.files[0]
-    if (f && isSupported(f)) setCvFile(f)
+    if (f && isSupported(f)) {
+      if (f.size > 5 * 1024 * 1024) {
+        setError('CV must be under 5 MB. Please compress your file and try again.')
+      } else {
+        setError('')
+        setCvFile(f)
+      }
+    }
     e.target.value = ''
   }, [])
 
@@ -224,6 +233,20 @@ Return only the summary text, no labels or formatting.`
             />
           </div>
         </div>
+
+        {highlights.length > 0 && (
+          <div className="section-card" style={{ marginBottom: 20 }}>
+            <div className="section-card-head"><h3>Profile Highlights</h3></div>
+            <div style={{ padding: '12px 20px 16px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {highlights.map((h, i) => (
+                <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 13, color: 'var(--text-2)', lineHeight: 1.6 }}>
+                  <span style={{ color: 'var(--accent)', flexShrink: 0, marginTop: 2 }}>✦</span>
+                  <span>{h}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="section-card" style={{ marginBottom: 20 }}>
           <div className="section-card-head"><h3>Update CV</h3></div>

@@ -1,10 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+import { corsHeaders } from "../_shared/cors.ts"
 
 const RATE_LIMIT    = 30     // max requests
 const WINDOW_MS     = 60_000 // per 60 seconds
@@ -29,9 +25,8 @@ async function checkRateLimit(adminClient: ReturnType<typeof createClient>, user
   })
 
   if (error) {
-    // If the RPC doesn't exist yet (migration not applied) fall through and allow.
-    console.warn('rate_limit rpc error (allowing request):', error.message)
-    return true
+    console.error('[call-claude] rate_limit rpc error (blocking request):', error.message)
+    return false
   }
   return data === true
 }

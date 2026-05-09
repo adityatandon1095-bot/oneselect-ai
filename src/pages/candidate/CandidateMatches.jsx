@@ -46,7 +46,7 @@ export default function CandidateMatches() {
     if (pool) {
       const { data: matchData } = await supabase
         .from('job_matches')
-        .select('*, jobs(id, title, experience_years, required_skills, description), video_urls, scores, interview_transcript')
+        .select('*, jobs(id, title, experience_years, required_skills, description, show_company_name, profiles(company_name)), video_urls, scores, interview_transcript')
         .eq('talent_id', pool.id)
         .order('match_score', { ascending: false })
       setMatches(matchData ?? [])
@@ -120,7 +120,11 @@ export default function CandidateMatches() {
                   <div style={{ flex: 1 }}>
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 6 }}>
                       <span style={{ fontFamily: 'var(--font-head)', fontSize: 17 }}>{m.jobs?.title ?? 'Confidential Role'}</span>
-                      <span style={{ fontSize: 12, color: 'var(--text-3)' }}>· Confidential Company</span>
+                      <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
+                        {m.jobs?.show_company_name !== false && m.jobs?.profiles?.company_name
+                          ? `· ${m.jobs.profiles.company_name}`
+                          : '· Confidential Company'}
+                      </span>
                     </div>
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
                       <span style={{ fontSize: 12, color: 'var(--text-2)' }}>{m.jobs?.experience_years ?? '?'}+ years required</span>
@@ -180,6 +184,23 @@ export default function CandidateMatches() {
                       <div>
                         <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-3)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Best Answer</div>
                         <div style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.7, borderLeft: '2px solid var(--accent)', paddingLeft: 10 }}>"{m.scores.bestAnswer}"</div>
+                      </div>
+                    )}
+
+                    {/* Interview transcript */}
+                    {Array.isArray(m.interview_transcript) && m.interview_transcript.length > 0 && (
+                      <div>
+                        <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-3)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Interview Transcript</div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          {m.interview_transcript.filter(t => t.role !== 'system').map((t, i) => (
+                            <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                              <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: t.role === 'assistant' ? 'var(--accent)' : 'var(--text-3)', flexShrink: 0, width: 52, paddingTop: 2 }}>
+                                {t.role === 'assistant' ? 'INTERVIEWER' : 'YOU'}
+                              </span>
+                              <div style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.6, flex: 1 }}>{t.content}</div>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     )}
 

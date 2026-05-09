@@ -112,12 +112,11 @@ export default function RecruiterJobs() {
     if (!job) return
     supabase.functions.invoke('source-linkedin-candidates', {
       body: {
-        job_id:           job.id,
-        job_title:        job.title,
-        job_description:  job.description ?? '',
-        skills:           job.required_skills ?? [],
-        location:         'India',
-        experience_level: job.experience_years ? `${job.experience_years}+ years` : '',
+        job_id:          job.id,
+        job_title:       job.title,
+        job_description: job.description ?? '',
+        skills:          job.required_skills ?? [],
+        location:        job.location ?? '',
       },
     }).catch(() => {})
   }
@@ -361,7 +360,7 @@ export default function RecruiterJobs() {
                 const rq    = reqStatus(cands)
                 const ps    = poolStatus[j.id]
                 return (
-                  <div key={j.id} className="table-row">
+                  <div key={j.id} className="table-row" style={{ cursor: 'pointer' }} onClick={() => navigate(`/recruiter/candidates?job=${j.id}`)}>
                     <div className="col-main">
                       <div className="col-name">
                         {j.job_code && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-3)', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 'var(--r)', padding: '1px 6px', marginRight: 7, letterSpacing: '0.04em' }}>{j.job_code}</span>}
@@ -403,13 +402,13 @@ export default function RecruiterJobs() {
                       <button
                         className="btn btn-secondary"
                         style={{ fontSize: 10, padding: '3px 8px' }}
-                        onClick={() => navigate(`/recruiter/candidates?job=${j.id}`)}
+                        onClick={e => { e.stopPropagation(); navigate(`/recruiter/candidates?job=${j.id}`) }}
                       >Pipeline</button>
                       <button
                         className="btn btn-secondary"
                         style={{ fontSize: 10, padding: '3px 8px', color: 'var(--red)' }}
                         disabled={closing === j.id}
-                        onClick={() => toggleStatus(j)}
+                        onClick={e => { e.stopPropagation(); toggleStatus(j) }}
                       >{closing === j.id ? '…' : 'Close'}</button>
                     </div>
                   </div>
@@ -426,7 +425,7 @@ export default function RecruiterJobs() {
                 <span className="badge badge-amber">{filtered.filter(j => j.status !== 'active').length}</span>
               </div>
               {filtered.filter(j => j.status !== 'active').map(j => (
-                <div key={j.id} className="table-row" style={{ opacity: 0.65 }}>
+                <div key={j.id} className="table-row" style={{ opacity: 0.65, cursor: 'pointer' }} onClick={() => navigate(`/recruiter/candidates?job=${j.id}`)}>
                   <div className="col-main">
                     <div className="col-name">{j.title}</div>
                     <div className="col-sub">{j.profiles?.company_name ?? j.profiles?.email ?? '—'} · {j.experience_years ?? 0}+ yrs</div>
@@ -437,7 +436,7 @@ export default function RecruiterJobs() {
                       className="btn btn-secondary"
                       style={{ fontSize: 10, padding: '3px 8px', color: 'var(--green)' }}
                       disabled={closing === j.id}
-                      onClick={() => toggleStatus(j)}
+                      onClick={e => { e.stopPropagation(); toggleStatus(j) }}
                     >{closing === j.id ? '…' : 'Reopen'}</button>
                   </div>
                 </div>

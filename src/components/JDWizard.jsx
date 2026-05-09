@@ -111,6 +111,7 @@ export default function JDWizard({ onClose, onSave, showAssign = false, recruite
   const [compMode,      setCompMode]      = useState(d?.compMode ?? 'ai')
   const [compMin,       setCompMin]       = useState(d?.compMin ?? '')
   const [compMax,       setCompMax]       = useState(d?.compMax ?? '')
+  const [showCompanyName, setShowCompanyName] = useState(true)
   const [compRec,       setCompRec]       = useState('')
   const [compRecLoaded, setCompRecLoaded] = useState(false)
 
@@ -275,6 +276,7 @@ export default function JDWizard({ onClose, onSave, showAssign = false, recruite
       comp_max:             compMode === 'manual' && compMax ? parseInt(compMax, 10) : null,
       tech_weight:          60,
       comm_weight:          40,
+      show_company_name:    showCompanyName,
       assigned_to:          assignedTo || null,
       interview_questions:  iqFormatted,
     })
@@ -753,6 +755,27 @@ export default function JDWizard({ onClose, onSave, showAssign = false, recruite
             <p style={S.sub}>
               Assign this requisition to a recruiter. They will see it on their dashboard and can immediately begin sourcing candidates.
             </p>
+
+            <div style={{ marginBottom: 16, padding: '12px 16px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)' }}>Show company name to candidates</div>
+                <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2 }}>When off, candidates see "Confidential Company" on the job listing</div>
+              </div>
+              <button
+                onClick={() => setShowCompanyName(v => !v)}
+                style={{
+                  width: 40, height: 22, borderRadius: 11, border: 'none', cursor: 'pointer', flexShrink: 0,
+                  background: showCompanyName ? 'var(--accent)' : 'var(--border)',
+                  position: 'relative', transition: 'background 0.2s',
+                }}
+              >
+                <span style={{
+                  position: 'absolute', top: 3, left: showCompanyName ? 20 : 3,
+                  width: 16, height: 16, borderRadius: '50%', background: 'white',
+                  transition: 'left 0.2s',
+                }} />
+              </button>
+            </div>
 
             {recruiters.length === 0 ? (
               <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: 20, fontSize: 13, color: 'var(--text-3)', textAlign: 'center' }}>

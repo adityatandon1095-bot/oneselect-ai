@@ -190,7 +190,7 @@ export default function AdminClients() {
           first_login:   true,
         }).eq('id', result.userId)
       }
-      setInvResult({ email: inv.invEmail.trim().toLowerCase(), password: result.tempPassword, emailSent: result.emailSent })
+      setInvResult({ email: inv.invEmail.trim().toLowerCase(), emailSent: result.emailSent })
       clearInv()
       setShowInvite(false)
       await load()
@@ -204,7 +204,7 @@ export default function AdminClients() {
   function copyDetails() {
     if (!invResult) return
     navigator.clipboard.writeText(
-      `Portal: https://oneselect-ai-t6uo-phi.vercel.app\nEmail: ${invResult.email}\nPassword: ${invResult.password}`
+      `Portal: https://oneselect-ai-t6uo-phi.vercel.app\nEmail: ${invResult.email}\nNote: A one-time login link was sent to their email.`
     ).catch(() => {})
   }
 
@@ -626,9 +626,8 @@ export default function AdminClients() {
                     <span style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--font-mono)', width: 72, flexShrink: 0 }}>Email</span>
                     <span style={{ fontSize: 13, color: 'var(--text)', fontFamily: 'var(--font-mono)' }}>{invResult.email}</span>
                   </div>
-                  <div style={{ display: 'flex', gap: 12, alignItems: 'baseline' }}>
-                    <span style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--font-mono)', width: 72, flexShrink: 0 }}>Password</span>
-                    <span style={{ fontSize: 24, color: 'var(--accent)', fontFamily: 'var(--font-mono)', fontWeight: 700, letterSpacing: '0.15em' }}>{invResult.password}</span>
+                  <div style={{ fontSize: 12, color: 'var(--text-3)', lineHeight: 1.6 }}>
+                    A one-time login link has been sent to their email. They will set their own password after first login.
                   </div>
                 </div>
               </div>

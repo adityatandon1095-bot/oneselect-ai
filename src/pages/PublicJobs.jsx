@@ -71,6 +71,11 @@ function ApplyModal({ job, onClose }) {
 
   async function handleFile(file) {
     if (!file || !isSupported(file.name)) return
+    if (file.size > 5 * 1024 * 1024) {
+      setErrMsg('CV must be under 5 MB. Please compress your file and try again.')
+      return
+    }
+    setErrMsg('')
     setCvFile(file)
     setUseText(false)
   }
@@ -91,33 +96,38 @@ function ApplyModal({ job, onClose }) {
 
       const rawText = content.kind === 'text' ? content.text : ''
 
-      const { error } = await supabase.from('candidates').insert({
-        job_id:       job.id,
-        full_name:    form.name.trim(),
-        email:        form.email.trim(),
-        phone:        form.phone.trim() || '',
-        raw_text:     rawText,
-        linkedin_url: form.linkedin_url.trim() || null,
-        github_url:   form.github_url.trim() || null,
-        source:       'applied',
-      })
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/public-apply`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY },
+          body: JSON.stringify({
+            job_id:       job.id,
+            full_name:    form.name.trim(),
+            email:        form.email.trim(),
+            phone:        form.phone.trim() || '',
+            raw_text:     rawText,
+            linkedin_url: form.linkedin_url.trim() || null,
+            github_url:   form.github_url.trim() || null,
+            job_title:    job.title,
+          }),
+        }
+      )
+      const result = await res.json()
 
-      if (error) {
-        // Catch duplicate application (unique index violation)
-        if (error.code === '23505' || error.message?.includes('candidates_public_apply_unique')) {
+      if (!res.ok) {
+        if (res.status === 409 || result.error === 'duplicate') {
           setErrMsg('You have already applied for this position. Check your email for your confirmation.')
           setStep('error')
           return
         }
-        throw new Error(error.message)
+        if (res.status === 429) {
+          setErrMsg('Too many applications from this location. Please try again in an hour.')
+          setStep('error')
+          return
+        }
+        throw new Error(result.error ?? 'Submission failed')
       }
-
-      // Fire-and-forget confirmation email
-      fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/notify-candidate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY },
-        body: JSON.stringify({ type: 'application_received', candidateEmail: form.email.trim(), candidateName: form.name.trim(), jobTitle: job.title }),
-      }).catch(() => {})
 
       setStep('done')
     } catch (err) {

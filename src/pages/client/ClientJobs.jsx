@@ -4,6 +4,7 @@ import { useAuth } from '../../lib/AuthContext'
 import { usePlan } from '../../hooks/usePlan'
 import { TRIAL_LIMITS } from '../../config/trialLimits'
 import PaidFeature from '../../components/PaidFeature'
+import TrialNudgeBanner from '../../components/TrialNudgeBanner'
 import { CURRENCIES, DEFAULT_CURRENCY, fmtSalary } from '../../utils/currency'
 import { triggerTalentPoolMatch } from '../../utils/talentPool'
 import TagInput from '../../components/TagInput'
@@ -315,7 +316,7 @@ function JobDetail({ job: initialJob, onBack, onUpdate }) {
 }
 
 export default function ClientJobs() {
-  const { user } = useAuth()
+  const { user, effectiveClientId, isStakeholder } = useAuth()
   const { isTrial } = usePlan()
   const [jobs, setJobs] = useState([])
   const [loading, setLoading] = useState(true)
@@ -332,7 +333,7 @@ export default function ClientJobs() {
   useEffect(() => { if (user) load() }, [user])
 
   async function load() {
-    const { data } = await supabase.from('jobs').select('*, candidates(count)').eq('recruiter_id', user.id).order('created_at', { ascending: false })
+    const { data } = await supabase.from('jobs').select('*, candidates(count)').eq('recruiter_id', effectiveClientId).order('created_at', { ascending: false })
     setJobs(data ?? [])
     setLoading(false)
   }
@@ -344,7 +345,7 @@ export default function ClientJobs() {
     e.preventDefault()
     setError('')
     if (isTrial && jobs.length >= TRIAL_LIMITS.max_jobs) {
-      setError(`Trial accounts can post ${TRIAL_LIMITS.max_jobs} job. Upgrade to post unlimited jobs.`)
+      setError(`Trial accounts can post up to ${TRIAL_LIMITS.max_jobs} jobs. Upgrade to post unlimited jobs.`)
       return
     }
     setSaving(true)
@@ -378,7 +379,7 @@ export default function ClientJobs() {
     setShowInstant(false)
     setError('')
     if (isTrial && jobs.length >= TRIAL_LIMITS.max_jobs) {
-      setError(`Trial accounts can post ${TRIAL_LIMITS.max_jobs} job. Upgrade to post unlimited jobs.`)
+      setError(`Trial accounts can post up to ${TRIAL_LIMITS.max_jobs} jobs. Upgrade to post unlimited jobs.`)
       return
     }
     const { data, error: err } = await supabase.from('jobs').insert({
@@ -404,7 +405,7 @@ export default function ClientJobs() {
     setShowWizard(false)
     setError('')
     if (isTrial && jobs.length >= TRIAL_LIMITS.max_jobs) {
-      setError(`Trial accounts can post ${TRIAL_LIMITS.max_jobs} job. Upgrade to post unlimited jobs.`)
+      setError(`Trial accounts can post up to ${TRIAL_LIMITS.max_jobs} jobs. Upgrade to post unlimited jobs.`)
       return
     }
     const { data, error: err } = await supabase.from('jobs').insert({
@@ -453,22 +454,25 @@ export default function ClientJobs() {
 
   return (
     <div className="page">
+      <TrialNudgeBanner />
       <div className="page-head">
         <div>
           <h2>My Jobs</h2>
           <p>{activeJobs.length} active · {closedJobs.length} closed</p>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn btn-secondary" onClick={() => { setShowForm(!showForm); setError('') }}>
-            {showForm ? 'Cancel' : '+ Quick Add'}
-          </button>
-          <button className="btn btn-secondary" onClick={() => { setShowWizard(true); setShowForm(false) }}>
-            Step-by-step
-          </button>
-          <button className="btn btn-primary" onClick={() => { setShowInstant(true); setShowForm(false) }}>
-            ✨ Post a Job
-          </button>
-        </div>
+        {!isStakeholder && (
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-secondary" onClick={() => { setShowForm(!showForm); setError('') }}>
+              {showForm ? 'Cancel' : '+ Quick Add'}
+            </button>
+            <button className="btn btn-secondary" onClick={() => { setShowWizard(true); setShowForm(false) }}>
+              Step-by-step
+            </button>
+            <button className="btn btn-primary" onClick={() => { setShowInstant(true); setShowForm(false) }}>
+              ✨ Post a Job
+            </button>
+          </div>
+        )}
       </div>
 
       {error && <div className="error-banner" style={{ marginBottom: 16 }}>{error}</div>}

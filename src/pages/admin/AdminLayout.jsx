@@ -9,6 +9,7 @@ const NAV = [
   { to: '/admin/jobs',        label: 'Jobs',            icon: '◫' },
   { to: '/admin/talent-pool',    label: 'Talent Pool',     icon: '◌' },
   { to: '/admin/linkedin-pool',  label: 'LinkedIn Pool',   icon: '◆' },
+  { to: '/admin/talent-crm',     label: 'Talent CRM',      icon: '◴' },
   { to: '/admin/sourcing',       label: 'Sourcing',        icon: '◍' },
   { to: '/admin/pipeline',    label: 'Pipeline',        icon: '◐' },
   { to: '/admin/board',       label: 'Pipeline Board',  icon: '▦'  },

@@ -25,7 +25,7 @@ export default function AdminLinkedInPool() {
         .order('created_at', { ascending: false }),
       supabase
         .from('jobs')
-        .select('id, title, client_name')
+        .select('id, title, profiles(company_name)')
         .eq('status', 'active')
         .order('created_at', { ascending: false }),
     ])
@@ -201,7 +201,7 @@ export default function AdminLinkedInPool() {
                 <option value="">— choose a job —</option>
                 {jobs.map(j => (
                   <option key={j.id} value={j.id}>
-                    {j.title}{j.client_name ? ` · ${j.client_name}` : ''}
+                    {j.title}{j.profiles?.company_name ? ` · ${j.profiles.company_name}` : ''}
                   </option>
                 ))}
               </select>

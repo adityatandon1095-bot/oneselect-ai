@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../../lib/AuthContext'
 import { supabase } from '../../lib/supabase'
 import TwoFactorSection from '../../components/TwoFactorSection'
+import DemoLoader from '../../components/DemoLoader'
 
 const EMPTY_PLAN = { name: '', description: '', price_monthly: '', max_jobs: '', max_candidates: '', max_recruiters: '' }
 
@@ -17,7 +18,6 @@ export default function AdminSettings() {
   // ── Integrations ──────────────────────────────────────────────────────────
   const [linkedinEnabled,      setLinkedinEnabled]     = useState(true)
   const [linkedinMaxProfiles,  setLinkedinMaxProfiles] = useState(20)
-  const [netrowsKey,           setNetrowsKey]          = useState('')
   const [integrationsSaving,   setIntegrationsSaving]  = useState(false)
   const [integrationsSaved,    setIntegrationsSaved]   = useState(false)
   const [sourcingStats,        setSourcingStats]       = useState({ total: 0, inPipeline: 0, talentPool: 0, runsThisMonth: 0 })
@@ -57,17 +57,10 @@ export default function AdminSettings() {
 
   async function saveIntegrationSettings() {
     setIntegrationsSaving(true)
-    const upserts = [
+    await Promise.all([
       supabase.from('platform_settings').upsert({ key: 'linkedin_sourcing_enabled', value: String(linkedinEnabled), updated_at: new Date().toISOString() }, { onConflict: 'key' }),
       supabase.from('platform_settings').upsert({ key: 'linkedin_max_profiles', value: String(linkedinMaxProfiles), updated_at: new Date().toISOString() }, { onConflict: 'key' }),
-    ]
-    if (netrowsKey.trim()) {
-      upserts.push(
-        supabase.from('platform_settings').upsert({ key: 'netrows_api_key', value: netrowsKey.trim(), updated_at: new Date().toISOString() }, { onConflict: 'key' })
-      )
-    }
-    await Promise.all(upserts)
-    setNetrowsKey('')
+    ])
     setIntegrationsSaving(false)
     setIntegrationsSaved(true)
     setTimeout(() => setIntegrationsSaved(false), 3000)
@@ -259,22 +252,11 @@ export default function AdminSettings() {
           <div style={{ marginBottom: 20 }}>
             <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)', marginBottom: 4 }}>LinkedIn Sourcing</div>
             <div style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 16 }}>
-              Automatically search LinkedIn for matching Indian candidates when a job is created, using the Netrows API.
+              Automatically search LinkedIn for matching candidates when a job is created, powered by Apify.
+              The API token is configured in Supabase Edge Function secrets — no key entry needed here.
             </div>
 
             <div className="form-grid">
-              <div className="field span-2">
-                <label>Netrows API Key
-                  <span style={{ fontWeight: 300, color: 'var(--text-3)', marginLeft: 6 }}>(write-only — never displayed)</span>
-                </label>
-                <input
-                  type="password"
-                  placeholder="Enter new key to update…"
-                  value={netrowsKey}
-                  onChange={e => setNetrowsKey(e.target.value)}
-                  autoComplete="new-password"
-                />
-              </div>
               <div className="field">
                 <label>Max Profiles per Job</label>
                 <input
@@ -368,6 +350,17 @@ export default function AdminSettings() {
           )}
         </div>
       </div>
+
+      {/* Demo Mode */}
+      {import.meta.env.VITE_DEMO_MODE === 'true' && (
+        <div className="section-card" style={{ marginBottom: 16, border: '1px solid var(--amber, #f59e0b)', background: 'rgba(245,158,11,0.04)' }}>
+          <div className="section-card-head">
+            <h3 style={{ color: 'var(--amber, #f59e0b)' }}>Demo Mode</h3>
+            <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--amber, #f59e0b)', letterSpacing: '0.08em', padding: '2px 8px', border: '1px solid var(--amber, #f59e0b)', borderRadius: 2 }}>DEMO ENV</span>
+          </div>
+          <DemoLoader />
+        </div>
+      )}
 
       <TwoFactorSection />
 

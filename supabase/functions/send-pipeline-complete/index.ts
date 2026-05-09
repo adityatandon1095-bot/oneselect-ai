@@ -1,9 +1,6 @@
+import { FROM_EMAIL } from "../_shared/email.ts"
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+import { corsHeaders } from "../_shared/cors.ts"
 
 async function sendEmail(resendKey: string, payload: Record<string, unknown>, fnName: string, recipient: string) {
   const call = () => fetch('https://api.resend.com/emails', {
@@ -126,7 +123,7 @@ serve(async (req) => {
     `
 
     const { ok: sent, data: emailResult } = await sendEmail(resendKey, {
-      from:    'One Select <noreply@oneselect.co.uk>',
+      from:    FROM_EMAIL,
       to:      [clientEmail],
       subject: `Pipeline complete: ${totalPassed ?? 0} candidate${(totalPassed ?? 0) !== 1 ? 's' : ''} passed for ${jobTitle ?? 'your role'}`,
       html:    body,

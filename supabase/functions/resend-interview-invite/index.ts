@@ -1,10 +1,7 @@
+import { FROM_EMAIL } from "../_shared/email.ts"
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+import { corsHeaders } from "../_shared/cors.ts"
 
 async function sendEmail(resendKey: string, payload: Record<string, unknown>, recipient: string) {
   const call = () => fetch('https://api.resend.com/emails', {
@@ -102,7 +99,7 @@ serve(async (req) => {
     await db.from(table).update({ interview_invite_token: newToken, interview_token_expires_at: expiresAt }).eq('id', record.id)
 
     const { ok } = await sendEmail(resendKey, {
-      from: 'One Select <noreply@oneselect.ai>',
+      from: FROM_EMAIL,
       to:   [record.email],
       subject: `Your new interview link — ${record.job_title}`,
       html: `

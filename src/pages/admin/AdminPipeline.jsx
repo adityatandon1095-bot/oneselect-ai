@@ -14,6 +14,7 @@ import { triggerTalentPoolMatch, mapMatchToCandidate } from '../../utils/talentP
 import { logAudit } from '../../utils/audit'
 import TagInput from '../../components/TagInput'
 import VideoPlayer from '../../components/VideoPlayer'
+import AIScoreFeedback from '../../components/AIScoreFeedback'
 
 const stripRawText = (k, v) => k === 'raw_text' ? undefined : v
 
@@ -581,6 +582,16 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
 
       const table = candidate._fromPool ? 'job_matches' : 'candidates'
       await supabase.from(table).update({ offer_status: 'sent' }).eq('id', candidate.id)
+
+      logAudit(supabase, {
+        actorId:    user?.id,
+        actorRole:  profile?.user_role ?? 'recruiter',
+        action:     'offer_sent',
+        entityType: 'candidate',
+        entityId:   candidate.id,
+        jobId:      activeJob?.id ?? null,
+        metadata:   { candidate_name: candidate.full_name, candidate_email: candidate.email, job_title: activeJob?.title },
+      })
 
       setOfferModal(m => ({ ...m, sending: false, sent: true }))
       addLog(`📄 Offer letter sent to ${candidate.email}`, 'ok')
@@ -1309,7 +1320,12 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
                 </div>
                 <div className="c-score">
                   {c._status === 'screening' && <span className="spinner" />}
-                  {c.match_score != null && <ScoreRing score={c.match_score} size={42} />}
+                  {c.match_score != null && (
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                      <ScoreRing score={c.match_score} size={42} />
+                      <AIScoreFeedback candidateId={c.id} jobId={activeJob?.id} score={c.match_score} />
+                    </div>
+                  )}
                   {c.match_rank && <span className={`badge ${c.match_rank === 'top10' ? 'badge-blue' : c.match_rank === 'strong' ? 'badge-green' : c.match_rank === 'moderate' ? 'badge-amber' : 'badge-red'}`}>{c.match_rank}</span>}
                   {c.match_pass != null && <span className={`badge ${c.match_pass ? 'badge-green' : 'badge-red'}`}>{c.match_pass ? 'Pass' : 'Fail'}</span>}
                   {outreachBadge(c.id)}
@@ -1330,6 +1346,11 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
               </div>
             ))}
           </div>
+          {screenedCount > 0 && (
+            <div style={{ padding: '10px 16px', borderTop: '1px solid var(--border)', fontSize: 11, color: 'var(--text-3)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>Scores not matching your judgment? Use the 👍 👎 buttons above to give feedback and help us improve.</span>
+            </div>
+          )}
         </div>
       )}
 

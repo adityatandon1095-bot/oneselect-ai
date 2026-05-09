@@ -1,10 +1,7 @@
+import { FROM_EMAIL } from "../_shared/email.ts"
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { PDFDocument, rgb, StandardFonts } from 'https://esm.sh/pdf-lib@1.17.1'
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+import { corsHeaders } from "../_shared/cors.ts"
 
 async function sendEmail(resendKey: string, payload: Record<string, unknown>, fnName: string, recipient: string) {
   const call = () => fetch('https://api.resend.com/emails', {
@@ -53,7 +50,8 @@ function wrapText(text: string, maxChars: number): string[] {
 
 async function buildPdf(letterText: string, candidateName: string, jobTitle: string): Promise<Uint8Array> {
   const doc = await PDFDocument.create()
-  const page = doc.addPage([595, 842]) // A4
+  let currentPage = doc.addPage([595, 842]) // A4
+  const page = currentPage // keep ref for footer
   const { width, height } = page.getSize()
 
   const fontReg  = await doc.embedFont(StandardFonts.TimesRoman)
@@ -86,9 +84,10 @@ async function buildPdf(letterText: string, candidateName: string, jobTitle: str
     for (const line of lines) {
       if (y < 80) {
         const newPage = doc.addPage([595, 842])
+        currentPage = newPage
         y = newPage.getSize().height - 60
       }
-      page.drawText(line, { x: 56, y, size: 11, font: fontReg, color: dark, lineHeight: 16 })
+      currentPage.drawText(line, { x: 56, y, size: 11, font: fontReg, color: dark, lineHeight: 16 })
       y -= 16
     }
     y -= 10
@@ -98,7 +97,7 @@ async function buildPdf(letterText: string, candidateName: string, jobTitle: str
   y = 50
   page.drawLine({ start: { x: 56, y }, end: { x: width - 56, y }, thickness: 0.5, color: gold })
   y -= 14
-  page.drawText('One Select · Strategic Talent Solutions · noreply@oneselect.ai', {
+  page.drawText('One Select · Strategic Talent Solutions · noreply@oneselect.co.uk', {
     x: 56, y, size: 8, font: fontReg, color: grey,
   })
 
@@ -140,7 +139,7 @@ serve(async (req) => {
     `
 
     const { ok: emailSent } = await sendEmail(resendKey, {
-      from: 'One Select <noreply@oneselect.ai>',
+      from: FROM_EMAIL,
       to: [candidate_email],
       subject: `Offer Letter — ${job_title}`,
       html,

@@ -3,8 +3,6 @@ import { useLocation } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../lib/AuthContext'
 import { usePlan } from '../../hooks/usePlan'
-import { TRIAL_LIMITS } from '../../config/trialLimits'
-import PaidFeature from '../../components/PaidFeature'
 import { downloadCsv, candidateRows } from '../../utils/exportCsv'
 import { logAudit } from '../../utils/audit'
 
@@ -374,8 +372,8 @@ function CandidateProfile({ candidate, onBack, onWatch, onViewCV, onOffer, onDec
 }
 
 export default function ClientCandidates() {
-  const { user } = useAuth()
-  const { isTrial, canAccess } = usePlan()
+  const { user, effectiveClientId, isStakeholder } = useAuth()
+  const { isTrial } = usePlan()
   const location = useLocation()
   const [jobs, setJobs] = useState([])
   const [candidates, setCandidates] = useState([])
@@ -393,23 +391,28 @@ export default function ClientCandidates() {
   const [compareIds, setCompareIds] = useState([])
   const [showCompare, setShowCompare] = useState(false)
   const [approvePrompt, setApprovePrompt] = useState(null)
-  const jobIdsRef = useRef([])
+  const jobIdsRef    = useRef([])
+  const channelRef   = useRef(null)
+
+  function subscribeToJobs(ids) {
+    if (channelRef.current) supabase.removeChannel(channelRef.current)
+    if (!ids.length) return
+    const filter = `job_id=in.(${ids.join(',')})`
+    channelRef.current = supabase
+      .channel('client-candidates-live')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'candidates', filter }, ({ new: row }) => {
+        setCandidates(prev => prev.map(c => c.id === row.id ? { ...c, ...row } : c))
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'candidates', filter }, ({ new: row }) => {
+        setCandidates(prev => prev.some(c => c.id === row.id) ? prev : [...prev, row])
+      })
+      .subscribe()
+  }
 
   useEffect(() => {
     if (!user) return
     load()
-    const channel = supabase
-      .channel('client-candidates-live')
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'candidates' }, ({ new: row }) => {
-        if (jobIdsRef.current.includes(row.job_id))
-          setCandidates(prev => prev.map(c => c.id === row.id ? { ...c, ...row } : c))
-      })
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'candidates' }, ({ new: row }) => {
-        if (jobIdsRef.current.includes(row.job_id))
-          setCandidates(prev => prev.some(c => c.id === row.id) ? prev : [...prev, row])
-      })
-      .subscribe()
-    return () => supabase.removeChannel(channel)
+    return () => { if (channelRef.current) supabase.removeChannel(channelRef.current) }
   }, [user])
 
   useEffect(() => {
@@ -419,10 +422,11 @@ export default function ClientCandidates() {
   }, [location.search])
 
   async function load() {
-    const { data: jobData } = await supabase.from('jobs').select('id, title').eq('recruiter_id', user.id)
+    const { data: jobData } = await supabase.from('jobs').select('id, title').eq('recruiter_id', effectiveClientId)
     const ids = (jobData ?? []).map(j => j.id)
     jobIdsRef.current = ids
     setJobs(jobData ?? [])
+    subscribeToJobs(ids)
     if (!ids.length) { setLoading(false); return }
 
     const { data: cData } = await supabase
@@ -525,9 +529,8 @@ export default function ClientCandidates() {
     return words.every(w => hay.includes(w))
   })
   const tabFilteredAll = searchActive.filter(c => tab === 'All' || getStatus(c) === tab)
-  const trialCap = isTrial && !canAccess('can_view_full_candidate_profile')
-  const tabFiltered    = trialCap ? tabFilteredAll.slice(0, TRIAL_LIMITS.max_candidates_visible) : tabFilteredAll
-  const trialHidden    = trialCap ? Math.max(0, tabFilteredAll.length - TRIAL_LIMITS.max_candidates_visible) : 0
+  const tabFiltered = tabFilteredAll
+  const trialHidden = 0
 
   const counts = {
     'All': searchActive.length,
@@ -543,16 +546,6 @@ export default function ClientCandidates() {
   if (loading) return <div className="page"><span className="spinner" /></div>
 
   if (selected) {
-    if (!canAccess('can_view_full_candidate_profile')) {
-      return (
-        <div className="page">
-          <button className="btn btn-secondary" style={{ marginBottom: 20 }} onClick={() => setSelectedId(null)}>← Back to list</button>
-          <PaidFeature feature="can_view_full_candidate_profile">
-            <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-3)' }}>Full profile</div>
-          </PaidFeature>
-        </div>
-      )
-    }
     return (
       <div className="page">
         <CandidateProfile
@@ -794,7 +787,7 @@ export default function ClientCandidates() {
                       ⏱ {d}d
                     </span>
                   ) : null })()}
-                  {c.match_pass === true && c.client_approved === null && (
+                  {c.match_pass === true && c.client_approved === null && !isStakeholder && (
                     approvePrompt?.id === c.id
                       ? (
                         <div onClick={e => e.stopPropagation()} style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -858,33 +851,6 @@ export default function ClientCandidates() {
               </div>
             )
           })
-        )}
-        {trialHidden > 0 && (
-          <>
-            {[...Array(Math.min(trialHidden, 3))].map((_, i) => (
-              <div key={`locked-${i}`} style={{ filter: 'blur(3px)', pointerEvents: 'none', userSelect: 'none', opacity: 0.35 }} className="table-row">
-                <div className="col-main">
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <div className="profile-avatar" style={{ width: 34, height: 34, fontSize: 14, borderRadius: 'var(--r)', flexShrink: 0, background: 'var(--surface2)' }}>?</div>
-                    <div>
-                      <div className="col-name">Candidate {TRIAL_LIMITS.max_candidates_visible + i + 1}</div>
-                      <div className="col-sub">Hidden · Upgrade to view</div>
-                    </div>
-                  </div>
-                </div>
-                <div className="col-right">
-                  <span className="badge badge-amber">Interview Done</span>
-                  <span className="mono" style={{ fontSize: 13, fontWeight: 700, color: 'var(--green)' }}>87</span>
-                </div>
-              </div>
-            ))}
-            <div style={{ padding: '14px 20px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--surface)' }}>
-              <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
-                🔒 {trialHidden} more candidate{trialHidden !== 1 ? 's' : ''} hidden on trial
-              </span>
-              <a href="mailto:hello@oneselect.co.uk" style={{ fontSize: 12, color: 'var(--accent)', fontFamily: 'var(--font-mono)', textDecoration: 'none' }}>Upgrade to see all →</a>
-            </div>
-          </>
         )}
       </div>
 

@@ -1,10 +1,7 @@
+import { FROM_EMAIL } from "../_shared/email.ts"
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+import { corsHeaders } from "../_shared/cors.ts"
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
@@ -50,7 +47,7 @@ serve(async (req) => {
   for (const [, { email, name, company, candidates }] of byRecruiter) {
     const list = candidates.map(c => `• ${c.name} — ${c.job}`).join('\n')
     const payload = {
-      from: 'One Select <noreply@oneselect.co.uk>',
+      from: FROM_EMAIL,
       to: [email],
       subject: `Action required: ${candidates.length} candidate${candidates.length !== 1 ? 's' : ''} awaiting client approval`,
       text: `Hi ${name},\n\nThe following candidate${candidates.length !== 1 ? 's have' : ' has'} been waiting for client approval for more than 48 hours:\n\n${list}\n\nPlease log in and follow up with your client to keep the pipeline moving.\n\nOne Select`,

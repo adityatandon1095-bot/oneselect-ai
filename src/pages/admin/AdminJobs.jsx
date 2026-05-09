@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../lib/AuthContext'
+import { logAudit } from '../../utils/audit'
 import JDWizard from '../../components/JDWizard'
 import { downloadCsv, candidateRows } from '../../utils/exportCsv'
 
@@ -30,6 +32,7 @@ const REQ_CFG = {
 const COL = '2fr 1.5fr 90px 140px 170px 60px 90px 120px'
 
 export default function AdminJobs() {
+  const { user, profile } = useAuth()
   const location   = useLocation()
   const navigate   = useNavigate()
   const clientId   = location.state?.clientId   ?? null
@@ -73,6 +76,15 @@ export default function AdminJobs() {
       ...rest,
     }).select().single()
     if (err) { setError(err.message); return }
+    logAudit(supabase, {
+      actorId:    user?.id,
+      actorRole:  profile?.user_role ?? 'admin',
+      action:     'job_created',
+      entityType: 'job',
+      entityId:   newJob?.id,
+      jobId:      newJob?.id ?? null,
+      metadata:   { title: newJob?.title, recruiter_id: recruiterId },
+    })
     // Fire LinkedIn sourcing in background — never blocks job creation
     if (newJob) {
       supabase.functions.invoke('source-linkedin-candidates', {
@@ -131,6 +143,15 @@ export default function AdminJobs() {
     const next = job.status === 'active' ? 'closed' : 'active'
     await supabase.from('jobs').update({ status: next }).eq('id', job.id)
     setJobs(p => p.map(j => j.id === job.id ? { ...j, status: next } : j))
+    logAudit(supabase, {
+      actorId:    user?.id,
+      actorRole:  profile?.user_role ?? 'admin',
+      action:     next === 'closed' ? 'job_closed' : 'job_reopened',
+      entityType: 'job',
+      entityId:   job.id,
+      jobId:      job.id,
+      metadata:   { title: job.title, new_status: next },
+    })
     setClosing(null)
   }
 

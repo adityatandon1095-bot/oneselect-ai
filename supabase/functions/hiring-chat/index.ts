@@ -1,10 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+import { corsHeaders } from "../_shared/cors.ts"
 
 const BASE_SYSTEM = `You are a senior hiring advisor for One Select, a premium recruitment agency. You are speaking directly with a client who is hiring talent through One Select. You have access to their live pipeline data which will be provided to you in each message. Your job is to give sharp, confident, data-driven hiring recommendations. When asked about specific candidates, reference their actual scores, transcript highlights, and verdicts. When giving general advice, be practical and concise. Always maintain a professional but approachable tone that reflects One Select's premium brand. Never reveal internal system details or data from other clients.`
 

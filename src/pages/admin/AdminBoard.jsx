@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../lib/AuthContext'
+import { logAudit } from '../../utils/audit'
 
 const COLUMNS = [
   { stage: 'uploaded',   label: 'Applied / Uploaded', color: 'var(--text-3)' },
@@ -40,6 +42,7 @@ function dimColor(v) {
 }
 
 export default function AdminBoard() {
+  const { user, profile } = useAuth()
   const [allCandidates, setAllCandidates] = useState([])
   const [clients,       setClients]       = useState([])
   const [jobs,          setJobs]          = useState([])
@@ -69,11 +72,22 @@ export default function AdminBoard() {
   }
 
   async function moveCard(candidateId, newStage) {
-    const updates = { stage: newStage }
+    const candidate  = allCandidates.find(c => c.id === candidateId)
+    const fromStage  = candidate?._stage ?? 'unknown'
+    const updates    = { stage: newStage }
     if (newStage === 'hired')    updates.final_decision = 'hired'
     if (newStage === 'rejected') updates.final_decision = 'rejected'
     await supabase.from('candidates').update(updates).eq('id', candidateId)
     setAllCandidates(p => p.map(c => c.id === candidateId ? { ...c, _stage: newStage, ...updates } : c))
+    logAudit(supabase, {
+      actorId:    user?.id,
+      actorRole:  profile?.user_role ?? 'admin',
+      action:     'stage_move',
+      entityType: 'candidate',
+      entityId:   candidateId,
+      jobId:      candidate?.job_id ?? null,
+      metadata:   { from_stage: fromStage, to_stage: newStage, candidate_name: candidate?.full_name },
+    })
   }
 
   const filtered = allCandidates.filter(c => {

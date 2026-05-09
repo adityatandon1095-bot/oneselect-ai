@@ -1,10 +1,7 @@
+import { FROM_EMAIL } from "../_shared/email.ts"
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+import { corsHeaders } from "../_shared/cors.ts"
 
 async function sendEmail(resendKey: string, payload: Record<string, unknown>, fnName: string, recipient: string) {
   const call = () => fetch('https://api.resend.com/emails', {
@@ -144,7 +141,7 @@ Write 2-3 short paragraphs. Professional but warm. No bullet points. No greeting
       `
 
       await sendEmail(resendKey, {
-        from: 'One Select <noreply@oneselect.ai>',
+        from: FROM_EMAIL,
         to: [client.email],
         subject: `Weekly Hiring Update — ${jobNames}`,
         html,

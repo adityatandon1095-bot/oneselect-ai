@@ -4,7 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../lib/AuthContext'
 
 export default function ClientDashboard() {
-  const { user, profile, profileLoading } = useAuth()
+  const { user, profile, profileLoading, effectiveClientId } = useAuth()
   const navigate = useNavigate()
 
   const [stats, setStats]                   = useState({ jobs: 0, candidates: 0, screened: 0, passed: 0, interviewed: 0 })
@@ -53,7 +53,7 @@ export default function ClientDashboard() {
     const { data: jobs } = await supabase
       .from('jobs')
       .select('id, title, status, created_at')
-      .eq('recruiter_id', user.id)
+      .eq('recruiter_id', effectiveClientId)
       .order('created_at', { ascending: false })
 
     const jobIds = (jobs ?? []).map(j => j.id)

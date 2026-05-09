@@ -124,7 +124,7 @@ function Bar({ value }) {
 }
 
 export default function ClientReports() {
-  const { user } = useAuth()
+  const { user, effectiveClientId } = useAuth()
   const [jobs, setJobs] = useState([])
   const [candidates, setCandidates] = useState([])
   const [pending, setPending] = useState([])
@@ -136,7 +136,7 @@ export default function ClientReports() {
   useEffect(() => { if (user) load() }, [user])
 
   async function load() {
-    const { data: jobData } = await supabase.from('jobs').select('id, title, status').eq('recruiter_id', user.id).order('created_at', { ascending: false })
+    const { data: jobData } = await supabase.from('jobs').select('id, title, status').eq('recruiter_id', effectiveClientId).order('created_at', { ascending: false })
     const ids = (jobData ?? []).map(j => j.id)
     setJobs(jobData ?? [])
     if (!ids.length) { setLoading(false); return }

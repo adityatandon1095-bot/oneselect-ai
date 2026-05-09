@@ -1,12 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+import { corsHeaders } from "../_shared/cors.ts"
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-}
-
-const NETROWS_BASE   = "https://api.netrows.com/api/v1/linkedin"
+const APIFY_RUN_URL  = "https://api.apify.com/v2/acts/harvestapi~linkedin-profile-search/run-sync-get-dataset-items"
 const ANTHROPIC_API  = "https://api.anthropic.com/v1/messages"
 const CLAUDE_MODEL   = "claude-sonnet-4-6"
 
@@ -14,6 +10,63 @@ const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
 )
+
+// ---------- mock data (APIFY_MOCK=true) ----------
+
+function mockProfiles(): Array<Record<string, unknown>> {
+  return [
+    {
+      fullName: "Priya Kapoor",
+      headline: "Senior Product Manager · Fintech & Payments",
+      location: "London, United Kingdom",
+      profileUrl: "https://www.linkedin.com/in/priya-kapoor-mock",
+      currentCompany: "Revolut",
+      skills: ["Product Strategy", "Agile", "SQL", "User Research", "OKRs", "Payments"],
+      summary: "9 years in fintech product. Led launch of Revolut Business accounts in APAC. Strong data-driven background.",
+      profilePicture: null,
+    },
+    {
+      fullName: "James Osei",
+      headline: "Product Manager | B2B SaaS | Data Analytics",
+      location: "Manchester, United Kingdom",
+      profileUrl: "https://www.linkedin.com/in/james-osei-mock",
+      currentCompany: "Sage",
+      skills: ["Product Management", "Data Analysis", "Stakeholder Management", "Agile", "JIRA"],
+      summary: "6 years building B2B SaaS products. Specialised in analytics dashboards and data workflows.",
+      profilePicture: null,
+    },
+    {
+      fullName: "Aisha Nwosu",
+      headline: "Lead Product Manager — Growth & Retention",
+      location: "London, United Kingdom",
+      profileUrl: "https://www.linkedin.com/in/aisha-nwosu-mock",
+      currentCompany: "Monzo",
+      skills: ["Growth Product", "A/B Testing", "User Research", "Product Analytics", "Team Leadership"],
+      summary: "5 years at Monzo. Owned the core growth loop, drove 30% improvement in 90-day retention.",
+      profilePicture: null,
+    },
+    {
+      fullName: "Tom Bergmann",
+      headline: "Product Manager | Mobile & Consumer Apps",
+      location: "Berlin, Germany",
+      profileUrl: "https://www.linkedin.com/in/tom-bergmann-mock",
+      currentCompany: "Zalando",
+      skills: ["Mobile Product", "Agile", "Figma", "Customer Discovery", "Roadmapping"],
+      summary: "4 years in consumer mobile product. Led checkout redesign that improved conversion by 18%.",
+      profilePicture: null,
+    },
+    {
+      fullName: "Sara Lindqvist",
+      headline: "Associate PM · Transitioning from Business Analyst",
+      location: "Stockholm, Sweden",
+      profileUrl: "https://www.linkedin.com/in/sara-lindqvist-mock",
+      currentCompany: "Klarna",
+      skills: ["SQL", "Requirements Gathering", "Process Mapping", "Excel", "Stakeholder Interviews"],
+      summary: "3 years as BA at Klarna, now moving into product. Strong analytical foundation.",
+      profilePicture: null,
+    },
+  ]
+}
 
 // ---------- profile helpers ----------
 
@@ -37,17 +90,23 @@ function formatEducation(education: unknown[]): string {
   return [e.degree, e.field, e.school].filter(Boolean).join(", ")
 }
 
-function extractCurrentRole(experience: unknown[]): { role: string; company: string } {
-  if (!Array.isArray(experience) || experience.length === 0) return { role: "", company: "" }
-  const sorted = [...experience].sort((a, b) => {
-    const ea = a as Record<string, string | null>
-    const eb = b as Record<string, string | null>
-    if (!ea.end_date && eb.end_date) return -1
-    if (ea.end_date && !eb.end_date) return 1
-    return 0
-  })
-  const cur = sorted[0] as Record<string, string>
-  return { role: cur.title ?? "", company: cur.company ?? "" }
+// Map an Apify profile object to a normalised shape our scoring + insert logic can use.
+// All fields default to null so nothing crashes on partial responses.
+function mapApifyProfile(p: Record<string, unknown>): Record<string, unknown> {
+  return {
+    // canonical fields our scoring helpers read
+    full_name:       (p.fullName    as string | null)        ?? null,
+    headline:        (p.headline    as string | null)        ?? null,
+    location:        (p.location    as string | null)        ?? null,
+    linkedin_url:    (p.profileUrl  as string | null)        ?? null,
+    current_company: (p.currentCompany as string | null)     ?? null,
+    skills:          Array.isArray(p.skills) ? p.skills      : [],
+    summary:         (p.summary     as string | null)        ?? null,
+    bio:             (p.summary     as string | null)        ?? null,
+    avatar_url:      (p.profilePicture as string | null)     ?? null,
+    // keep original for enrichedData storage
+    ...p,
+  }
 }
 
 // ---------- Claude helpers ----------
@@ -89,11 +148,10 @@ function parseJson<T>(text: string, fallback: T): T {
 }
 
 interface SearchIntent {
-  search_keywords:   string
-  must_have_skills:  string[]
+  must_have_skills:    string[]
   nice_to_have_skills: string[]
-  seniority:         string
-  industry_context:  string
+  seniority:           string
+  industry_context:    string
 }
 
 async function extractSearchIntent(
@@ -103,17 +161,16 @@ async function extractSearchIntent(
   skills: string[]
 ): Promise<SearchIntent> {
   const fallback: SearchIntent = {
-    search_keywords:    [jobTitle, ...skills.slice(0, 2)].filter(Boolean).join(" "),
-    must_have_skills:   skills.slice(0, 3),
+    must_have_skills:    skills.slice(0, 3),
     nice_to_have_skills: [],
-    seniority:          "mid",
-    industry_context:   "",
+    seniority:           "mid",
+    industry_context:    "",
   }
   if (!apiKey) return fallback
 
   const text = await callClaude(
     apiKey,
-    `You are a technical recruiter. Extract LinkedIn search intent from a job description.
+    `You are a technical recruiter. Extract scoring criteria from a job description.
 Respond with valid JSON only — no markdown, no explanation.`,
     `Job Title: ${jobTitle}
 Skills mentioned: ${skills.join(", ")}
@@ -122,13 +179,12 @@ ${(jobDescription || "").slice(0, 2000)}
 
 Return JSON:
 {
-  "search_keywords": "<2-6 word query optimised for LinkedIn search — title + core tech stack>",
   "must_have_skills": ["skill1", "skill2"],
   "nice_to_have_skills": ["skill3"],
   "seniority": "<junior|mid|senior|lead|principal>",
   "industry_context": "<brief domain context, one phrase>"
 }`,
-    500
+    400
   )
   return parseJson<SearchIntent>(text, fallback)
 }
@@ -152,8 +208,8 @@ async function scoreProfile(
     headline:   profile.headline,
     skills:     (profile.skills as string[] | null)?.slice(0, 15) ?? [],
     experience: (profile.experience as unknown[] | null)?.slice(0, 3) ?? [],
-    education:  (profile.education as unknown[] | null)?.[0] ?? null,
-    about:      ((profile.summary as string | null) ?? (profile.about as string | null) ?? "").slice(0, 300),
+    education:  (profile.education  as unknown[] | null)?.[0] ?? null,
+    about:      ((profile.summary as string | null) ?? (profile.bio as string | null) ?? (profile.about as string | null) ?? "").slice(0, 300),
   }
 
   const text = await callClaude(
@@ -212,23 +268,25 @@ serve(async (req) => {
       job_title,
       job_description = "",
       skills          = [],
-      location        = "India",
-      experience_level = "",
+      location        = "",
     } = body
 
     if (!job_id || !job_title) throw new Error("job_id and job_title are required")
     logRow.job_id = job_id
 
-    // Resolve Netrows key — env var takes priority, then platform_settings
-    let netrowsKey = Deno.env.get("NETROWS_API_KEY") ?? ""
-    if (!netrowsKey) {
-      const { data: s } = await supabase
-        .from("platform_settings").select("value").eq("key", "netrows_api_key").single()
-      netrowsKey = s?.value ?? ""
+    // ---- API key checks ----
+    const apifyToken = Deno.env.get("APIFY_API_TOKEN") ?? ""
+    if (!apifyToken) {
+      await insertLog({ ...logRow, status: "failed", error_message: "APIFY_API_TOKEN not configured" })
+      return new Response(
+        JSON.stringify({
+          success: false,
+          user_message: "LinkedIn sourcing is not configured. Please contact support.",
+        }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      )
     }
-    if (!netrowsKey) throw new Error("NETROWS_API_KEY not configured")
 
-    // Resolve Anthropic key
     let anthropicKey = Deno.env.get("ANTHROPIC_API_KEY") ?? ""
     if (!anthropicKey) {
       const { data: s } = await supabase
@@ -236,7 +294,7 @@ serve(async (req) => {
       anthropicKey = s?.value ?? ""
     }
 
-    // Check sourcing enabled
+    // ---- Check sourcing enabled ----
     const { data: enabledSetting } = await supabase
       .from("platform_settings").select("value").eq("key", "linkedin_sourcing_enabled").single()
     if (enabledSetting?.value === "false") {
@@ -246,12 +304,12 @@ serve(async (req) => {
       })
     }
 
-    // Read max profiles cap
+    // ---- Read max profiles cap ----
     const { data: maxSetting } = await supabase
       .from("platform_settings").select("value").eq("key", "linkedin_max_profiles").single()
-    const maxProfiles = Math.min(Number(maxSetting?.value ?? "20") || 20, 50)
+    const maxProfiles = Math.min(Number(maxSetting?.value ?? "25") || 25, 50)
 
-    // ---- Part A: extract intelligent search intent from JD via Claude ----
+    // ---- Extract scoring intent via Claude (used for scoring, not for search query) ----
     const intent = await extractSearchIntent(
       anthropicKey,
       job_title,
@@ -259,58 +317,89 @@ serve(async (req) => {
       skills as string[]
     )
 
-    // ---- Part B: Netrows search using Claude's extracted keywords ----
-    const searchUrl = new URL(`${NETROWS_BASE}/person/search`)
-    searchUrl.searchParams.set("keywords", intent.search_keywords)
-    searchUrl.searchParams.set("location",  "India")
-    searchUrl.searchParams.set("title",     job_title)
-    searchUrl.searchParams.set("limit",     String(maxProfiles))
+    // ---- Build Apify search query from job data directly ----
+    const topSkills = (skills as string[]).slice(0, 3).join(" ")
+    const searchQuery = [job_title, topSkills].filter(Boolean).join(" ").trim()
 
-    const searchRes = await fetch(searchUrl.toString(), {
-      headers: { Authorization: `Bearer ${netrowsKey}` },
-    })
-    if (!searchRes.ok) {
-      const errText = await searchRes.text().catch(() => searchRes.statusText)
-      throw new Error(`Netrows search failed (${searchRes.status}): ${errText}`)
+    // ---- Mock mode (APIFY_MOCK=true skips API call) ----
+    const isMock = Deno.env.get("APIFY_MOCK") === "true"
+
+    let rawProfiles: Array<Record<string, unknown>>
+
+    if (isMock) {
+      console.log("[source-linkedin-candidates] MOCK MODE — returning hardcoded profiles")
+      rawProfiles = mockProfiles()
+    } else {
+      // ---- Call Apify LinkedIn Profile Search actor ----
+      const apifyBody: Record<string, unknown> = {
+        searchQuery,
+        searchMode: "full",
+        maxItems:   maxProfiles,
+      }
+      if (location) apifyBody.location = location
+
+      const apifyRes = await fetch(
+        `${APIFY_RUN_URL}?token=${apifyToken}`,
+        {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify(apifyBody),
+          signal:  AbortSignal.timeout(270_000), // 4.5 min — stay under Supabase edge function 300s limit
+        }
+      )
+
+      if (!apifyRes.ok) {
+        const errText = await apifyRes.text().catch(() => apifyRes.statusText)
+        console.error(`[source-linkedin-candidates] Apify error (${apifyRes.status}): ${errText}`)
+        await insertLog({
+          ...logRow,
+          status: "failed",
+          error_message: `Apify ${apifyRes.status}: ${errText.slice(0, 200)}`,
+        })
+        const linkedinFallback = buildLinkedInUrl(job_title, location)
+        return new Response(
+          JSON.stringify({
+            success:        false,
+            user_message:   "LinkedIn sourcing is temporarily unavailable. You can upload CVs manually in the meantime.",
+            show_cv_upload: true,
+            linkedin_url:   linkedinFallback,
+          }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        )
+      }
+
+      const apifyJson = await apifyRes.json()
+      // run-sync-get-dataset-items returns an array directly
+      rawProfiles = Array.isArray(apifyJson) ? apifyJson : []
     }
 
-    const searchJson = await searchRes.json()
-    const profiles: Array<Record<string, unknown>> =
-      searchJson.data ?? searchJson.results ?? []
+    logRow.candidates_found = rawProfiles.length
 
-    logRow.candidates_found = profiles.length
-
-    if (profiles.length === 0) {
+    if (rawProfiles.length === 0) {
       await insertLog({ ...logRow, status: "success" })
+      const linkedinFallback = buildLinkedInUrl(job_title, location)
       return new Response(
-        JSON.stringify({ success: true, candidates_added: 0, talent_pool_added: 0 }),
+        JSON.stringify({
+          success:          true,
+          candidates_added: 0,
+          talent_pool_added: 0,
+          user_message:     "No matching profiles found. Try broadening the job requirements or adjusting the location.",
+          linkedin_url:     linkedinFallback,
+        }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       )
     }
 
-    // ---- Part C+D: fetch full profile, score, route by score ----
+    // ---- Score, route, and insert each profile ----
     let candidatesAdded = 0
     let talentPoolAdded = 0
 
-    for (const p of profiles) {
-      const linkedinUrl = ((p.linkedin_url ?? p.profile_url ?? "") as string).trim()
+    for (const raw of rawProfiles) {
+      const profile    = mapApifyProfile(raw)
+      const linkedinUrl = ((profile.linkedin_url ?? "") as string).trim()
       if (!linkedinUrl) continue
 
-      // Fetch enriched profile from Netrows
-      let profile: Record<string, unknown> = p
-      try {
-        const profileUrl = new URL(`${NETROWS_BASE}/person/profile`)
-        profileUrl.searchParams.set("linkedin_url", linkedinUrl)
-        const profileRes = await fetch(profileUrl.toString(), {
-          headers: { Authorization: `Bearer ${netrowsKey}` },
-        })
-        if (profileRes.ok) {
-          const profileJson = await profileRes.json()
-          profile = profileJson.data ?? profileJson ?? p
-        }
-      } catch { /* fall back to search result data */ }
-
-      // Part C: Claude scores this profile against the JD
+      // Claude scores this profile against the JD
       const { score, reason } = await scoreProfile(
         anthropicKey, profile, job_title, job_description, intent
       )
@@ -318,11 +407,11 @@ serve(async (req) => {
       // Score < 4: discard
       if (score < 4) continue
 
-      // Score 7+: job pipeline (job_id set); 4-6: talent pool (job_id null)
+      // Score 7+: job pipeline; 4-6: talent pool
       const isJobPipeline = score >= 7
       const targetJobId   = isJobPipeline ? job_id : null
 
-      // Deduplicate — skip if same linkedin_url already exists for this target slot
+      // Deduplicate on linkedin_url
       let dupQuery = supabase
         .from("candidates")
         .select("id", { count: "exact", head: true })
@@ -337,28 +426,30 @@ serve(async (req) => {
       const { count: dupCount } = await dupQuery
       if ((dupCount ?? 0) > 0) continue
 
-      // Map Netrows profile fields to candidates columns
-      const fullName   = ((profile.full_name ?? profile.name ?? p.full_name ?? p.name ?? "") as string).trim()
-      const headline   = ((profile.headline  ?? p.headline ?? "") as string)
-      const summary    = ((profile.summary   ?? profile.about ?? headline) as string)
-      const email      = (profile.email ?? null) as string | null
-      const skills_    = (profile.skills ?? []) as string[]
-      const experience = (profile.experience ?? profile.positions ?? []) as unknown[]
-      const education  = (profile.education  ?? []) as unknown[]
+      // Extract fields from mapped profile
+      const fullName      = ((profile.full_name ?? "") as string).trim()
+      const headline      = ((profile.headline ?? "") as string)
+      const summary       = ((profile.summary ?? profile.bio ?? headline) as string)
+      const currentCompany = (profile.current_company ?? null) as string | null
+      const skills_       = (profile.skills ?? []) as string[]
 
-      const { role: currentRole, company: currentCompany } = extractCurrentRole(experience)
-      const candidateRole = currentRole || headline.split(" at ")[0] || headline
+      // For Apify profiles, experience array may not exist — fall back gracefully
+      const experience    = (profile.experience ?? profile.positions ?? []) as unknown[]
+      const education     = (profile.education ?? []) as unknown[]
       const totalYears    = estimateYears(experience)
       const educationStr  = formatEducation(education)
 
-      // Enrich linkedin_data with Claude's match score + reason
-      const enrichedData = { ...profile, match_score: score, match_reason: reason }
+      // Use headline role-part as candidate_role
+      const candidateRole = headline.split(" at ")[0] || headline || job_title
+
+      // Store enriched data with scoring
+      const enrichedData  = { ...raw, match_score: score, match_reason: reason }
 
       await supabase.from("candidates").insert({
         job_id:         targetJobId,
         full_name:      fullName || "Unknown",
-        email:          email || null,
-        candidate_role: candidateRole || job_title,
+        email:          null,
+        candidate_role: candidateRole,
         total_years:    totalYears,
         skills:         Array.isArray(skills_) ? (skills_ as string[]).slice(0, 20) : [],
         education:      educationStr || null,
@@ -387,13 +478,36 @@ serve(async (req) => {
     )
 
   } catch (err) {
+    const msg = (err as Error).message
     logRow.status = "failed"
-    logRow.error_message = (err as Error).message
+    logRow.error_message = msg
     await insertLog(logRow).catch(() => {})
-    console.error("[source-linkedin-candidates]", (err as Error).message)
+    console.error("[source-linkedin-candidates]", msg)
+
+    // Surface a useful message rather than a generic 500
+    const isTimeout = msg.includes("timed out") || msg.includes("AbortError")
+    const linkedinFallback = buildLinkedInUrl("", "")
+
     return new Response(
-      JSON.stringify({ success: false, error: (err as Error).message }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify({
+        success:        false,
+        user_message:   isTimeout
+          ? "LinkedIn sourcing timed out. You can upload CVs manually in the meantime."
+          : "LinkedIn sourcing is temporarily unavailable. You can upload CVs manually in the meantime.",
+        show_cv_upload: true,
+        linkedin_url:   linkedinFallback,
+        error:          msg,
+      }),
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     )
   }
 })
+
+// ---------- helpers ----------
+
+function buildLinkedInUrl(jobTitle: string, location: string): string {
+  const params = new URLSearchParams()
+  if (jobTitle) params.set("keywords", jobTitle)
+  if (location) params.set("location", location)
+  return `https://www.linkedin.com/search/results/people/?${params.toString()}`
+}

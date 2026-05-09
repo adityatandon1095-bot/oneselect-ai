@@ -10,6 +10,7 @@ const NAV = [
   { to: '/recruiter/candidates',  label: 'Candidates',  icon: '◑' },
   { to: '/recruiter/talent-pool',    label: 'Talent Pool',   icon: '◭' },
   { to: '/recruiter/linkedin-pool',  label: 'LinkedIn Pool', icon: '◆' },
+  { to: '/recruiter/talent-crm',     label: 'Talent CRM',    icon: '◴' },
   { to: '/recruiter/pipeline',       label: 'Pipeline',      icon: '◐' },
   { to: '/recruiter/reports',     label: 'Reports',     icon: '◧' },
   { to: '/recruiter/chat',        label: 'AI Assistant', icon: '◎' },

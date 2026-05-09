@@ -1,9 +1,6 @@
+import { FROM_EMAIL } from "../_shared/email.ts"
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+import { corsHeaders } from "../_shared/cors.ts"
 
 async function sendEmail(resendKey: string, payload: Record<string, unknown>, fnName: string, recipient: string) {
   const call = () => fetch('https://api.resend.com/emails', {
@@ -113,7 +110,7 @@ serve(async (req) => {
       `
 
       const { ok: emailSent } = await sendEmail(resendKey, {
-        from: 'One Select <noreply@oneselect.ai>',
+        from: FROM_EMAIL,
         to: [candidate_email],
         subject: `Live Interview Invitation — ${job_title}`,
         html,
@@ -131,7 +128,7 @@ serve(async (req) => {
         confirmed_slot,
         job_title,
         candidate_name,
-        recruiter_email || 'noreply@oneselect.ai',
+        recruiter_email || 'noreply@oneselect.co.uk',
         room_url || '',
       )
       const icsBase64 = btoa(icsContent)
@@ -167,7 +164,7 @@ serve(async (req) => {
       `
 
       const { ok: emailSent } = await sendEmail(resendKey, {
-        from: 'One Select <noreply@oneselect.ai>',
+        from: FROM_EMAIL,
         to: [candidate_email],
         subject: `Confirmed: Live Interview — ${job_title}`,
         html,

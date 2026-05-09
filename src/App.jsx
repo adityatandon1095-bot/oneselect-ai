@@ -43,6 +43,7 @@ import CandidateProfile from './pages/candidate/CandidateProfile'
 import CandidateMatches from './pages/candidate/CandidateMatches'
 import AdminSourcing from './pages/admin/AdminSourcing'
 import AdminLinkedInPool from './pages/admin/AdminLinkedInPool'
+import AdminTalentCRM from './pages/admin/AdminTalentCRM'
 import AdminCompliance from './pages/admin/AdminCompliance'
 import AdminBoard from './pages/admin/AdminBoard'
 import AdminBilling from './pages/admin/AdminBilling'
@@ -115,6 +116,7 @@ export default function App() {
             <Route path="pipeline"    element={<ErrorBoundary><AdminPipeline /></ErrorBoundary>} />
             <Route path="talent-pool"   element={<ErrorBoundary><AdminTalentPool /></ErrorBoundary>} />
             <Route path="linkedin-pool" element={<ErrorBoundary><AdminLinkedInPool /></ErrorBoundary>} />
+            <Route path="talent-crm"    element={<ErrorBoundary><AdminTalentCRM /></ErrorBoundary>} />
             <Route path="sourcing"      element={<ErrorBoundary><AdminSourcing /></ErrorBoundary>} />
             <Route path="board"       element={<ErrorBoundary><AdminBoard /></ErrorBoundary>} />
             <Route path="compliance"  element={<ErrorBoundary><AdminCompliance /></ErrorBoundary>} />
@@ -130,6 +132,7 @@ export default function App() {
             <Route path="jobs"      element={<ErrorBoundary><RecruiterJobs /></ErrorBoundary>} />
             <Route path="talent-pool"   element={<ErrorBoundary><AdminTalentPool /></ErrorBoundary>} />
             <Route path="linkedin-pool" element={<ErrorBoundary><AdminLinkedInPool /></ErrorBoundary>} />
+            <Route path="talent-crm"    element={<ErrorBoundary><AdminTalentCRM /></ErrorBoundary>} />
             <Route path="candidates" element={<ErrorBoundary><RecruiterCandidates /></ErrorBoundary>} />
             <Route path="pipeline"  element={<ErrorBoundary><RecruiterPipeline /></ErrorBoundary>} />
             <Route path="reports"   element={<ErrorBoundary><RecruiterReports /></ErrorBoundary>} />

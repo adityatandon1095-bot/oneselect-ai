@@ -13,9 +13,60 @@ function subLabel(st) {
 const DEFAULT_NOTIF = { shortlisted: true, interview_complete: true, approval_reminder: true, weekly_digest: true }
 
 export default function ClientSettings() {
-  const { user, profile } = useAuth()
+  const { user, profile, isStakeholder } = useAuth()
   const { canAccess } = usePlan()
   const [plan, setPlan] = useState(null)
+
+  // Stakeholder invite state (only rendered for non-stakeholders)
+  const [stakeholders,     setStakeholders]     = useState([])
+  const [inviteEmail,      setInviteEmail]      = useState('')
+  const [inviteName,       setInviteName]       = useState('')
+  const [inviting,         setInviting]         = useState(false)
+  const [inviteMsg,        setInviteMsg]        = useState('')
+
+  useEffect(() => {
+    if (!isStakeholder && user?.id) loadStakeholders()
+  }, [user?.id, isStakeholder])
+
+  async function loadStakeholders() {
+    const { data } = await supabase
+      .from('profiles')
+      .select('id, full_name, email, created_at')
+      .eq('stakeholder_of', user.id)
+      .order('created_at', { ascending: false })
+    setStakeholders(data ?? [])
+  }
+
+  async function inviteStakeholder(e) {
+    e.preventDefault()
+    if (!inviteEmail.trim()) return
+    setInviting(true); setInviteMsg('')
+    const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/invite-user`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY },
+      body: JSON.stringify({
+        email:          inviteEmail.trim(),
+        contact_name:   inviteName.trim() || inviteEmail.split('@')[0],
+        company_name:   profile?.company_name ?? '',
+        role:           'client',
+        stakeholder_of: user.id,
+      }),
+    })
+    const result = await res.json()
+    if (!res.ok || result.error) {
+      setInviteMsg(`Error: ${result.error ?? 'Invite failed'}`)
+    } else {
+      setInviteMsg(`Invite sent to ${inviteEmail.trim()}`)
+      setInviteEmail(''); setInviteName('')
+      loadStakeholders()
+    }
+    setInviting(false)
+  }
+
+  async function removeStakeholder(id) {
+    await supabase.from('profiles').delete().eq('id', id)
+    setStakeholders(prev => prev.filter(s => s.id !== id))
+  }
 
   useEffect(() => {
     if (profile?.plan_id) {
@@ -270,6 +321,84 @@ export default function ClientSettings() {
           </div>
         </div>
       </div>
+
+      {/* Stakeholders — only shown to the account owner, not to stakeholders themselves */}
+      {!isStakeholder && (
+        <div className="section-card" style={{ marginTop: 16 }}>
+          <div className="section-card-head">
+            <h3>Team Access</h3>
+            <p style={{ fontSize: 12, color: 'var(--text-3)', margin: 0 }}>
+              Invite colleagues to a read-only view of your pipeline
+            </p>
+          </div>
+          <div className="section-card-body">
+            <form onSubmit={inviteStakeholder} style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+              <input
+                className="input"
+                type="email"
+                placeholder="colleague@company.com"
+                value={inviteEmail}
+                onChange={e => setInviteEmail(e.target.value)}
+                style={{ flex: '1 1 200px' }}
+                required
+              />
+              <input
+                className="input"
+                type="text"
+                placeholder="Name (optional)"
+                value={inviteName}
+                onChange={e => setInviteName(e.target.value)}
+                style={{ flex: '1 1 160px' }}
+              />
+              <button className="btn btn-primary" type="submit" disabled={inviting || !inviteEmail.trim()}>
+                {inviting ? <><span className="spinner" style={{ width: 12, height: 12 }} /> Sending…</> : 'Send Invite'}
+              </button>
+            </form>
+            {inviteMsg && (
+              <div style={{ fontSize: 12, color: inviteMsg.startsWith('Error') ? 'var(--red)' : 'var(--green)', marginBottom: 12 }}>
+                {inviteMsg}
+              </div>
+            )}
+            {stakeholders.length > 0 ? (
+              <table className="table" style={{ fontSize: 13 }}>
+                <thead>
+                  <tr><th>Name</th><th>Email</th><th>Added</th><th style={{ width: 60 }}></th></tr>
+                </thead>
+                <tbody>
+                  {stakeholders.map(s => (
+                    <tr key={s.id}>
+                      <td>{s.full_name || '—'}</td>
+                      <td style={{ color: 'var(--text-2)' }}>{s.email}</td>
+                      <td style={{ color: 'var(--text-3)', fontSize: 11 }}>{new Date(s.created_at).toLocaleDateString()}</td>
+                      <td>
+                        <button
+                          className="btn btn-ghost"
+                          style={{ fontSize: 11, color: 'var(--red)', padding: '2px 6px' }}
+                          onClick={() => removeStakeholder(s.id)}
+                        >Remove</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <div style={{ fontSize: 13, color: 'var(--text-3)' }}>
+                No team members added yet. Invited colleagues get read-only access — they can view jobs and candidates but cannot approve, reject, or post new roles.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {isStakeholder && (
+        <div className="section-card" style={{ marginTop: 16 }}>
+          <div className="section-card-body">
+            <div style={{ fontSize: 13, color: 'var(--text-2)' }}>
+              You have <strong>read-only access</strong> to this account's pipeline. Contact the account owner to change your permissions.
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
