@@ -210,7 +210,8 @@ export default function RecruiterJobs() {
     setClosing(null)
   }
 
-  const filtered = filter === 'all' ? jobs : jobs.filter(j => j.status === filter)
+  const clientFiltered = selectedClientId ? jobs.filter(j => j.recruiter_id === selectedClientId) : jobs
+  const filtered = filter === 'all' ? clientFiltered : clientFiltered.filter(j => j.status === filter)
 
   if (loading || clientIds === null) return <div className="page"><span className="spinner" /></div>
 
@@ -257,7 +258,7 @@ export default function RecruiterJobs() {
 
       {/* Client selector banner — used by Quick Add and Instant Post */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, padding: '10px 16px', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 'var(--r)', fontSize: 13 }}>
-        <span style={{ color: 'var(--text-3)', flexShrink: 0, fontSize: 12, fontFamily: 'var(--font-mono)' }}>Create jobs for:</span>
+        <span style={{ color: 'var(--text-3)', flexShrink: 0, fontSize: 12, fontFamily: 'var(--font-mono)' }}>Filter & create for:</span>
         <select
           value={selectedClientId}
           onChange={e => setSelectedClientId(e.target.value)}
@@ -268,7 +269,7 @@ export default function RecruiterJobs() {
             <option key={c.id} value={c.id}>{c.company_name || c.full_name || c.email}</option>
           ))}
         </select>
-        <span style={{ fontSize: 11, color: 'var(--text-3)' }}>Used for Quick Add and Post a Job</span>
+        <span style={{ fontSize: 11, color: 'var(--text-3)' }}>Filters job list · used for Quick Add and Post a Job</span>
       </div>
 
       {error && <div className="error-banner" style={{ marginBottom: 16 }}>{error}</div>}

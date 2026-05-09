@@ -589,6 +589,11 @@ export default function RecruiterCandidates() {
   const [bulkAllotJobId, setBulkAllotJobId]     = useState('')
   const [bulkAlloting, setBulkAlloting]         = useState(false)
   const [searchQuery, setSearchQuery]           = useState('')
+  const [sourcingJob, setSourcingJob]           = useState(false)
+  const [sourcedJob,  setSourcedJob]            = useState(null) // job id that was just sourced
+  const [interviewModes, setInterviewModes]     = useState(() => {
+    try { return JSON.parse(localStorage.getItem('interview_modes') || '{}') } catch { return {} }
+  })
 
   // CV upload
   const [showUpload, setShowUpload]   = useState(false)
@@ -622,7 +627,7 @@ export default function RecruiterCandidates() {
     const clientIds = (rcData ?? []).map(r => r.client_id)
     if (!clientIds.length) { setLoading(false); return }
 
-    const { data: jobData } = await supabase.from('jobs').select('id, title').in('recruiter_id', clientIds)
+    const { data: jobData } = await supabase.from('jobs').select('id, title, description, required_skills, location').in('recruiter_id', clientIds)
     const ids = (jobData ?? []).map(j => j.id)
     setJobs(jobData ?? [])
     if (!ids.length) { setLoading(false); return }
@@ -634,6 +639,32 @@ export default function RecruiterCandidates() {
     setCandidates(cData ?? [])
     setPoolCandidates((mData ?? []).map(mapMatchToCandidate))
     setLoading(false)
+  }
+
+  function setInterviewMode(jobId, mode) {
+    setInterviewModes(prev => {
+      const next = { ...prev, [jobId]: mode }
+      try { localStorage.setItem('interview_modes', JSON.stringify(next)) } catch {}
+      return next
+    })
+  }
+
+  async function sourceLinkedIn() {
+    const job = jobs.find(j => j.id === jobFilter)
+    if (!job) return
+    setSourcingJob(true)
+    await supabase.functions.invoke('source-linkedin-candidates', {
+      body: {
+        job_id:          job.id,
+        job_title:       job.title,
+        job_description: job.description ?? '',
+        skills:          job.required_skills ?? [],
+        location:        job.location ?? '',
+      },
+    }).catch(() => {})
+    setSourcingJob(false)
+    setSourcedJob(job.id)
+    setTimeout(() => setSourcedJob(null), 3000)
   }
 
   async function handleDelete() {
@@ -906,6 +937,19 @@ export default function RecruiterCandidates() {
           <button
             className="btn btn-secondary"
             style={{ whiteSpace: 'nowrap' }}
+            disabled={jobs.length === 0 || jobFilter === 'all' || sourcingJob}
+            title={jobFilter === 'all' ? 'Select a specific job to source LinkedIn candidates' : 'Source LinkedIn candidates for this job'}
+            onClick={sourceLinkedIn}
+          >
+            {sourcingJob
+              ? <><span className="spinner" style={{ width: 11, height: 11 }} /> Sourcing…</>
+              : sourcedJob === jobFilter
+                ? '✓ Sourcing started'
+                : '⟳ Source LinkedIn'}
+          </button>
+          <button
+            className="btn btn-secondary"
+            style={{ whiteSpace: 'nowrap' }}
             disabled={jobs.length === 0}
             onClick={() => { setShowUpload(v => !v); setFiles([]) }}
           >
@@ -1059,6 +1103,34 @@ export default function RecruiterCandidates() {
           </button>
         ))}
       </div>
+
+      {/* ── Interview Mode toggle (visible only when a specific job is selected) ── */}
+      {jobFilter !== 'all' && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, padding: '8px 14px', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 'var(--r)', fontSize: 12 }}>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-3)', flexShrink: 0 }}>AI Interview</span>
+          {['manual', 'auto'].map(mode => {
+            const active = (interviewModes[jobFilter] ?? 'manual') === mode
+            return (
+              <button
+                key={mode}
+                onClick={() => setInterviewMode(jobFilter, mode)}
+                style={{
+                  padding: '4px 12px', border: `1px solid ${active ? 'var(--accent)' : 'var(--border)'}`,
+                  background: active ? 'var(--accent)' : 'var(--surface)',
+                  color: active ? '#fff' : 'var(--text-3)',
+                  borderRadius: 'var(--r)', fontSize: 11, cursor: 'pointer',
+                  fontFamily: 'var(--font-mono)', letterSpacing: '0.04em',
+                }}
+              >{mode === 'manual' ? 'Manual Review' : 'Automated'}</button>
+            )
+          })}
+          <span style={{ fontSize: 11, color: 'var(--text-3)', marginLeft: 4 }}>
+            {(interviewModes[jobFilter] ?? 'manual') === 'auto'
+              ? 'Invites sent automatically when candidates pass screening'
+              : 'You send invites manually for each candidate'}
+          </span>
+        </div>
+      )}
 
       {/* ── Bulk action bar ── */}
       {selectedIds.size > 0 && (

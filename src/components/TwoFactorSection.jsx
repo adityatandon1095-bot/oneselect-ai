@@ -95,9 +95,10 @@ export default function TwoFactorSection() {
             <p style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.7, margin: 0 }}>
               Scan this QR code with <strong>Google Authenticator</strong>, <strong>Authy</strong>, or any TOTP app, then enter the 6-digit code to confirm.
             </p>
-            <div
-              dangerouslySetInnerHTML={{ __html: enrollData.qrCode }}
-              style={{ width: 180, height: 180, background: 'white', padding: 8, borderRadius: 'var(--r)', border: '1px solid var(--border)' }}
+            <img
+              src={enrollData.qrCode}
+              alt="Scan with authenticator app"
+              style={{ width: 180, height: 180, background: 'white', padding: 8, borderRadius: 'var(--r)', border: '1px solid var(--border)', display: 'block' }}
             />
             <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-3)', background: 'var(--surface2)', padding: '8px 12px', borderRadius: 'var(--r)', letterSpacing: '0.06em' }}>
               Manual entry: {enrollData.secret}

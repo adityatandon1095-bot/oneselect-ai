@@ -62,6 +62,8 @@ export default function AdminBilling() {
   const [loading,      setLoading]      = useState(true)
   const [dirtyRows,    setDirtyRows]    = useState({}) // clientId → {plan_id, price_override, subscription_status}
   const [rowSaving,    setRowSaving]    = useState(new Set())
+  const [rowSaved,     setRowSaved]     = useState(new Set())
+  const [rowError,     setRowError]     = useState({})
   const [invoiceStatus, setInvoiceStatus] = useState({})
   const [notesModal,   setNotesModal]   = useState(null)
   const [notesText,    setNotesText]    = useState('')
@@ -207,12 +209,17 @@ export default function AdminBilling() {
     }
     const { error } = await supabase.from('profiles').update(payload).eq('id', client.id)
     setRowSaving(prev => { const n = new Set(prev); n.delete(client.id); return n })
-    if (!error) {
+    if (error) {
+      setRowError(prev => ({ ...prev, [client.id]: error.message }))
+    } else {
       setClients(prev => prev.map(c => c.id === client.id
         ? { ...c, ...payload, plans: plans.find(p => p.id === payload.plan_id) ?? null }
         : c
       ))
       setDirtyRows(prev => { const n = { ...prev }; delete n[client.id]; return n })
+      setRowError(prev => { const n = { ...prev }; delete n[client.id]; return n })
+      setRowSaved(prev => new Set([...prev, client.id]))
+      setTimeout(() => setRowSaved(prev => { const n = new Set(prev); n.delete(client.id); return n }), 2000)
     }
   }
 
@@ -383,6 +390,8 @@ export default function AdminBilling() {
                   const row      = getRow(c)
                   const dirty    = isRowDirty(c)
                   const saving   = rowSaving.has(c.id)
+                  const saved    = rowSaved.has(c.id)
+                  const rowErr   = rowError[c.id]
                   const inv      = invoiceStatus[c.id] ?? 'pending'
                   const planPrice = plans.find(p => p.id === row.plan_id)?.price_monthly ?? null
                   const hasOverride = row.price_override !== '' && row.price_override != null &&
@@ -471,22 +480,25 @@ export default function AdminBilling() {
 
                       {/* Actions */}
                       <td style={TD}>
-                        <div style={{ display: 'flex', gap: 6 }}>
-                          {dirty && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-start' }}>
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            {(dirty || saved) && (
+                              <button
+                                className="btn btn-primary"
+                                style={{ fontSize: 10, padding: '3px 10px', background: saved ? 'var(--green)' : undefined, borderColor: saved ? 'var(--green)' : undefined }}
+                                disabled={saving || saved}
+                                onClick={() => saveRow(c)}
+                              >
+                                {saving ? 'Saving…' : saved ? '✓ Saved' : 'Save'}
+                              </button>
+                            )}
                             <button
-                              className="btn btn-primary"
-                              style={{ fontSize: 10, padding: '3px 10px' }}
-                              disabled={saving}
-                              onClick={() => saveRow(c)}
-                            >
-                              {saving ? 'Saving…' : 'Save'}
-                            </button>
-                          )}
-                          <button
-                            className="btn btn-secondary"
-                            style={{ fontSize: 10, padding: '3px 8px' }}
-                            onClick={() => { setNotesModal(c); setNotesText(c.billing_notes ?? '') }}
-                          >Notes</button>
+                              className="btn btn-secondary"
+                              style={{ fontSize: 10, padding: '3px 8px' }}
+                              onClick={() => { setNotesModal(c); setNotesText(c.billing_notes ?? '') }}
+                            >Notes</button>
+                          </div>
+                          {rowErr && <div style={{ fontSize: 10, color: 'var(--red)', maxWidth: 160 }}>⚠ {rowErr}</div>}
                         </div>
                       </td>
                     </tr>
