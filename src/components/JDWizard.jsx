@@ -88,7 +88,7 @@ function stripFences(text) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function JDWizard({ onClose, onSave, showAssign = false, recruiters = [], prefill = null }) {
+export default function JDWizard({ onClose, onSave, showAssign = false, recruiters = [], prefill = null, assignLabel = 'recruiter' }) {
   // Load saved draft once on mount (ignored when prefill is provided)
   const savedDraft = useRef(prefill ? null : loadDraft())
   const d = savedDraft.current
@@ -779,7 +779,9 @@ export default function JDWizard({ onClose, onSave, showAssign = false, recruite
 
             {recruiters.length === 0 ? (
               <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: 20, fontSize: 13, color: 'var(--text-3)', textAlign: 'center' }}>
-                No recruiters found. Invite recruiter accounts first from the Clients page.
+                {assignLabel === 'client'
+                  ? 'No clients assigned. Ask your admin to assign clients to your account.'
+                  : 'No recruiters found. Invite recruiter accounts first from the Clients page.'}
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
@@ -814,7 +816,7 @@ export default function JDWizard({ onClose, onSave, showAssign = false, recruite
                 onClick={doSave}
                 disabled={recruiters.length > 0 && !assignedTo}
               >
-                {recruiters.length === 0 ? 'Create Without Assignment' : 'Assign & Create Job →'}
+                {recruiters.length === 0 ? 'Create Without Assignment' : assignLabel === 'client' ? 'Create for Client →' : 'Assign & Create Job →'}
               </button>
             </div>
           </div>

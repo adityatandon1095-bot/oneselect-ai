@@ -246,9 +246,9 @@ export default function RecruiterReports() {
             <span className="badge badge-amber">{filteredPending.length} pending</span>
           </div>
           {filteredPending.map(c => (
-            <div key={c.id} className="table-row">
+            <div key={c.id} className="table-row" style={{ cursor: 'pointer' }} onClick={() => setDetailCandidate(c)}>
               <div className="col-main">
-                <div className="col-name">{c.full_name}</div>
+                <div className="col-name" style={{ color: 'var(--accent)' }}>{c.full_name}</div>
                 <div className="col-sub">{c.candidate_role}</div>
               </div>
               <div className="col-right">

@@ -17,7 +17,11 @@ export default function TwoFactorSection() {
   async function loadFactors() {
     setLoading(true)
     const { data } = await supabase.auth.mfa.listFactors()
-    setFactors((data?.totp ?? []).filter(f => f.status === 'verified'))
+    const allTotp = data?.totp ?? []
+    // Silently clean up any stale unverified factors from aborted enrollments
+    const unverified = allTotp.filter(f => f.status !== 'verified')
+    await Promise.all(unverified.map(f => supabase.auth.mfa.unenroll({ factorId: f.id })))
+    setFactors(allTotp.filter(f => f.status === 'verified'))
     setLoading(false)
   }
 
@@ -50,9 +54,10 @@ export default function TwoFactorSection() {
 
   async function unenroll(factorId) {
     if (!confirm('Disable two-factor authentication? Your account will be less secure.')) return
-    setUnenrolling(true)
-    await supabase.auth.mfa.unenroll({ factorId })
+    setUnenrolling(true); setError('')
+    const { error: err } = await supabase.auth.mfa.unenroll({ factorId })
     setUnenrolling(false)
+    if (err) { setError(err.message); return }
     setSuccess('')
     await loadFactors()
   }

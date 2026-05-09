@@ -48,23 +48,28 @@ export default function AdminBoard() {
   const [jobs,          setJobs]          = useState([])
   const [filter,        setFilter]        = useState({ clientId: '', jobId: '', recommendation: '', search: '' })
   const [loading,       setLoading]       = useState(true)
+  const [loadError,     setLoadError]     = useState('')
   const [dropTarget,    setDropTarget]    = useState(null)
   const dragId = useRef(null)
 
   useEffect(() => { load() }, [])
 
   async function load() {
+    setLoading(true)
+    setLoadError('')
     const [
-      { data: cands },
+      { data: cands, error: candsErr },
       { data: clientData },
       { data: jobData },
     ] = await Promise.all([
       supabase.from('candidates')
         .select('*, jobs(id, title, recruiter_id, profiles(company_name))')
-        .order('created_at', { ascending: false }),
+        .order('created_at', { ascending: false })
+        .limit(2000),
       supabase.from('profiles').select('id, company_name, full_name').eq('user_role', 'client'),
       supabase.from('jobs').select('id, title, recruiter_id').eq('status', 'active'),
     ])
+    if (candsErr) { setLoadError(candsErr.message); setLoading(false); return }
     setAllCandidates((cands ?? []).map(c => ({ ...c, _stage: deriveStage(c) })))
     setClients(clientData ?? [])
     setJobs(jobData ?? [])
@@ -104,6 +109,7 @@ export default function AdminBoard() {
   ]))
 
   if (loading) return <div className="page" style={{ display: 'flex', alignItems: 'center', gap: 10 }}><span className="spinner" /> Loading pipeline…</div>
+  if (loadError) return <div className="page"><div className="error-banner">Failed to load board: {loadError} <button className="btn btn-secondary" style={{ marginLeft: 12, fontSize: 11 }} onClick={load}>Retry</button></div></div>
 
   return (
     <div className="page" style={{ overflow: 'hidden' }}>
@@ -112,7 +118,10 @@ export default function AdminBoard() {
           <h2>Pipeline Board</h2>
           <p>All candidates across all jobs — drag to move between stages</p>
         </div>
-        <span className="mono text-muted" style={{ fontSize: 11 }}>{allCandidates.length} total candidates</span>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <span className="mono text-muted" style={{ fontSize: 11 }}>{allCandidates.length} total candidates</span>
+          <button className="btn btn-secondary" style={{ fontSize: 11, padding: '4px 10px' }} onClick={load}>↻ Refresh</button>
+        </div>
       </div>
 
       {/* Filter bar */}

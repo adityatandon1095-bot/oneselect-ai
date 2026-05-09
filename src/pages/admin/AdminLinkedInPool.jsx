@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 
-export default function AdminLinkedInPool() {
+export default function AdminLinkedInPool({ allowedClientIds } = {}) {
   const [candidates, setCandidates] = useState([])
   const [jobs, setJobs]             = useState([])
   const [loading, setLoading]       = useState(true)
@@ -16,6 +16,9 @@ export default function AdminLinkedInPool() {
 
   async function load() {
     setLoading(true)
+    let jobQ = supabase.from('jobs').select('id, title, profiles(company_name)').eq('status', 'active').order('created_at', { ascending: false })
+    if (allowedClientIds?.length) jobQ = jobQ.in('recruiter_id', allowedClientIds)
+
     const [{ data: cands }, { data: jobList }] = await Promise.all([
       supabase
         .from('candidates')
@@ -23,11 +26,7 @@ export default function AdminLinkedInPool() {
         .eq('source', 'linkedin')
         .is('job_id', null)
         .order('created_at', { ascending: false }),
-      supabase
-        .from('jobs')
-        .select('id, title, profiles(company_name)')
-        .eq('status', 'active')
-        .order('created_at', { ascending: false }),
+      jobQ,
     ])
     setCandidates(cands ?? [])
     setJobs(jobList ?? [])

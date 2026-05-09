@@ -8,6 +8,7 @@ import { mapMatchToCandidate } from '../../utils/talentPool'
 import { extractContent, isSupported, fileExt, ACCEPT_ATTR } from '../../utils/fileExtract'
 import { parseExperience } from '../../utils/parseExperience'
 import { downloadCsv, candidateRows } from '../../utils/exportCsv'
+import AIScoreFeedback from '../../components/AIScoreFeedback'
 
 const REC_COLOR = { 'Strong Hire': 'var(--green)', 'Hire': 'var(--accent)', 'Borderline': 'var(--amber)', 'Reject': 'var(--red)' }
 const DIMS = [
@@ -178,20 +179,24 @@ function CandidateProfile({ candidate, job, onBack }) {
   }
 
   async function handleReeengage() {
-    setReengageLoading(true)
+    setReengageLoading(true); setAiError('')
     try {
       const result = await generateReengagementEmail(candidate, job)
       setReengageEmail(result)
-    } catch {}
+    } catch (e) {
+      setAiError('Re-engagement draft failed: ' + e.message)
+    }
     setReengageLoading(false)
   }
 
   async function handleRefQuestions() {
-    setRefQLoading(true)
+    setRefQLoading(true); setAiError('')
     try {
       const result = await generateReferenceQuestions(candidate)
       setRefQuestions(result)
-    } catch {}
+    } catch (e) {
+      setAiError('Reference questions failed: ' + e.message)
+    }
     setRefQLoading(false)
   }
 
@@ -216,7 +221,7 @@ function CandidateProfile({ candidate, job, onBack }) {
           {candidate.email && <p className="email">{candidate.email}</p>}
           <ProfileLinks c={candidate} />
           {candidate.match_score != null && (
-            <div style={{ marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            <div style={{ marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
               <span className={`badge ${candidate.match_pass ? 'badge-green' : 'badge-red'}`}>
                 Screen {candidate.match_score}/100
               </span>
@@ -225,6 +230,7 @@ function CandidateProfile({ candidate, job, onBack }) {
                   {candidate.match_rank}
                 </span>
               )}
+              <AIScoreFeedback candidateId={candidate.id} jobId={job?.id} score={candidate.match_score} />
             </div>
           )}
         </div>
@@ -762,7 +768,12 @@ export default function RecruiterCandidates() {
   const addFiles = useCallback((incoming) => {
     const valid = Array.from(incoming).filter(isSupported)
     if (!valid.length) return
+    const tooBig = valid.filter(f => f.size > 5 * 1024 * 1024)
+    if (tooBig.length) {
+      setFiles(p => [...p, ...tooBig.map(f => ({ id: crypto.randomUUID(), file: f, ext: fileExt(f), status: 'error', parsed: null, error: 'CV must be under 5 MB. Please compress your file and try again.' }))])
+    }
     setFiles(p => [...p, ...valid
+      .filter(f => f.size <= 5 * 1024 * 1024)
       .filter(f => !p.some(e => e.file.name === f.name))
       .map(f => ({ id: crypto.randomUUID(), file: f, ext: fileExt(f), status: 'pending', parsed: null, error: '' }))])
   }, [])

@@ -62,6 +62,7 @@ export default function RecruiterJobs() {
 
     setClients(assignedClients)
     setClientIds(ids)
+    if (assignedClients.length === 1) setSelectedClientId(assignedClients[0].id)
 
     if (!ids.length) { setLoading(false); return }
     await loadJobs(ids)
@@ -463,6 +464,7 @@ export default function RecruiterJobs() {
           onClose={() => { setShowWizard(false); setWizardPrefill(null) }}
           onSave={handleWizardSave}
           showAssign
+          assignLabel="client"
           recruiters={clients.map(c => ({ id: c.id, contact_name: c.company_name || c.full_name || c.email, company_name: c.company_name, email: c.email }))}
           prefill={wizardPrefill}
         />

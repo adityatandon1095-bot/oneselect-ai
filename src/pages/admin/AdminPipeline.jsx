@@ -128,6 +128,7 @@ export default function AdminPipeline({ allowedClientIds } = {}) {
 
   // LinkedIn sourced candidates
   const [movingToScreening, setMovingToScreening] = useState(new Set())
+  const [loadingJob, setLoadingJob] = useState(false)
 
   const running = pipelineRunning || poolMatchLoading
   const fileInputRef = useRef()
@@ -201,27 +202,33 @@ export default function AdminPipeline({ allowedClientIds } = {}) {
     if (id === 'new') { setActiveJob(null); setCandidates([]); return }
     const job = clientJobs.find(j => j.id === id)
     setActiveJob(job)
+    setLoadingJob(true)
+    setCandidates([])
 
-    let loaded
-    if (poolMode) {
-      const { data } = await supabase
-        .from('job_matches')
-        .select('*, talent_pool(*)')
-        .eq('job_id', id)
-        .order('match_score', { ascending: false, nullsFirst: false })
-      loaded = (data ?? []).map(mapMatchToCandidate)
-    } else {
-      const { data } = await supabase.from('candidates').select('*').eq('job_id', id).order('match_score', { ascending: false }).limit(500)
-      loaded = (data ?? []).map(c => ({ ...c, _status: c.match_score != null ? 'screened' : 'parsed' }))
+    try {
+      let loaded
+      if (poolMode) {
+        const { data } = await supabase
+          .from('job_matches')
+          .select('*, talent_pool(*)')
+          .eq('job_id', id)
+          .order('match_score', { ascending: false, nullsFirst: false })
+        loaded = (data ?? []).map(mapMatchToCandidate)
+      } else {
+        const { data } = await supabase.from('candidates').select('*').eq('job_id', id).order('match_score', { ascending: false }).limit(500)
+        loaded = (data ?? []).map(c => ({ ...c, _status: c.match_score != null ? 'screened' : 'parsed' }))
+      }
+
+      setCandidates(loaded)
+
+      // Load outreach log for this job
+      const { data: outData } = await supabase.from('outreach_log').select('id, candidate_id, sent_at, responded').eq('job_id', id)
+      const map = {}
+      ;(outData ?? []).forEach(r => { map[r.candidate_id] = r })
+      setOutreachLog(map)
+    } finally {
+      setLoadingJob(false)
     }
-
-    setCandidates(loaded)
-
-    // Load outreach log for this job
-    const { data: outData } = await supabase.from('outreach_log').select('id, candidate_id, sent_at, responded').eq('job_id', id)
-    const map = {}
-    ;(outData ?? []).forEach(r => { map[r.candidate_id] = r })
-    setOutreachLog(map)
   }
 
   async function refreshCandidates() {
@@ -1108,8 +1115,16 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
         </div>
       </div>
 
+      {/* ── Loading indicator ── */}
+      {loadingJob && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, padding: '32px 0', color: 'var(--text-3)', fontSize: 13, fontFamily: 'var(--font-mono)' }}>
+          <span className="spinner" style={{ width: 16, height: 16 }} />
+          Loading pipeline…
+        </div>
+      )}
+
       {/* ── LinkedIn Sourced ── */}
-      {activeJob && (
+      {!loadingJob && activeJob && (
         <div className="section-card">
           <div className="section-card-head">
             <h3>Sourced · LinkedIn</h3>
@@ -1189,7 +1204,7 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
       )}
 
       {/* ── 2 CV Upload — hidden for clients ── */}
-      {activeJob && !isClient && (
+      {!loadingJob && activeJob && !isClient && (
         <div className="section-card">
           <div className="section-card-head">
             <h3>{useTalentPool ? '2 · Talent Pool' : '2 · CV Upload'}</h3>
@@ -1225,6 +1240,40 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
                     <div style={{ flex: 1 }}><div className="progress-track"><div className="progress-fill" style={{ width: `${(poolMatchProgress.current / poolMatchProgress.total) * 100}%` }} /></div></div>
                   )}
                 </div>
+                {passedCandidates.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--green)', marginBottom: 8 }}>
+                      ✓ {passedCandidates.length} candidate{passedCandidates.length !== 1 ? 's' : ''} passed screening
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {passedCandidates.slice(0, 5).map(c => (
+                        <div key={c.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 'var(--r)' }}>
+                          <div>
+                            <div style={{ fontSize: 13, fontWeight: 500 }}>{c.full_name}</div>
+                            <div style={{ fontSize: 11, color: 'var(--text-3)' }}>{c.candidate_role} · Score {c.match_score}</div>
+                          </div>
+                          {!c.scores?.overallScore && (
+                            <button
+                              className="btn btn-primary"
+                              style={{ fontSize: 10, padding: '3px 10px', whiteSpace: 'nowrap' }}
+                              onClick={() => setAiInviteModal({ candidate: c, email: c.email ?? '', sending: false, sent: false, error: null })}
+                            >
+                              → AI Interview
+                            </button>
+                          )}
+                          {c.scores?.overallScore && (
+                            <span className="badge badge-green" style={{ fontSize: 10 }}>Interviewed</span>
+                          )}
+                        </div>
+                      ))}
+                      {passedCandidates.length > 5 && (
+                        <div style={{ fontSize: 11, color: 'var(--text-3)', textAlign: 'center', padding: '4px 0' }}>
+                          +{passedCandidates.length - 5} more — see section 4 below
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <>
@@ -1297,7 +1346,7 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
       )}
 
       {/* ── 3 AI Screening — hidden for clients ── */}
-      {activeJob && pipelineCandidates.length > 0 && !isClient && (
+      {!loadingJob && activeJob && pipelineCandidates.length > 0 && !isClient && (
         <div className="section-card">
           <div className="section-card-head">
             <h3>3 · AI Screening</h3>
@@ -1355,7 +1404,7 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
       )}
 
       {/* ── 4 AI Video Interview ── */}
-      {passedCandidates.length > 0 && (
+      {!loadingJob && passedCandidates.length > 0 && (
         <div className="section-card">
           <div className="section-card-head">
             <h3>4 · AI Video Interview</h3>
@@ -1512,7 +1561,7 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
       )}
 
       {/* ── 5 Live Interview ── */}
-      {liveInterviewCandidates.length > 0 && (
+      {!loadingJob && liveInterviewCandidates.length > 0 && (
         <div className="section-card">
           <div className="section-card-head">
             <h3>5 · Live Interview</h3>
@@ -1555,7 +1604,7 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
       )}
 
       {/* ── 6 Final Decision ── */}
-      {decisionCandidates.length > 0 && (
+      {!loadingJob && decisionCandidates.length > 0 && (
         <div className="section-card">
           <div className="section-card-head">
             <h3>6 · Final Decision</h3>

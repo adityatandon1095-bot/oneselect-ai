@@ -22,6 +22,7 @@ import RecruiterCandidates from './pages/recruiter/RecruiterCandidates'
 import RecruiterChat from './pages/recruiter/RecruiterChat'
 import RecruiterReports from './pages/recruiter/RecruiterReports'
 import RecruiterSettings from './pages/recruiter/RecruiterSettings'
+import RecruiterLinkedInPool from './pages/recruiter/RecruiterLinkedInPool'
 import ClientLayout from './pages/client/ClientLayout'
 import ClientRegister from './pages/client/ClientRegister'
 import ClientDashboard from './pages/client/ClientDashboard'
@@ -131,7 +132,7 @@ export default function App() {
             <Route path="clients"   element={<ErrorBoundary><RecruiterClients /></ErrorBoundary>} />
             <Route path="jobs"      element={<ErrorBoundary><RecruiterJobs /></ErrorBoundary>} />
             <Route path="talent-pool"   element={<ErrorBoundary><AdminTalentPool /></ErrorBoundary>} />
-            <Route path="linkedin-pool" element={<ErrorBoundary><AdminLinkedInPool /></ErrorBoundary>} />
+            <Route path="linkedin-pool" element={<ErrorBoundary><RecruiterLinkedInPool /></ErrorBoundary>} />
             <Route path="talent-crm"    element={<ErrorBoundary><AdminTalentCRM /></ErrorBoundary>} />
             <Route path="candidates" element={<ErrorBoundary><RecruiterCandidates /></ErrorBoundary>} />
             <Route path="pipeline"  element={<ErrorBoundary><RecruiterPipeline /></ErrorBoundary>} />

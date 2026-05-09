@@ -4,6 +4,31 @@ import { supabase } from '../../lib/supabase'
 const EMPTY_PLAN = { name: '', description: '', price_monthly: '' }
 const STATUS_OPTIONS = ['trial', 'active', 'suspended', 'expired']
 
+const DEFAULT_PLANS = [
+  {
+    name: 'Basic',
+    price_monthly: 4999,
+    description: 'Up to 3 active jobs · 50 CV uploads/mo · AI screening included',
+    features: ['3 active job postings', '50 CV uploads / month', 'AI CV screening', 'LinkedIn sourcing (25 profiles/job)', 'Email support'],
+    color: 'var(--text-3)',
+  },
+  {
+    name: 'Pro',
+    price_monthly: 14999,
+    description: 'Up to 10 active jobs · Unlimited CVs · AI interview + offer letters',
+    features: ['10 active job postings', 'Unlimited CV uploads', 'AI CV screening + video interviews', 'LinkedIn sourcing (50 profiles/job)', 'Talent pool access', 'Offer letter generation', 'Priority support'],
+    color: 'var(--accent)',
+    highlight: true,
+  },
+  {
+    name: 'Enterprise',
+    price_monthly: null,
+    description: 'Custom pricing · Unlimited everything · Dedicated support',
+    features: ['Unlimited job postings', 'Unlimited CVs + interviews', 'White-label options', 'Custom integrations', 'Dedicated account manager', 'SLA guarantee'],
+    color: 'var(--green)',
+  },
+]
+
 const monthStart = () => {
   const d = new Date()
   d.setDate(1); d.setHours(0, 0, 0, 0)
@@ -29,6 +54,7 @@ export default function AdminBilling() {
   const [planError,   setPlanError]   = useState('')
   const [deleteModal, setDeleteModal] = useState(null)
   const [deleting,    setDeleting]    = useState(false)
+  const [seeding,     setSeeding]     = useState(false)
 
   // ── Clients ────────────────────────────────────────────────────
   const [clients,      setClients]      = useState([])
@@ -82,6 +108,21 @@ export default function AdminBilling() {
   }
 
   // ── Plans CRUD ─────────────────────────────────────────────────
+
+  async function seedDefaultPlans() {
+    setSeeding(true)
+    const existing = new Set(plans.map(p => p.name.toLowerCase()))
+    const toCreate = DEFAULT_PLANS.filter(p => !existing.has(p.name.toLowerCase()))
+    if (toCreate.length) {
+      await supabase.from('plans').insert(toCreate.map(p => ({
+        name:          p.name,
+        description:   p.description,
+        price_monthly: p.price_monthly,
+      })))
+    }
+    await loadAll()
+    setSeeding(false)
+  }
 
   const planClientCount = planId => clients.filter(c => c.plan_id === planId).length
 
@@ -234,15 +275,48 @@ export default function AdminBilling() {
       <div className="section-card" style={{ marginBottom: 20 }}>
         <div className="section-card-head">
           <h3>Plans</h3>
-          <button className="btn btn-primary" style={{ fontSize: 11, padding: '5px 12px' }} onClick={openNewPlan}>
-            + Create Plan
-          </button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {plans.length < DEFAULT_PLANS.length && (
+              <button className="btn btn-secondary" style={{ fontSize: 11, padding: '5px 12px' }} disabled={seeding} onClick={seedDefaultPlans}>
+                {seeding ? <><span className="spinner" style={{ width: 11, height: 11 }} /> Seeding…</> : '✦ Seed Default Plans'}
+              </button>
+            )}
+            <button className="btn btn-primary" style={{ fontSize: 11, padding: '5px 12px' }} onClick={openNewPlan}>
+              + Create Plan
+            </button>
+          </div>
+        </div>
+
+        {/* Plan reference cards */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12, padding: '16px 16px 0' }}>
+          {DEFAULT_PLANS.map(p => {
+            const exists = plans.some(db => db.name.toLowerCase() === p.name.toLowerCase())
+            return (
+              <div key={p.name} style={{ border: `1px solid ${p.highlight ? 'var(--accent)' : 'var(--border)'}`, borderTop: `3px solid ${p.color}`, borderRadius: 'var(--r)', padding: 16, background: p.highlight ? 'rgba(184,146,74,0.04)' : 'var(--bg)', position: 'relative' }}>
+                {p.highlight && <div style={{ position: 'absolute', top: -1, right: 12, fontSize: 9, fontFamily: 'var(--font-mono)', background: 'var(--accent)', color: '#fff', padding: '2px 8px', borderRadius: '0 0 4px 4px', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Popular</div>}
+                <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>{p.name}</div>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 18, fontWeight: 700, color: p.color, marginBottom: 8 }}>
+                  {p.price_monthly != null ? <>₹{p.price_monthly.toLocaleString()}<span style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-3)' }}>/mo</span></> : 'Custom'}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 12 }}>
+                  {p.features.map(f => (
+                    <div key={f} style={{ fontSize: 11, color: 'var(--text-2)', display: 'flex', gap: 6 }}>
+                      <span style={{ color: p.color, flexShrink: 0 }}>✓</span>{f}
+                    </div>
+                  ))}
+                </div>
+                <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: exists ? 'var(--green)' : 'var(--text-3)', padding: '3px 8px', background: exists ? 'rgba(16,185,129,0.08)' : 'var(--surface2)', borderRadius: 'var(--r)', display: 'inline-block' }}>
+                  {exists ? '✓ In database' : '— Not created'}
+                </div>
+              </div>
+            )
+          })}
         </div>
 
         {plansLoading ? (
           <div style={{ padding: 24, display: 'flex', justifyContent: 'center' }}><span className="spinner" /></div>
         ) : plans.length === 0 ? (
-          <div className="empty-state">No plans yet — create one above.</div>
+          <div className="empty-state" style={{ marginTop: 16 }}>No plans yet — seed defaults or create one above.</div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
