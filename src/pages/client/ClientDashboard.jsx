@@ -68,6 +68,7 @@ export default function ClientDashboard() {
       .from('candidates')
       .select('id, full_name, candidate_role, match_score, match_pass, scores, created_at, job_id')
       .in('job_id', jobIds)
+      .not('match_pass', 'is', null)   // only show screened candidates to clients
       .order('created_at', { ascending: false })
 
     const all = allCandidates ?? []

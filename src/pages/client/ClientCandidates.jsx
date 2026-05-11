@@ -433,6 +433,7 @@ export default function ClientCandidates() {
       .from('candidates')
       .select('*')
       .in('job_id', ids)
+      .not('match_pass', 'is', null)   // only show screened candidates to clients
       .order('match_score', { ascending: false, nullsFirst: false })
 
     setCandidates(cData ?? [])
