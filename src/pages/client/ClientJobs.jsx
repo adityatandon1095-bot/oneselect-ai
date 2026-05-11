@@ -53,6 +53,33 @@ function PipelineFunnel({ candidates, activeStage, onStageClick }) {
   )
 }
 
+function SourcingActivityPanel({ stats }) {
+  const items = [
+    { icon: '🔍', value: stats.profiles_scanned, label: 'LinkedIn profiles scanned' },
+    { icon: '✓',  value: stats.profiles_matched,  label: 'matched your requirements' },
+    { icon: '👤', value: stats.shortlisted,        label: 'shortlisted for your review' },
+  ]
+  return (
+    <div style={{ marginBottom: 20, padding: '16px 20px', background: 'var(--surface)', border: '1px solid var(--border)', borderTop: '2px solid var(--accent)', borderRadius: 'var(--r)' }}>
+      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--accent)', marginBottom: 14 }}>
+        AI Sourcing Status
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 0, marginBottom: 12 }}>
+        {items.map(({ icon, value, label }, i) => (
+          <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 8, paddingRight: i < 2 ? 20 : 0, marginRight: i < 2 ? 20 : 0, borderRight: i < 2 ? '1px solid var(--border)' : 'none' }}>
+            <span style={{ fontSize: 14, lineHeight: 1 }}>{icon}</span>
+            <span style={{ fontFamily: 'var(--font-head)', fontSize: 28, fontWeight: 300, color: 'var(--text)', lineHeight: 1 }}>{value}</span>
+            <span style={{ fontSize: 12, color: 'var(--text-2)' }}>{label}</span>
+          </div>
+        ))}
+      </div>
+      <p style={{ margin: 0, fontSize: 12, color: 'var(--text-3)', fontStyle: 'italic', lineHeight: 1.6 }}>
+        One Select AI continuously scans LinkedIn to find the best candidates for your role. Your recruiter reviews and shortlists the top matches.
+      </p>
+    </div>
+  )
+}
+
 function JobDetail({ job: initialJob, onBack, onUpdate }) {
   const [job, setJob] = useState(initialJob)
   const [candidates, setCandidates] = useState([])
@@ -61,6 +88,7 @@ function JobDetail({ job: initialJob, onBack, onUpdate }) {
   const [selectedId, setSelectedId] = useState(null)
   const [editing, setEditing] = useState(false)
   const [activityLog, setActivityLog] = useState([])
+  const [sourcing, setSourcing] = useState(null)
   const [editForm, setEditForm] = useState({
     title: initialJob.title ?? '',
     experience_years: initialJob.experience_years ?? 3,
@@ -100,12 +128,16 @@ function JobDetail({ job: initialJob, onBack, onUpdate }) {
 
   useEffect(() => {
     supabase.from('candidates').select('*').eq('job_id', job.id)
+      .not('match_pass', 'is', null)
       .order('match_score', { ascending: false, nullsFirst: false })
       .then(({ data }) => { setCandidates(data ?? []); setLoading(false) })
       .catch(() => setLoading(false))
     supabase.from('audit_log').select('action, actor_role, metadata, created_at').eq('job_id', job.id)
       .order('created_at', { ascending: false }).limit(20)
       .then(({ data }) => setActivityLog(data ?? []))
+      .catch(() => {})
+    supabase.rpc('get_sourcing_stats', { p_job_id: job.id })
+      .then(({ data }) => { if (data) setSourcing(data) })
       .catch(() => {})
   }, [job.id])
 
@@ -234,6 +266,10 @@ function JobDetail({ job: initialJob, onBack, onUpdate }) {
 
       {loading ? <div style={{ textAlign: 'center', padding: 40 }}><span className="spinner" /></div> : (
         <>
+          {job.status === 'active' && sourcing?.profiles_scanned > 0 && (
+            <SourcingActivityPanel stats={sourcing} />
+          )}
+
           <PipelineFunnel candidates={candidates} activeStage={stageFilter} onStageClick={setStageFilter} />
 
           <div className="section-card">
