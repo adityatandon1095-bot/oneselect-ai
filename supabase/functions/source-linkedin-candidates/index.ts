@@ -226,7 +226,7 @@ JD excerpt: ${(jobDescription || "").slice(0, 500)}
 Candidate:
 ${JSON.stringify(profileSummary)}
 
-Score 1-10. Rubric: 7-10 = strong fit → pipeline, 4-6 = partial fit → talent pool, 1-3 = poor fit → discard.`,
+Score 1-10. Rubric: 7-10 = strong fit → pipeline + talent pool, 4-6 = partial fit → talent pool only, 1-3 = weak fit → talent pool only.`,
     200
   )
   const parsed = parseJson<Partial<ProfileScore>>(text, {})
@@ -239,11 +239,13 @@ Score 1-10. Rubric: 7-10 = strong fit → pipeline, 4-6 = partial fit → talent
 // ---------- log helper ----------
 
 async function insertLog(row: {
-  job_id:           string | null
-  candidates_found: number
-  candidates_added: number
-  status:           "success" | "failed"
-  error_message:    string | null
+  job_id:                       string | null
+  candidates_found:             number
+  candidates_added:             number
+  candidates_added_to_pipeline: number
+  candidates_added_to_pool:     number
+  status:                       "success" | "failed"
+  error_message:                string | null
 }) {
   await supabase.from("linkedin_sourcing_log").insert(row).catch(() => {})
 }
@@ -254,11 +256,13 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders })
 
   const logRow = {
-    job_id:           null as string | null,
-    candidates_found: 0,
-    candidates_added: 0,
-    status:           "failed" as "success" | "failed",
-    error_message:    null as string | null,
+    job_id:                       null as string | null,
+    candidates_found:             0,
+    candidates_added:             0,
+    candidates_added_to_pipeline: 0,
+    candidates_added_to_pool:     0,
+    status:                       "failed" as "success" | "failed",
+    error_message:                null as string | null,
   }
 
   try {
@@ -391,11 +395,12 @@ serve(async (req) => {
     }
 
     // ---- Score, route, and insert each profile ----
-    let candidatesAdded = 0
-    let talentPoolAdded = 0
+    let candidatesAdded = 0  // pipeline inserts (score 7+)
+    let talentPoolAdded = 0  // pool inserts (all scores)
+    let matchedCount    = 0  // score 4+ (for "profiles_matched" sourcing stat)
 
     for (const raw of rawProfiles) {
-      const profile    = mapApifyProfile(raw)
+      const profile     = mapApifyProfile(raw)
       const linkedinUrl = ((profile.linkedin_url ?? "") as string).trim()
       if (!linkedinUrl) continue
 
@@ -404,49 +409,26 @@ serve(async (req) => {
         anthropicKey, profile, job_title, job_description, intent
       )
 
-      // Score < 4: discard
-      if (score < 4) continue
+      if (score >= 4) matchedCount++
 
-      // Score 7+: job pipeline; 4-6: talent pool
+      // Score 7+: insert to both pipeline (job_id) and pool (job_id = null)
+      // Score 1-6: insert to pool only
       const isJobPipeline = score >= 7
-      const targetJobId   = isJobPipeline ? job_id : null
-
-      // Deduplicate on linkedin_url
-      let dupQuery = supabase
-        .from("candidates")
-        .select("id", { count: "exact", head: true })
-        .eq("linkedin_url", linkedinUrl)
-
-      if (isJobPipeline) {
-        dupQuery = dupQuery.eq("job_id", job_id)
-      } else {
-        dupQuery = dupQuery.is("job_id", null).eq("source", "linkedin")
-      }
-
-      const { count: dupCount } = await dupQuery
-      if ((dupCount ?? 0) > 0) continue
 
       // Extract fields from mapped profile
-      const fullName      = ((profile.full_name ?? "") as string).trim()
-      const headline      = ((profile.headline ?? "") as string)
-      const summary       = ((profile.summary ?? profile.bio ?? headline) as string)
+      const fullName       = ((profile.full_name ?? "") as string).trim()
+      const headline       = ((profile.headline ?? "") as string)
+      const summary        = ((profile.summary ?? profile.bio ?? headline) as string)
       const currentCompany = (profile.current_company ?? null) as string | null
-      const skills_       = (profile.skills ?? []) as string[]
+      const skills_        = (profile.skills ?? []) as string[]
+      const experience     = (profile.experience ?? profile.positions ?? []) as unknown[]
+      const education      = (profile.education ?? []) as unknown[]
+      const totalYears     = estimateYears(experience)
+      const educationStr   = formatEducation(education)
+      const candidateRole  = headline.split(" at ")[0] || headline || job_title
+      const enrichedData   = { ...raw, match_score: score, match_reason: reason }
 
-      // For Apify profiles, experience array may not exist — fall back gracefully
-      const experience    = (profile.experience ?? profile.positions ?? []) as unknown[]
-      const education     = (profile.education ?? []) as unknown[]
-      const totalYears    = estimateYears(experience)
-      const educationStr  = formatEducation(education)
-
-      // Use headline role-part as candidate_role
-      const candidateRole = headline.split(" at ")[0] || headline || job_title
-
-      // Store enriched data with scoring
-      const enrichedData  = { ...raw, match_score: score, match_reason: reason }
-
-      await supabase.from("candidates").insert({
-        job_id:         targetJobId,
+      const baseRow = {
         full_name:      fullName || "Unknown",
         email:          null,
         candidate_role: candidateRole,
@@ -459,16 +441,39 @@ serve(async (req) => {
         linkedin_url:   linkedinUrl,
         linkedin_data:  enrichedData,
         source:         "linkedin",
-      })
+      }
 
-      if (isJobPipeline) {
-        candidatesAdded++
-      } else {
+      // --- Talent pool insert (all profiles, job_id = null) ---
+      const { count: poolDupCount } = await supabase
+        .from("candidates")
+        .select("id", { count: "exact", head: true })
+        .eq("linkedin_url", linkedinUrl)
+        .is("job_id", null)
+        .eq("source", "linkedin")
+
+      if ((poolDupCount ?? 0) === 0) {
+        await supabase.from("candidates").insert({ ...baseRow, job_id: null })
         talentPoolAdded++
+      }
+
+      // --- Pipeline insert (score 7+ only, job_id linked) ---
+      if (isJobPipeline) {
+        const { count: pipeDupCount } = await supabase
+          .from("candidates")
+          .select("id", { count: "exact", head: true })
+          .eq("linkedin_url", linkedinUrl)
+          .eq("job_id", job_id)
+
+        if ((pipeDupCount ?? 0) === 0) {
+          await supabase.from("candidates").insert({ ...baseRow, job_id })
+          candidatesAdded++
+        }
       }
     }
 
-    logRow.candidates_added = candidatesAdded
+    logRow.candidates_added             = matchedCount
+    logRow.candidates_added_to_pipeline = candidatesAdded
+    logRow.candidates_added_to_pool     = talentPoolAdded
     logRow.status = "success"
     await insertLog(logRow)
 

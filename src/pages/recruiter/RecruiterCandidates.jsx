@@ -22,6 +22,13 @@ const INTERVIEW_COMPLETE = 'INTERVIEW_COMPLETE'
 const TABS = ['All', 'Interview Pending', 'Interview Done', 'Screened Out']
 const EMPTY_MANUAL = { full_name: '', email: '', phone: '', candidate_role: '', total_years: '', skills: '', education: '', summary: '', jobId: '', addToPool: false }
 
+const SOURCING_MSGS = [
+  'Searching LinkedIn for matching profiles…',
+  'Analysing candidate experience…',
+  'Scoring profiles against job requirements…',
+  'Adding top matches to your pipeline…',
+]
+
 function ProfileLinks({ c }) {
   const links = [
     c.linkedin_url  && { href: c.linkedin_url,  label: 'LinkedIn' },
@@ -589,8 +596,11 @@ export default function RecruiterCandidates() {
   const [bulkAllotJobId, setBulkAllotJobId]     = useState('')
   const [bulkAlloting, setBulkAlloting]         = useState(false)
   const [searchQuery, setSearchQuery]           = useState('')
-  const [sourcingJob, setSourcingJob]           = useState(false)
-  const [sourcedJob,  setSourcedJob]            = useState(null) // job id that was just sourced
+  const [sourcingJob,       setSourcingJob]       = useState(false)
+  const [sourcedJob,        setSourcedJob]        = useState(null)
+  const [sourcingMsgIdx,    setSourcingMsgIdx]    = useState(0)
+  const [sourcingNoResults, setSourcingNoResults] = useState(false)
+  const sourcingIntervalRef = useRef(null)
   const [interviewModes, setInterviewModes]     = useState(() => {
     try { return JSON.parse(localStorage.getItem('interview_modes') || '{}') } catch { return {} }
   })
@@ -618,6 +628,19 @@ export default function RecruiterCandidates() {
     const j = params.get('job')
     if (j) setJobFilter(j)
   }, [location.search])
+
+  useEffect(() => {
+    if (sourcingJob) {
+      setSourcingMsgIdx(0)
+      sourcingIntervalRef.current = setInterval(() => {
+        setSourcingMsgIdx(i => (i + 1) % SOURCING_MSGS.length)
+      }, 2500)
+    } else {
+      clearInterval(sourcingIntervalRef.current)
+      sourcingIntervalRef.current = null
+    }
+    return () => clearInterval(sourcingIntervalRef.current)
+  }, [sourcingJob])
 
   async function load() {
     const { data: rcData } = await supabase
@@ -653,17 +676,26 @@ export default function RecruiterCandidates() {
     const job = jobs.find(j => j.id === jobFilter)
     if (!job) return
     setSourcingJob(true)
-    await supabase.functions.invoke('source-linkedin-candidates', {
+    setSourcingNoResults(false)
+    const result = await supabase.functions.invoke('source-linkedin-candidates', {
       body: {
         job_id:          job.id,
         job_title:       job.title,
         job_description: job.description ?? '',
         skills:          job.required_skills ?? [],
       },
-    }).catch(() => {})
+    }).catch(() => ({ data: null }))
+    const data = result?.data
     setSourcingJob(false)
-    setSourcedJob(job.id)
-    setTimeout(() => setSourcedJob(null), 3000)
+    const totalAdded = (data?.candidates_added ?? 0) + (data?.talent_pool_added ?? 0)
+    if (totalAdded === 0) {
+      setSourcingNoResults(true)
+      setTimeout(() => setSourcingNoResults(false), 8000)
+    } else {
+      setSourcedJob(job.id)
+      setTimeout(() => setSourcedJob(null), 3000)
+      await load()
+    }
   }
 
   async function handleDelete() {
@@ -916,6 +948,7 @@ export default function RecruiterCandidates() {
 
   return (
     <div className="page">
+      <style>{`@keyframes sourcing-pulse { 0%, 60%, 100% { transform: scale(1); opacity: 0.35; } 30% { transform: scale(1.5); opacity: 1; } }`}</style>
       <div className="page-head">
         <div>
           <h2>Candidates</h2>
@@ -1158,6 +1191,26 @@ export default function RecruiterCandidates() {
         </div>
       )}
 
+      {sourcingJob && (
+        <div className="section-card" style={{ padding: '48px 24px', textAlign: 'center' }}>
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginBottom: 28 }}>
+            {[0, 1, 2].map(i => (
+              <div key={i} style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--accent)', animation: `sourcing-pulse 1.5s ease-in-out ${i * 0.18}s infinite` }} />
+            ))}
+          </div>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--accent)', marginBottom: 12 }}>AI Sourcing in Progress</div>
+          <div style={{ fontSize: 14, color: 'var(--text-2)', minHeight: 22 }}>{SOURCING_MSGS[sourcingMsgIdx]}</div>
+          <div style={{ marginTop: 20, fontSize: 11, color: 'var(--text-3)', lineHeight: 1.7 }}>This usually takes 1–3 minutes. You can navigate away — sourcing continues in the background.</div>
+        </div>
+      )}
+      {sourcingNoResults && (
+        <div className="section-card" style={{ padding: '48px 24px', textAlign: 'center' }}>
+          <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-3)', marginBottom: 12 }}>LinkedIn Sourcing Complete</div>
+          <div style={{ fontSize: 14, color: 'var(--text-2)', marginBottom: 6 }}>No matching profiles found on LinkedIn for this role.</div>
+          <div style={{ fontSize: 12, color: 'var(--text-3)' }}>Try adjusting the job requirements or skills list.</div>
+        </div>
+      )}
+      {!sourcingJob && !sourcingNoResults && (
       <div className="section-card">
         {tabFiltered.length === 0 ? (
           <div className="empty-state">No candidates in this category</div>
@@ -1253,6 +1306,7 @@ export default function RecruiterCandidates() {
           </>
         )}
       </div>
+      )}
 
       {/* ── Delete Modal ── */}
       {deleteModal && (
