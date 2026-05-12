@@ -627,7 +627,7 @@ export default function RecruiterCandidates() {
     const clientIds = (rcData ?? []).map(r => r.client_id)
     if (!clientIds.length) { setLoading(false); return }
 
-    const { data: jobData } = await supabase.from('jobs').select('id, title, description, required_skills, location').in('recruiter_id', clientIds)
+    const { data: jobData } = await supabase.from('jobs').select('id, title, description, required_skills').in('recruiter_id', clientIds)
     const ids = (jobData ?? []).map(j => j.id)
     setJobs(jobData ?? [])
     if (!ids.length) { setLoading(false); return }
@@ -659,7 +659,6 @@ export default function RecruiterCandidates() {
         job_title:       job.title,
         job_description: job.description ?? '',
         skills:          job.required_skills ?? [],
-        location:        job.location ?? '',
       },
     }).catch(() => {})
     setSourcingJob(false)
