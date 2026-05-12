@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { supabase } from './supabase'
 
 const AuthContext = createContext(null)
@@ -17,6 +17,10 @@ export function AuthProvider({ children }) {
   const [profile, setProfile]               = useState(null)
   const [loading, setLoading]               = useState(true)
   const [profileLoading, setProfileLoading] = useState(false)
+  // Tracks which user ID has already had its profile fetched.
+  // Supabase SDK v2 fires SIGNED_IN on every tab focus, even with a valid session.
+  // Without this guard, profileLoading=true on every focus unmounts the whole app.
+  const profileFetchedForRef = useRef(null)
 
   async function fetchProfile(u) {
     try {
@@ -53,6 +57,7 @@ export function AuthProvider({ children }) {
         if (cancelled) return
         if (session?.user) {
           setUser(session.user)
+          profileFetchedForRef.current = session.user.id
           setProfileLoading(true)
           fetchProfile(session.user).catch(() => { if (!cancelled) setProfileLoading(false) })
         }
@@ -78,6 +83,7 @@ export function AuthProvider({ children }) {
       if (cancelled) return
 
       if (event === 'SIGNED_OUT') {
+        profileFetchedForRef.current = null
         setUser(null)
         setProfile(null)
         setProfileLoading(false)
@@ -87,10 +93,14 @@ export function AuthProvider({ children }) {
       if (!session?.user) return
 
       if (event === 'SIGNED_IN') {
-        // Genuine login — full re-init including profile fetch
         setUser(session.user)
-        setProfileLoading(true)
-        fetchProfile(session.user).catch(() => { if (!cancelled) setProfileLoading(false) })
+        // SDK v2 fires SIGNED_IN on every tab focus — only re-fetch profile on a
+        // genuinely new user (different ID or first login since page load).
+        if (profileFetchedForRef.current !== session.user.id) {
+          profileFetchedForRef.current = session.user.id
+          setProfileLoading(true)
+          fetchProfile(session.user).catch(() => { if (!cancelled) setProfileLoading(false) })
+        }
         return
       }
 

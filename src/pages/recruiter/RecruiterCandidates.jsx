@@ -597,10 +597,12 @@ export default function RecruiterCandidates() {
   const [bulkAlloting, setBulkAlloting]         = useState(false)
   const [searchQuery, setSearchQuery]           = useState('')
   const [sourcingJob,       setSourcingJob]       = useState(false)
+  const [sourcingForJobId,  setSourcingForJobId]  = useState(null)
   const [sourcedJob,        setSourcedJob]        = useState(null)
   const [sourcingMsgIdx,    setSourcingMsgIdx]    = useState(0)
   const [sourcingNoResults, setSourcingNoResults] = useState(false)
   const sourcingIntervalRef = useRef(null)
+  const sourcingPollRef     = useRef(null)
   const [interviewModes, setInterviewModes]     = useState(() => {
     try { return JSON.parse(localStorage.getItem('interview_modes') || '{}') } catch { return {} }
   })
@@ -664,6 +666,58 @@ export default function RecruiterCandidates() {
     setLoading(false)
   }
 
+  function stopPoll() {
+    if (sourcingPollRef.current) {
+      clearInterval(sourcingPollRef.current)
+      sourcingPollRef.current = null
+    }
+    try { sessionStorage.removeItem('sourcing_pending') } catch {}
+  }
+
+  function startPoll(jobId, startedAt) {
+    if (sourcingPollRef.current) clearInterval(sourcingPollRef.current)
+    const deadline = Date.now() + 360_000  // 6-minute hard timeout
+    sourcingPollRef.current = setInterval(async () => {
+      if (Date.now() > deadline) {
+        stopPoll()
+        setSourcingJob(false)
+        setSourcingForJobId(null)
+        return
+      }
+      const { data } = await supabase
+        .rpc('get_sourcing_status', { p_job_id: jobId, p_after: startedAt })
+        .catch(() => ({ data: null }))
+      if (!data?.done) return
+      stopPoll()
+      setSourcingJob(false)
+      setSourcingForJobId(null)
+      const totalAdded = (data.candidates_added_to_pipeline ?? 0) + (data.candidates_added_to_pool ?? 0)
+      if (totalAdded === 0) {
+        setSourcingNoResults(true)
+        setTimeout(() => setSourcingNoResults(false), 8000)
+      } else {
+        setSourcedJob(jobId)
+        setTimeout(() => setSourcedJob(null), 3000)
+        load()
+      }
+    }, 10_000)
+  }
+
+  // Resume sourcing loading state if the user navigated away mid-sourcing
+  useEffect(() => {
+    if (!user) return
+    try {
+      const pending = JSON.parse(sessionStorage.getItem('sourcing_pending') ?? 'null')
+      if (pending?.jobId && pending?.startedAt) {
+        setSourcingJob(true)
+        setSourcingForJobId(pending.jobId)
+        startPoll(pending.jobId, pending.startedAt)
+      }
+    } catch {}
+    return () => stopPoll()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user])
+
   function setInterviewMode(jobId, mode) {
     setInterviewModes(prev => {
       const next = { ...prev, [jobId]: mode }
@@ -675,27 +729,32 @@ export default function RecruiterCandidates() {
   async function sourceLinkedIn() {
     const job = jobs.find(j => j.id === jobFilter)
     if (!job) return
+    const startedAt = new Date().toISOString()
     setSourcingJob(true)
+    setSourcingForJobId(job.id)
     setSourcingNoResults(false)
-    const result = await supabase.functions.invoke('source-linkedin-candidates', {
-      body: {
+    // Persist so we can resume the loading UI if the user navigates away and back
+    try { sessionStorage.setItem('sourcing_pending', JSON.stringify({ jobId: job.id, startedAt })) } catch {}
+    // Fire the edge function with keepalive:true so the request completes even if
+    // the user switches tabs or navigates away before it finishes.
+    const { data: { session } } = await supabase.auth.getSession()
+    fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/source-linkedin-candidates`, {
+      method:    'POST',
+      keepalive: true,
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': `Bearer ${session?.access_token}`,
+        'apikey':        import.meta.env.VITE_SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify({
         job_id:          job.id,
         job_title:       job.title,
         job_description: job.description ?? '',
         skills:          job.required_skills ?? [],
-      },
-    }).catch(() => ({ data: null }))
-    const data = result?.data
-    setSourcingJob(false)
-    const totalAdded = (data?.candidates_added ?? 0) + (data?.talent_pool_added ?? 0)
-    if (totalAdded === 0) {
-      setSourcingNoResults(true)
-      setTimeout(() => setSourcingNoResults(false), 8000)
-    } else {
-      setSourcedJob(job.id)
-      setTimeout(() => setSourcedJob(null), 3000)
-      await load()
-    }
+      }),
+    }).catch(() => {})
+    // Poll the sourcing log every 10 s to detect completion
+    startPoll(job.id, startedAt)
   }
 
   async function handleDelete() {
@@ -1191,7 +1250,7 @@ export default function RecruiterCandidates() {
         </div>
       )}
 
-      {sourcingJob && (
+      {sourcingJob && sourcingForJobId === jobFilter && (
         <div className="section-card" style={{ padding: '48px 24px', textAlign: 'center' }}>
           <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginBottom: 28 }}>
             {[0, 1, 2].map(i => (
@@ -1203,14 +1262,14 @@ export default function RecruiterCandidates() {
           <div style={{ marginTop: 20, fontSize: 11, color: 'var(--text-3)', lineHeight: 1.7 }}>This usually takes 1–3 minutes. You can navigate away — sourcing continues in the background.</div>
         </div>
       )}
-      {sourcingNoResults && (
+      {sourcingNoResults && sourcingForJobId === jobFilter && (
         <div className="section-card" style={{ padding: '48px 24px', textAlign: 'center' }}>
           <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-3)', marginBottom: 12 }}>LinkedIn Sourcing Complete</div>
           <div style={{ fontSize: 14, color: 'var(--text-2)', marginBottom: 6 }}>No matching profiles found on LinkedIn for this role.</div>
           <div style={{ fontSize: 12, color: 'var(--text-3)' }}>Try adjusting the job requirements or skills list.</div>
         </div>
       )}
-      {!sourcingJob && !sourcingNoResults && (
+      {!(sourcingJob && sourcingForJobId === jobFilter) && !(sourcingNoResults && sourcingForJobId === jobFilter) && (
       <div className="section-card">
         {tabFiltered.length === 0 ? (
           <div className="empty-state">No candidates in this category</div>
