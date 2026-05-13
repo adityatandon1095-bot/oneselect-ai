@@ -236,6 +236,36 @@ Score 1-10. Rubric: 7-10 = strong fit → pipeline + talent pool, 4-6 = partial 
   }
 }
 
+// ---------- rate limiter (10 calls per hour per user) ----------
+
+const SOURCING_RATE_LIMIT  = 10
+const SOURCING_WINDOW_MS   = 3_600_000  // 1 hour
+
+async function checkSourcingRateLimit(
+  adminClient: ReturnType<typeof createClient>,
+  userId: string
+): Promise<boolean> {
+  const now      = Date.now()
+  const windowTs = new Date(Math.floor(now / SOURCING_WINDOW_MS) * SOURCING_WINDOW_MS).toISOString()
+
+  await adminClient
+    .from("rate_limits")
+    .delete()
+    .lt("window_start", new Date(now - SOURCING_WINDOW_MS * 2).toISOString())
+
+  const { data, error } = await adminClient.rpc("increment_rate_limit", {
+    p_user_id:      userId,
+    p_window_start: windowTs,
+    p_limit:        SOURCING_RATE_LIMIT,
+  })
+
+  if (error) {
+    console.error("[source-linkedin-candidates] rate limit rpc error (blocking):", error.message)
+    return false
+  }
+  return data === true
+}
+
 // ---------- log helper ----------
 
 async function insertLog(row: {
@@ -254,6 +284,33 @@ async function insertLog(row: {
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders })
+
+  // ---- Require a valid authenticated session ----
+  const authHeader = req.headers.get("Authorization") ?? ""
+  const userClient = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_ANON_KEY")!,
+    { global: { headers: { Authorization: authHeader } } }
+  )
+  const { data: { user }, error: authError } = await userClient.auth.getUser()
+  if (authError || !user) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    })
+  }
+
+  // ---- Per-user rate limit: 10 calls per hour (uses module-level service-role client) ----
+  const allowed = await checkSourcingRateLimit(supabase, user.id)
+  if (!allowed) {
+    return new Response(
+      JSON.stringify({ error: "Rate limit exceeded. You can run up to 10 sourcing runs per hour." }),
+      {
+        status: 429,
+        headers: { ...corsHeaders, "Content-Type": "application/json", "Retry-After": "3600" },
+      }
+    )
+  }
 
   const logRow = {
     job_id:                       null as string | null,
