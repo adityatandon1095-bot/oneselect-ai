@@ -1,0 +1,625 @@
+================================================================================
+ONESELECT.AI — KNOWLEDGE BASE FOR AI ASSISTANT
+Last updated: May 2026
+================================================================================
+
+This document is the complete reference for the OneSelect.ai chatbot assistant.
+It covers everything about the product, service, workflow, pricing, and company.
+Use this as the authoritative source when answering visitor questions.
+
+================================================================================
+SECTION 1 — WHAT IS ONESELECT.AI
+================================================================================
+
+OneSelect.ai is an AI-powered hiring platform operated by One Select (Strategic
+Talent Solutions), a UK-based HR and recruitment company. The product exists at
+the intersection of a traditional recruitment agency and modern AI technology —
+but it is neither of those things alone.
+
+OneSelect is a FULLY MANAGED HIRING SERVICE. It is not a self-serve software
+tool that companies license and operate themselves. When a company engages
+OneSelect, the OneSelect team handles the entire recruitment pipeline on the
+client's behalf, using AI to deliver results faster, more consistently, and at
+a fraction of the cost of a traditional agency.
+
+The tagline is: "The right person in the right role changes everything."
+
+OneSelect is primarily active in the UK market and serves companies of all
+sizes — from fast-growing startups to established SMEs — across every industry.
+
+What OneSelect is:
+- A fully managed recruitment service powered by AI
+- A team of HR professionals who use AI tools to run your hiring
+- A platform that delivers ranked, interviewed candidates to a private portal
+- A flat-fee alternative to percentage-based recruitment agencies
+
+What OneSelect is NOT:
+- A job board (like Indeed or Reed)
+- A self-serve ATS (like Greenhouse or Lever)
+- A LinkedIn replacement
+- A tool you log into to run your own recruiting
+
+================================================================================
+SECTION 2 — THE PROBLEM ONESELECT SOLVES
+================================================================================
+
+Hiring is broken for most companies, and OneSelect was built specifically to
+fix the problems that plague the traditional process.
+
+THE TIME PROBLEM
+Traditional recruitment takes 4–6 weeks minimum from job posting to shortlist.
+HR teams spend an average of 23+ hours screening CVs per open role. The average
+job posting receives 250 CVs. Reading each one for even 5 minutes means 20+
+hours of reading before a single interview has been scheduled. First-round
+interviews then take additional days or weeks to coordinate, with multiple
+back-and-forth emails and calendar clashes.
+
+THE COST PROBLEM
+Traditional recruitment agencies charge 15–25% of the candidate's first-year
+salary as a placement fee. For a role paying £50,000 per year, that means
+£7,500–£12,500 per hire. For a company hiring 5–10 people per year, this adds
+up to £37,500–£125,000 annually — just in agency fees, before any other
+recruitment costs. Small and medium businesses often cannot afford this model,
+leaving them under-resourced or forced to do everything internally.
+
+THE CONSISTENCY AND BIAS PROBLEM
+Human CV screening is inconsistent. The same CV reviewed on a Monday morning
+versus a Friday afternoon may receive different attention. Unconscious bias
+affects decisions based on name, school, job title formatting, or which page
+a CV landed on. Good candidates get missed because their CV was buried on page
+12 of 250. Weaker candidates make it through because they happened to catch a
+reviewer at the right moment. There is no systematic, repeatable scoring.
+
+THE SCHEDULING PROBLEM
+Even after screening, arranging first-round interviews with 10–20 candidates
+across multiple calendars adds another week of administrative overhead. For
+every candidate who cancels or no-shows, more time is lost.
+
+THE SMALL TEAM PROBLEM
+Companies with small HR teams — or no dedicated HR function at all — lack the
+bandwidth to run a proper recruitment process for multiple simultaneous roles.
+They either hire badly, hire slowly, or pay agency fees they can't really afford.
+
+ONESELECT'S SOLUTION
+OneSelect eliminates all of these problems. The AI processes 100 CVs in under
+10 minutes. Every candidate is evaluated identically, with no human bias.
+Interviews happen automatically with no scheduling overhead. Clients receive a
+ranked shortlist the same day. The total cost is a flat fee — not a percentage
+of salary — saving 60–80% vs a traditional agency.
+
+================================================================================
+SECTION 3 — HOW ONESELECT WORKS — COMPLETE WORKFLOW
+================================================================================
+
+OneSelect runs a structured, automated pipeline that takes candidates from
+raw CV to ranked, interviewed shortlist without the client needing to be
+involved in any of the heavy lifting. Here is exactly how it works.
+
+---
+
+STEP 1 — CLIENT ONBOARDING
+
+When a company engages OneSelect, they are set up with a private client portal.
+The client receives a branded welcome email with login credentials for their
+personal portal, hosted at oneselect-ai-t6uo-phi.vercel.app. On first login,
+they are prompted to set a secure password. Their dashboard immediately shows
+all their active roles, pipeline status, and any candidates already in the
+system. The onboarding process takes less than 24 hours.
+
+---
+
+STEP 2 — JOB DEFINITION
+
+The client creates their job requirements through the portal's job wizard.
+They fill in:
+- Job title
+- Years of experience required
+- Required skills (must-have, non-negotiable)
+- Preferred skills (nice-to-have, bonus)
+- Full role description
+- Weighting preferences: how much to emphasise technical ability vs
+  communication skills for this specific role
+
+Once submitted, the job is immediately live and visible to the OneSelect team.
+The job definition is the foundation for all AI scoring — the more detail
+the client provides, the more precisely the AI can evaluate candidates.
+
+---
+
+STEP 3 — CANDIDATE SOURCING
+
+The OneSelect team sources candidates from multiple channels on the client's
+behalf:
+- LinkedIn (profile search and direct outreach)
+- Job boards: Reed, Indeed, Totaljobs, CV Library
+- Referral networks
+- The OneSelect master talent pool (pre-vetted candidates from previous
+  engagements who have opted in to future opportunities)
+
+The client does not need to post any jobs themselves, manage inbound
+applications, or communicate with candidates at this stage. OneSelect
+handles all sourcing.
+
+---
+
+STEP 4 — AI CV PARSING (AUTOMATIC)
+
+Every CV received — regardless of format — is processed automatically by
+Claude AI (Anthropic). The AI reads and extracts:
+- Full name and contact details
+- Current role and employer
+- Total years of professional experience
+- Complete skills list
+- Education and qualifications
+- Career highlights and notable achievements
+- A structured professional summary
+
+Supported file formats: PDF, DOCX, TXT, JPG, PNG. The AI handles all
+formatting variations — no standardised template required from candidates.
+Parsing 50 CVs takes approximately 5 minutes.
+
+---
+
+STEP 5 — AI SCREENING (AUTOMATIC)
+
+After parsing, Claude scores every candidate against the specific job
+definition. For each candidate, the AI produces:
+- A match score from 0–100
+- A pass/fail decision
+- A written reason explaining the screening verdict
+- A ranking position relative to all other candidates for this role
+
+The scoring considers: skill overlap with required and preferred skills,
+experience level match, role relevance, and career trajectory. The AI
+evaluates every candidate using identical criteria — the 250th CV gets
+exactly the same quality of analysis as the first.
+
+A typical batch of 50–100 CVs is screened in under 10 minutes. A human
+recruiter doing the same task to the same standard would take 40+ hours.
+
+---
+
+STEP 6 — AI INTERVIEWS (AUTOMATIC)
+
+Every candidate who passes the screening threshold receives an AI interview —
+automatically, with no scheduling required. Candidates receive an email with
+a secure interview link. They can complete the interview at any time of day
+from any device, in their own time.
+
+The interview is conducted by Claude AI and is personalised to each candidate:
+- The AI references the candidate's actual CV experience
+- It asks about their specific companies, projects, and achievements
+- It adapts follow-up questions based on their answers
+- It covers 4–5 core areas in 10–15 minutes per candidate
+
+The five areas assessed in every interview:
+1. Technical Ability — competence in the role's required skills
+2. Communication — clarity, structure, professional expression
+3. Role Fit — understanding of the role and genuine motivation
+4. Problem Solving — approach to challenges and complex situations
+5. Experience Relevance — how directly their background applies
+
+Interviews run in parallel automatically. 20 candidates can be interviewed
+simultaneously with zero human involvement. There is no back-and-forth
+scheduling, no no-shows, and no calendar coordination.
+
+---
+
+STEP 7 — SCORING AND RANKING (AUTOMATIC)
+
+After each interview completes, Claude generates a comprehensive assessment:
+
+Scores (each 0–100):
+- Technical Ability score
+- Communication score
+- Role Fit score
+- Problem Solving score
+- Experience Relevance score
+- Overall Score (weighted average based on role requirements)
+
+Recommendation: Strong Hire / Hire / Borderline / Reject
+
+Additional outputs per candidate:
+- Confidence level: High / Medium / Low
+- AI Insight: 3–4 sentence narrative assessment of the candidate
+- Strengths: specific positive attributes identified in the interview
+- Red Flags: concerns or inconsistencies flagged automatically
+- Best Answer: the strongest response from the interview, highlighted
+- Skills Verification: which claimed skills were demonstrated,
+  questioned, or not demonstrated in the interview
+
+The full ranked list from strongest to weakest is immediately available
+in the client's portal.
+
+---
+
+STEP 8 — CLIENT NOTIFICATION (AUTOMATIC)
+
+When the pipeline run completes, the client receives a branded email
+notification: "Your hiring results are ready." The email includes:
+- Total candidates screened
+- Number who passed
+- Number of Strong Hire recommendations
+- Top 3 candidates with their scores and a one-line summary
+- A direct link to their portal to review all results
+
+---
+
+STEP 9 — CLIENT REVIEWS RESULTS
+
+The client logs into their portal and sees their complete ranked candidate
+list. They can:
+- Filter candidates by recommendation category (Strong Hire, Hire, etc.)
+- Filter by job (for clients with multiple active roles)
+- Search by name, role, or skills
+- Click any candidate for their complete profile, which includes:
+  * Score rings and dimension bars visualising each dimension
+  * Full verbatim AI interview transcript
+  * AI Insight narrative
+  * Recommendation with confidence level
+  * Identified strengths
+  * Red flags
+  * Best interview answer highlighted
+  * Skills gap analysis against job requirements
+  * LinkedIn profile data (if sourced via LinkedIn)
+- Download a PDF report for any candidate
+- Use the built-in AI assistant to ask questions about the pipeline
+
+The client typically spends 30 minutes reviewing results to identify
+their preferred 2–3 candidates — compared to days of interviews in a
+traditional process.
+
+---
+
+STEP 10 — PLACEMENT
+
+The client selects their preferred candidates. OneSelect coordinates the
+offer process and handles candidate communication. Once a candidate is
+placed, they are marked in the system, the role is closed, and the
+engagement is complete.
+
+================================================================================
+SECTION 4 — THE TALENT POOL
+================================================================================
+
+OneSelect maintains a master database of pre-vetted candidates — the Talent Pool.
+
+How it works:
+- Every candidate who goes through a OneSelect pipeline is (with consent)
+  added to the master talent pool as an ongoing resource
+- When a new job is posted by any client, the AI automatically scans the
+  entire talent pool and scores every candidate against the new role's requirements
+- Clients can have an initial shortlist generated within hours of posting a role,
+  drawn entirely from pre-existing candidates who have already been screened
+  and interviewed
+- The talent pool grows with every engagement, improving match quality over time
+
+Value to clients:
+- Faster time to shortlist — no sourcing required if pool candidates match
+- Pre-vetted candidates who have already demonstrated quality in prior interviews
+- Continuous improvement: the more OneSelect is used, the deeper the pool
+
+================================================================================
+SECTION 5 — THE CLIENT PORTAL
+================================================================================
+
+Every OneSelect client has access to a private, branded portal. The portal is
+the client's window into their entire recruitment pipeline. No app download
+is required — it works in any modern browser.
+
+DASHBOARD
+- At-a-glance view of active jobs and their status
+- Counts: candidates in pipeline, interviews completed, top candidates
+- Quick navigation to all sections
+
+MY JOBS
+- List of all active and past job postings
+- Create new jobs via the guided wizard
+- See live status: sourcing, pipeline running, results ready
+- Edit job requirements at any time
+
+CANDIDATES
+- Complete ranked list of all candidates across all jobs
+- Filterable by: job, recommendation, score, status
+- Search by name, role, or skills
+- Click any candidate for their full profile
+- Bulk actions: export to CSV, download reports
+- Side-by-side candidate comparison
+
+REPORTS
+- Per-job summary reports
+- Pipeline health analytics
+- Downloadable PDF reports for sharing with stakeholders
+
+AI ASSISTANT
+- Built-in AI chat for asking questions about the pipeline
+- "Who is my strongest candidate for the developer role?"
+- "What are the common weaknesses across my shortlist?"
+- "Draft a comparison of the top 3 candidates for my Head of Sales role"
+
+SETTINGS
+- Account management
+- Two-factor authentication (2FA)
+- Notification preferences
+
+================================================================================
+SECTION 6 — KEY METRICS AND RESULTS
+================================================================================
+
+Speed:
+- Time to shortlist: hours, not weeks
+- CV parsing: 50 CVs in under 5 minutes
+- Full pipeline (sourcing to ranked shortlist): same day for prepared roles
+- CV processing vs human: 100 CVs in 10 minutes vs 40+ human hours
+- Client time required to review results: 30 minutes
+
+Quality:
+- Every candidate evaluated identically — no reviewer fatigue
+- No unconscious bias in screening
+- Personalised AI interviews for every passing candidate
+- Multi-dimensional scoring (5 dimensions, not just a gut feeling)
+
+Cost:
+- Starter plan: £800 per role
+- Savings vs traditional agencies: 60–80%
+- No hidden fees, no percentage-of-salary surprises
+
+Consistency:
+- The same job posted twice will receive comparable-quality evaluations
+- AI criteria do not drift between candidates
+- Full audit trail of all decisions
+
+================================================================================
+SECTION 7 — PRICING
+================================================================================
+
+OneSelect operates on a flat-fee model, not a percentage-of-salary model.
+This is one of the most significant differences from traditional agencies.
+
+STARTER — £800 per role
+- Best for: companies with occasional hiring needs
+- Up to 20 candidates screened and interviewed
+- Full pipeline: parsing, screening, AI interviews, scoring
+- Access to client portal with results
+- Standard report
+
+GROWTH — £1,500 per month
+- Best for: companies with ongoing or multiple simultaneous hiring needs
+- Up to 5 active roles at any one time
+- Unlimited candidates per role
+- Priority turnaround
+- Full portal access for all roles
+- Monthly reporting
+
+ENTERPRISE — Custom pricing
+- Unlimited roles
+- Dedicated account manager
+- White-label option (portal branded entirely with client's brand)
+- Integration with existing HR systems
+- Custom SLAs and reporting
+- Volume discounts
+- Contact OneSelect directly for a quote
+
+HOW THIS COMPARES TO TRADITIONAL AGENCIES:
+A traditional agency charges 15–25% of first-year salary as a placement fee.
+For a £50,000 salary role: £7,500–£12,500 per hire.
+OneSelect's Starter plan at £800 represents a saving of over 90% vs the top
+end of that range. Even the Growth plan at £1,500/month — covering up to 5
+simultaneous roles — is less than the agency fee for a single mid-level hire.
+
+Note: Always encourage prospects to speak with the OneSelect team for a
+tailored quote. Pricing may vary based on volume, role complexity, and
+specific requirements.
+
+================================================================================
+SECTION 8 — WHO ONESELECT IS FOR
+================================================================================
+
+IDEAL CLIENTS
+OneSelect works best for:
+
+- SMEs hiring 2–20 people per year who want a professional process without
+  agency fees
+- Fast-growing startups that need to hire quickly across multiple roles
+  simultaneously and cannot afford the time or cost of a traditional process
+- Companies with overstretched HR teams who need to scale their output
+  without scaling their headcount
+- Businesses that have been burned by inconsistent agency quality
+- Organisations hiring across a variety of roles and needing consistent
+  evaluation standards
+- Companies that care about reducing bias and improving diversity in hiring
+- Any business tired of paying 20% of salary per hire to an agency
+
+NOT IDEAL FOR
+OneSelect is not the best fit for:
+- A single one-off hire where cost is not a concern and time is unlimited
+- Very senior executive search (C-suite, board-level) where deep
+  human-led relationship management is paramount
+- Highly specialised technical roles requiring in-depth domain expertise
+  to properly assess answers (e.g. niche scientific research positions)
+
+================================================================================
+SECTION 9 — FREQUENTLY ASKED QUESTIONS
+================================================================================
+
+Q: HOW IS ONESELECT DIFFERENT FROM LINKEDIN?
+LinkedIn is a professional network where you find and approach candidates
+yourself. OneSelect is a fully managed service — we source from LinkedIn and
+many other channels, then screen, interview, and score every candidate so you
+only see the best ones, already ranked and ready to review. You never need to
+log in to LinkedIn or message a single person.
+
+Q: HOW IS IT DIFFERENT FROM A TRADITIONAL RECRUITMENT AGENCY?
+Traditional agencies charge 15–25% of salary and typically take 4–6 weeks.
+OneSelect charges a flat fee and delivers results in days. More importantly,
+AI-driven evaluation means every candidate is assessed consistently and
+objectively, not depending on the judgement (and workload) of a single
+recruiter. The cost savings alone are transformative for most companies.
+
+Q: HOW IS IT DIFFERENT FROM HIREVUE OR OTHER AI INTERVIEW TOOLS?
+Platforms like HireVue are tools that companies operate themselves — they
+still require someone on the client side to set up, manage, and review the
+process. OneSelect is a fully managed service. You tell us what you need,
+we run the entire pipeline, and you review the ranked results. We do the work.
+
+Q: IS THE AI BIASED?
+Claude AI evaluates candidates based exclusively on demonstrated skills,
+experience, and interview answers — not demographic information. Names,
+gender, age, ethnicity, and educational institution do not factor into
+scores. All AI decisions are reviewed by the OneSelect team before being
+presented to clients. OneSelect provides monthly bias audit reports showing
+the distribution of scores, recommendations, and outcomes across candidate
+demographics. This level of consistency and transparency is impossible to
+achieve with purely human screening.
+
+Q: DOES THE AI REPLACE HUMAN JUDGEMENT ENTIRELY?
+No. The AI handles the volume work: parsing hundreds of CVs, screening every
+candidate against objective criteria, and conducting first-round interviews
+automatically. This frees the OneSelect team and the client to focus on what
+humans do best — making final judgements on the strongest 3–5 candidates who
+have already been objectively validated. The AI surfaces the best candidates;
+humans make the final call.
+
+Q: CAN CANDIDATES SEE THEIR SCORES?
+Candidates receive professional communication throughout the process and are
+notified of outcomes. OneSelect is building a candidate portal where candidates
+can view their own profile, assessment, and matched opportunities. Transparency
+with candidates is a core value.
+
+Q: WHAT FILE FORMATS DO YOU ACCEPT FOR CVS?
+PDF, DOCX, TXT, JPG, and PNG. The AI can extract structured data from any
+of these formats, including scanned images of CVs. No template or standardised
+format is required from candidates.
+
+Q: HOW LONG DOES THE FULL PIPELINE TAKE?
+For a typical role with 50 candidates:
+- CV parsing: approximately 5 minutes
+- AI screening: approximately 10 minutes
+- AI interviews: 30–60 minutes (running in parallel, not sequentially)
+- Total automated pipeline: under 2 hours
+- Client review time: approximately 30 minutes
+- Full process from CV upload to confirmed shortlist: same day
+
+For comparison, the equivalent traditional process (human screening + first
+round interviews) typically takes 2–4 weeks.
+
+Q: DO YOU WORK INTERNATIONALLY?
+Yes. The AI supports all languages and OneSelect can source candidates
+globally. The platform is currently most active in the UK market, with
+clients primarily hiring for UK-based roles. International sourcing and
+assessment is available on request.
+
+Q: WHAT INDUSTRIES DO YOU WORK IN?
+All industries. OneSelect has particular experience and a deep talent pool
+in: technology, software engineering, product management, finance and
+fintech, marketing, operations, sales, customer success, HR, and
+professional services. The AI adapts its assessment criteria to the
+specific requirements of each role regardless of industry.
+
+Q: HOW DO CLIENTS ACCESS THEIR RESULTS?
+Via their private portal, accessible from any browser on any device. When
+results are ready, clients receive a notification email with a direct link.
+No app download is required. The portal works on desktop, tablet, and mobile.
+
+Q: IS MY DATA SECURE?
+Yes. All data is stored in Supabase, which is enterprise-grade, SOC 2
+compliant infrastructure with encryption at rest and in transit. Row Level
+Security (RLS) ensures that candidate data from one client is never visible
+to another client. CV data is only used for the specific hiring engagement
+it was submitted for. OneSelect never shares candidate data between clients
+without explicit consent.
+
+Q: CAN I TRY IT BEFORE COMMITTING?
+Yes. OneSelect offers a free demo where the team runs a sample pipeline on
+a role of your choice. You see real results — parsed CVs, AI scoring, and
+interview outputs — before making any commitment. Contact the team to arrange
+a demo.
+
+Q: HOW QUICKLY CAN WE GET STARTED?
+The client onboarding process takes less than 24 hours. Once the OneSelect
+team has your job requirements and an initial batch of CVs (or confirmation
+to begin sourcing), first results are typically delivered within 48 hours.
+
+Q: WHAT IF I ONLY NEED TO HIRE ONE PERSON?
+The Starter plan at £800 per role is designed for exactly this. You get the
+full OneSelect pipeline — sourcing, screening, AI interviews, scoring, and
+portal access — for a single role at a fixed, predictable cost.
+
+Q: CAN I USE ONESELECT FOR MULTIPLE ROLES AT THE SAME TIME?
+Yes. The Growth plan (£1,500/month) covers up to 5 active roles simultaneously.
+The Enterprise plan covers unlimited concurrent roles. Clients with multiple
+open positions often find the most value here, since the cost per role decreases
+significantly at volume.
+
+Q: WHAT HAPPENS AFTER A CANDIDATE IS PLACED?
+The role is marked as closed in the portal. OneSelect handles the offer
+coordination and candidate communication. The placed candidate (with consent)
+may be added to the talent pool as a resource for future opportunities if
+they are ever back on the market.
+
+Q: DO YOU HANDLE OFFER LETTERS AND CONTRACTS?
+OneSelect coordinates the offer process. Final employment contracts are
+typically handled by the client company's HR or legal team. OneSelect can
+advise on offer structure and provide templates as part of the service.
+
+================================================================================
+SECTION 10 — CONTACT AND NEXT STEPS
+================================================================================
+
+Website: oneselect.ai
+Client portal: oneselect-ai-t6uo-phi.vercel.app
+
+TO GET STARTED:
+The best first step is to book a free demo. The OneSelect team will walk
+through a live pipeline on a role of your choice so you see exactly what
+the output looks like before making any decision.
+
+TYPICAL ONBOARDING JOURNEY:
+Day 0: Initial conversation and demo
+Day 1: Onboarding — portal access set up, job requirements defined
+Day 2–3: Sourcing begins / CVs submitted to the system
+Day 2–3: Pipeline runs automatically
+Day 3–4: Client receives results notification
+Day 4: Client reviews portal, selects preferred candidates
+
+Total time from first conversation to shortlist: approximately 3–4 days.
+
+================================================================================
+SECTION 11 — THE TECHNOLOGY
+================================================================================
+
+OneSelect is built on enterprise-grade infrastructure designed for security,
+reliability, and scale.
+
+AI ENGINE: Claude (Anthropic)
+Claude is the state-of-the-art large language model from Anthropic, widely
+regarded as one of the most capable and safe AI systems available. It powers
+all AI functions in OneSelect: CV parsing, candidate screening, AI interviews,
+scoring, and the client-facing AI assistant. Anthropic's focus on AI safety
+and transparency aligns with OneSelect's commitment to fair, explainable hiring.
+
+DATABASE: Supabase (PostgreSQL)
+All data is stored in Supabase — enterprise-grade, SOC 2 compliant PostgreSQL
+infrastructure. Row Level Security (RLS) ensures strict data isolation between
+clients. All data is encrypted at rest and in transit.
+
+FRONTEND: React on Vercel
+The client portal and all web interfaces are built in React and hosted on
+Vercel, with 99.9% uptime SLA and global CDN distribution for fast load
+times anywhere in the world.
+
+EMAIL: Resend
+All transactional emails (invitations, notifications, interview links,
+result alerts) are delivered via Resend's reliable email infrastructure.
+
+SECURITY:
+- Row Level Security on all database tables
+- Two-factor authentication (2FA) available for all users
+- HTTPS enforced everywhere
+- Sessions validated server-side on every request
+- No API keys or secrets ever exposed to the browser
+- Candidate data isolated per client — zero cross-client data leakage
+
+================================================================================
+END OF KNOWLEDGE BASE
+================================================================================
