@@ -178,7 +178,7 @@ export default function AdminRecruiters() {
           <h2>Recruiters</h2>
           <p>{recruiters.length} internal recruiter{recruiters.length !== 1 ? 's' : ''}</p>
         </div>
-        <button className="btn btn-primary" onClick={() => { setInvName(''); setInvEmail(''); setInvError(''); setShowInvite(true) }}>
+        <button className="btn btn-primary" onClick={() => { updateInv('invName', ''); updateInv('invEmail', ''); setInvError(''); setShowInvite(true) }}>
           + Invite Recruiter
         </button>
       </div>
