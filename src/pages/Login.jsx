@@ -44,19 +44,24 @@ export default function Login() {
     const hashParams   = new URLSearchParams(window.location.hash.slice(1))
     const searchParams = new URLSearchParams(window.location.search)
     const urlType = hashParams.get('type') || searchParams.get('type')
+    // PKCE recovery/invite links carry ?code= instead of a hash type param
+    const hasCode = !!searchParams.get('code')
 
     // Pre-fill email from invite link ?email= param
     const prefilledEmail = searchParams.get('email') ?? ''
     if (prefilledEmail) setEmail(prefilledEmail)
 
     if (urlType === 'recovery' || urlType === 'invite') {
+      // Legacy implicit-flow link — type is explicit in the hash
       setMode('reset')
-    } else {
-      // Await signout so the admin session is fully cleared before the form renders.
-      // Without await, autofill can fire a submit before signout completes.
+    } else if (!hasCode) {
+      // Normal login page — clear any stale session so autofill can't fire early
       setSigningOut(true)
       supabase.auth.signOut({ scope: 'local' }).finally(() => setSigningOut(false))
     }
+    // hasCode = PKCE recovery/invite link — don't sign out; the SDK will exchange
+    // the code and fire PASSWORD_RECOVERY. Signing out here wipes the session
+    // before updateUser() can use it, which is the cause of the "error" on submit.
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'PASSWORD_RECOVERY') {
@@ -65,6 +70,16 @@ export default function Login() {
         setInfo('')
       }
     })
+
+    // Race-condition fallback: the SDK may exchange the PKCE code and fire
+    // PASSWORD_RECOVERY before the listener above is registered. getSession()
+    // resolves after the exchange, so if there's already a session we show the form.
+    if (hasCode) {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session) { setMode('reset'); setError(''); setInfo('') }
+      })
+    }
+
     return () => subscription.unsubscribe()
   }, [])
 
