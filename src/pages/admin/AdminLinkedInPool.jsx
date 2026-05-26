@@ -100,9 +100,13 @@ export default function AdminLinkedInPool({ allowedClientIds } = {}) {
       </div>
 
       {loading ? (
-        <div className="loading">Loading…</div>
+        <div style={{ padding: '40px 0', textAlign: 'center' }}><span className="spinner" /></div>
       ) : filtered.length === 0 ? (
-        <div className="empty-state">No LinkedIn profiles in the talent pool yet. They appear here when sourced candidates score 4–6 against a job.</div>
+        <div className="empty-state">
+          <div style={{ fontSize: 28, marginBottom: 10, opacity: 0.3 }}>◌</div>
+          <div style={{ fontWeight: 400, color: 'var(--text-2)', marginBottom: 6 }}>No LinkedIn profiles yet</div>
+          <div style={{ fontSize: 12, color: 'var(--text-3)' }}>Sourced candidates scoring 4–6 against a job will appear here.</div>
+        </div>
       ) : (
         <div className="table-wrap">
           <table className="table">

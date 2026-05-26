@@ -326,7 +326,11 @@ export default function AdminBilling() {
         {plansLoading ? (
           <div style={{ padding: 24, display: 'flex', justifyContent: 'center' }}><span className="spinner" /></div>
         ) : plans.length === 0 ? (
-          <div className="empty-state" style={{ marginTop: 16 }}>No plans yet — seed defaults or create one above.</div>
+          <div className="empty-state" style={{ marginTop: 16 }}>
+            <div style={{ fontSize: 28, marginBottom: 10, opacity: 0.3 }}>◧</div>
+            <div style={{ fontWeight: 400, color: 'var(--text-2)', marginBottom: 6 }}>No plans yet</div>
+            <div style={{ fontSize: 12, color: 'var(--text-3)' }}>Seed defaults or create a plan above to get started.</div>
+          </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
@@ -377,7 +381,11 @@ export default function AdminBilling() {
       <div className="section-card">
         <div className="section-card-head"><h3>Client Subscriptions</h3></div>
         {clients.length === 0 ? (
-          <div className="empty-state">No clients yet.</div>
+          <div className="empty-state">
+            <div style={{ fontSize: 28, marginBottom: 10, opacity: 0.3 }}>◉</div>
+            <div style={{ fontWeight: 400, color: 'var(--text-2)', marginBottom: 6 }}>No client subscriptions yet</div>
+            <div style={{ fontSize: 12, color: 'var(--text-3)' }}>Invite clients in the Clients page to manage their subscriptions here.</div>
+          </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>

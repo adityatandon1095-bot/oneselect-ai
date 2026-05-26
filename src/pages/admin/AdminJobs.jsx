@@ -246,7 +246,13 @@ export default function AdminJobs() {
 
         {filtered.length === 0 ? (
           <div className="empty-state">
-            {jobs.length === 0 ? 'No jobs created yet.' : 'No jobs match this filter.'}
+            {jobs.length === 0 ? (
+              <>
+                <div style={{ fontSize: 28, marginBottom: 10, opacity: 0.3 }}>◫</div>
+                <div style={{ fontWeight: 400, color: 'var(--text-2)', marginBottom: 6 }}>No jobs created yet</div>
+                <div style={{ fontSize: 12, color: 'var(--text-3)' }}>Jobs created by clients or in the Pipeline page will appear here.</div>
+              </>
+            ) : 'No jobs match this filter.'}
           </div>
         ) : (
           <>

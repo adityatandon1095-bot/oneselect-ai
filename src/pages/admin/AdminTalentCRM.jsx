@@ -117,8 +117,12 @@ export default function AdminTalentCRM() {
       {loading ? (
         <div style={{ textAlign: 'center', padding: 60 }}><span className="spinner" /></div>
       ) : all.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: 60, color: 'var(--text-muted)', fontSize: 14 }}>
-          No available candidates in the talent pool.
+        <div className="section-card">
+          <div className="empty-state">
+            <div style={{ fontSize: 28, marginBottom: 10, opacity: 0.3 }}>◌</div>
+            <div style={{ fontWeight: 400, color: 'var(--text-2)', marginBottom: 6 }}>No available candidates yet</div>
+            <div style={{ fontSize: 12, color: 'var(--text-3)' }}>Candidates marked as available in the talent pool will appear here for nurture and outreach.</div>
+          </div>
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 24, alignItems: 'start' }}>

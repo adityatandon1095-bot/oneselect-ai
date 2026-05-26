@@ -220,7 +220,13 @@ export default function ClientReports() {
       )}
 
       {filtered.length === 0 ? (
-        <div className="section-card"><div className="empty-state">No interview results yet</div></div>
+        <div className="section-card">
+          <div className="empty-state">
+            <div style={{ fontSize: 28, marginBottom: 10, opacity: 0.3 }}>◱</div>
+            <div style={{ fontWeight: 400, color: 'var(--text-2)', marginBottom: 6 }}>No interview results yet</div>
+            <div style={{ fontSize: 12, color: 'var(--text-3)' }}>Reports appear here once your candidates complete their AI interviews.</div>
+          </div>
+        </div>
       ) : (
         <>
           <div style={{ display: 'flex', gap: 2, marginBottom: 16 }} className="no-print">

@@ -40,12 +40,13 @@ function appStatus(c) {
 }
 
 export default function CandidateDashboard() {
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
   const navigate = useNavigate()
   const [poolEntry,     setPoolEntry]     = useState(null)
   const [matches,       setMatches]       = useState([])
   const [applications,  setApplications]  = useState([])
   const [loading,       setLoading]       = useState(true)
+  const [bannerDismissed, setBannerDismissed] = useState(false)
 
   useEffect(() => { if (user) load() }, [user])
 
@@ -73,7 +74,7 @@ export default function CandidateDashboard() {
     }
   }
 
-  if (loading) return <div className="page" style={{ display: 'flex', alignItems: 'center', gap: 10 }}><span className="spinner" /> Loading…</div>
+  if (loading) return <div className="page"><span className="spinner" /></div>
 
   const score       = profileScore(poolEntry)
   const interviewsDone = matches.filter(m => m.scores?.overallScore != null).length
@@ -85,6 +86,31 @@ export default function CandidateDashboard() {
 
   return (
     <div className="page">
+      {profile?.first_login === true && !bannerDismissed && (
+        <div style={{
+          background: 'var(--accent-d)',
+          border: '1px solid var(--accent)',
+          borderRadius: 'var(--r)',
+          padding: '16px 20px',
+          marginBottom: 24,
+          display: 'flex',
+          alignItems: 'flex-start',
+          gap: 14,
+        }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontFamily: 'var(--font-head)', fontSize: 17, fontWeight: 400, color: 'var(--accent)', marginBottom: 4, letterSpacing: '0.02em' }}>Welcome to One Select</div>
+            <div style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.6 }}>
+              We match your profile to opportunities from our hiring partners. Complete your profile to improve match quality — your applications, matches and interview results will appear here.
+            </div>
+          </div>
+          <button
+            onClick={() => setBannerDismissed(true)}
+            aria-label="Dismiss welcome message"
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)', fontSize: 18, lineHeight: 1, padding: 2 }}
+          >×</button>
+        </div>
+      )}
+
       <div className="page-head">
         <div>
           <h2>Welcome back{poolEntry?.full_name ? `, ${poolEntry.full_name.split(' ')[0]}` : ''}</h2>
@@ -159,10 +185,15 @@ export default function CandidateDashboard() {
           )}
         </div>
         {matches.length === 0 ? (
-          <div className="empty-state" style={{ padding: '30px 20px' }}>
-            <div style={{ fontSize: 28, opacity: 0.15, marginBottom: 10 }}>◎</div>
-            <div>You haven't been matched to any roles yet.</div>
-            <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 6 }}>Keep your profile up to date to improve your chances.</div>
+          <div className="empty-state">
+            <div style={{ fontSize: 28, marginBottom: 10, opacity: 0.3 }}>◎</div>
+            <div style={{ fontWeight: 400, color: 'var(--text-2)', marginBottom: 6 }}>No matches yet</div>
+            <div style={{ fontSize: 12, color: 'var(--text-3)' }}>Complete your profile to improve your matches.</div>
+            {score < 80 && (
+              <button className="btn btn-secondary" style={{ marginTop: 14, fontSize: 11 }} onClick={() => navigate('/candidate/profile')}>
+                Complete Profile →
+              </button>
+            )}
           </div>
         ) : (
           displayMatches.map(m => {

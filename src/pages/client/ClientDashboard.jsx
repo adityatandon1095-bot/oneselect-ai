@@ -13,6 +13,7 @@ export default function ClientDashboard() {
   const [recentActivity, setRecentActivity] = useState([])
   const [loading, setLoading]               = useState(true)
   const [showWelcome, setShowWelcome]       = useState(false)
+  const [bannerDismissed, setBannerDismissed] = useState(false)
 
   const [showPasswordChange, setShowPasswordChange] = useState(false)
   const [newPassword,    setNewPassword]    = useState('')
@@ -128,6 +129,7 @@ export default function ClientDashboard() {
   function dismissWelcome(goCreate = false) {
     localStorage.setItem(`welcomed_${user.id}`, '1')
     setShowWelcome(false)
+    setBannerDismissed(true)
     if (goCreate) navigate('/client/jobs')
   }
 
@@ -314,6 +316,31 @@ export default function ClientDashboard() {
         </div>
       )}
 
+      {profile?.first_login === true && !bannerDismissed && !showWelcome && (
+        <div style={{
+          background: 'var(--accent-d)',
+          border: '1px solid var(--accent)',
+          borderRadius: 'var(--r)',
+          padding: '16px 20px',
+          marginBottom: 24,
+          display: 'flex',
+          alignItems: 'flex-start',
+          gap: 14,
+        }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontFamily: 'var(--font-head)', fontSize: 17, fontWeight: 400, color: 'var(--accent)', marginBottom: 4, letterSpacing: '0.02em' }}>Welcome to One Select</div>
+            <div style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.6 }}>
+              Your hiring portal is ready. Post a job to start receiving AI-screened candidates from your recruiter, and review shortlists and interview results right here.
+            </div>
+          </div>
+          <button
+            onClick={() => setBannerDismissed(true)}
+            aria-label="Dismiss welcome message"
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)', fontSize: 18, lineHeight: 1, padding: 2 }}
+          >×</button>
+        </div>
+      )}
+
       <div className="page-head">
         <div>
           <h2>Welcome back{profile?.company_name ? `, ${profile.company_name}` : ''}</h2>
@@ -412,7 +439,7 @@ export default function ClientDashboard() {
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 16 }}>
         <div className="section-card">
           <div className="section-card-head">
             <h3>Recent Candidates</h3>

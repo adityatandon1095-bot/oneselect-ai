@@ -452,9 +452,13 @@ export default function AdminTalentPool() {
 
         {filtered.length === 0 ? (
           <div className="empty-state">
-            {candidates.length === 0
-              ? 'No candidates in the pool yet. Upload CVs above.'
-              : 'No candidates match this filter.'}
+            {candidates.length === 0 ? (
+              <>
+                <div style={{ fontSize: 28, marginBottom: 10, opacity: 0.3 }}>◌</div>
+                <div style={{ fontWeight: 400, color: 'var(--text-2)', marginBottom: 6 }}>No candidates in the pool yet</div>
+                <div style={{ fontSize: 12, color: 'var(--text-3)' }}>Upload CVs above to start building your talent pool.</div>
+              </>
+            ) : 'No candidates match this filter.'}
           </div>
         ) : (
           filtered.map(c => (

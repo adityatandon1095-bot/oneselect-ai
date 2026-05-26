@@ -252,7 +252,11 @@ export default function AdminAnalytics() {
 
       {funnel[0]?.value === 0 && (
         <div className="section-card">
-          <div className="empty-state">No pipeline data yet. Start processing candidates in the Pipeline page.</div>
+          <div className="empty-state">
+            <div style={{ fontSize: 28, marginBottom: 10, opacity: 0.3 }}>◧</div>
+            <div style={{ fontWeight: 400, color: 'var(--text-2)', marginBottom: 6 }}>No pipeline data yet</div>
+            <div style={{ fontSize: 12, color: 'var(--text-3)' }}>Process candidates in the Pipeline page to see analytics here.</div>
+          </div>
         </div>
       )}
     </div>

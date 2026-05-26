@@ -1017,7 +1017,7 @@ export default function RecruiterCandidates() {
           <h2>Candidates</h2>
           <p>{byJob.length} candidate{byJob.length !== 1 ? 's' : ''} across all jobs</p>
         </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           <input
             type="search"
             placeholder="Search by name, role, skills…"
@@ -1276,7 +1276,17 @@ export default function RecruiterCandidates() {
       {!(sourcingJob && sourcingForJobId === jobFilter) && !(sourcingNoResults && sourcingForJobId === jobFilter) && (
       <div className="section-card">
         {tabFiltered.length === 0 ? (
-          <div className="empty-state">No candidates in this category</div>
+          <div className="empty-state">
+            <div style={{ fontSize: 28, marginBottom: 10, opacity: 0.3 }}>◌</div>
+            <div style={{ fontWeight: 400, color: 'var(--text-2)', marginBottom: 6 }}>
+              {searchQuery.trim() || jobFilter !== 'all' ? 'No candidates match this filter' : 'No candidates yet'}
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-3)' }}>
+              {searchQuery.trim() || jobFilter !== 'all'
+                ? 'Try clearing the search or selecting a different job.'
+                : 'Upload CVs, source from LinkedIn, or add candidates manually to get started.'}
+            </div>
+          </div>
         ) : (
           <>
             {/* Select-all row */}

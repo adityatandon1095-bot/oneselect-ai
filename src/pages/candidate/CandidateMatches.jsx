@@ -96,14 +96,17 @@ export default function CandidateMatches() {
 
       {filtered.length === 0 ? (
         <div className="section-card">
-          <div className="empty-state" style={{ padding: '40px 20px' }}>
-            <div style={{ fontSize: 32, opacity: 0.15, marginBottom: 12, fontFamily: 'var(--font-head)' }}>◎</div>
+          <div className="empty-state">
+            <div style={{ fontSize: 28, marginBottom: 10, opacity: 0.3 }}>◎</div>
             {matches.length === 0
               ? <>
-                  <div>You haven't been matched to any roles yet.</div>
-                  <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 6 }}>Make sure your profile is complete and up to date.</div>
+                  <div style={{ fontWeight: 400, color: 'var(--text-2)', marginBottom: 6 }}>No matches yet</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-3)' }}>Make sure your profile is complete and up to date.</div>
                 </>
-              : <div>No matches in this category.</div>
+              : <>
+                  <div style={{ fontWeight: 400, color: 'var(--text-2)', marginBottom: 6 }}>No matches in this category</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-3)' }}>Try switching to a different filter.</div>
+                </>
             }
           </div>
         </div>

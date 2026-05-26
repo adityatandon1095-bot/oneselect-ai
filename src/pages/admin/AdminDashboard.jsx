@@ -60,7 +60,7 @@ export default function AdminDashboard() {
     setSendingUpdates(false)
   }
 
-  if (loading) return <div className="page" style={{ display: 'flex', alignItems: 'center', gap: 10 }}><span className="spinner" /> Loading…</div>
+  if (loading) return <div className="page"><span className="spinner" /></div>
 
   return (
     <div className="page">
@@ -122,7 +122,13 @@ export default function AdminDashboard() {
       <div className="section-card">
         <div className="section-card-head"><h3>Recent Jobs</h3></div>
         {recentJobs.length === 0
-          ? <div className="empty-state">No jobs yet</div>
+          ? (
+            <div className="empty-state">
+              <div style={{ fontSize: 28, marginBottom: 10, opacity: 0.3 }}>◫</div>
+              <div style={{ fontWeight: 400, color: 'var(--text-2)', marginBottom: 6 }}>No jobs yet</div>
+              <div style={{ fontSize: 12, color: 'var(--text-3)' }}>Newly created jobs across the platform will appear here.</div>
+            </div>
+          )
           : recentJobs.map((j) => (
             <div key={j.id} className="table-row">
               <div className="col-main">

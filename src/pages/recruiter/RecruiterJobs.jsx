@@ -344,9 +344,9 @@ export default function RecruiterJobs() {
       {jobs.length === 0 ? (
         <div className="section-card">
           <div className="empty-state">
-            <div style={{ fontSize: 32, marginBottom: 12, opacity: 0.25 }}>◫</div>
-            <div style={{ fontSize: 16, fontFamily: 'var(--font-head)', fontWeight: 400, color: 'var(--text-2)', marginBottom: 8 }}>No jobs yet</div>
-            <div style={{ fontSize: 13, marginBottom: 20 }}>Create jobs above for your assigned clients.</div>
+            <div style={{ fontSize: 28, marginBottom: 10, opacity: 0.3 }}>◫</div>
+            <div style={{ fontWeight: 400, color: 'var(--text-2)', marginBottom: 6 }}>No jobs yet</div>
+            <div style={{ fontSize: 12, color: 'var(--text-3)' }}>Create jobs above for your assigned clients.</div>
           </div>
         </div>
       ) : (

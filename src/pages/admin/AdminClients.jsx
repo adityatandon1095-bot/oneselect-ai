@@ -368,9 +368,13 @@ export default function AdminClients() {
 
         {pageItems.length === 0 ? (
           <div className="empty-state">
-            {profiles.length === 0
-              ? <><div style={{ fontSize: 28, marginBottom: 10, opacity: 0.3 }}>◉</div>No clients yet. Invite your first client.</>
-              : 'No clients match this filter.'}
+            {profiles.length === 0 ? (
+              <>
+                <div style={{ fontSize: 28, marginBottom: 10, opacity: 0.3 }}>◉</div>
+                <div style={{ fontWeight: 400, color: 'var(--text-2)', marginBottom: 6 }}>No clients yet</div>
+                <div style={{ fontSize: 12, color: 'var(--text-3)' }}>Invite your first client to get started.</div>
+              </>
+            ) : 'No clients match this filter.'}
           </div>
         ) : (
           pageItems.map(c => {

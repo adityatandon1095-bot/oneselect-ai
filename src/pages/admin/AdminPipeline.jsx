@@ -1019,7 +1019,7 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
     <div className="page">
       <div className="page-head">
         <div><h2>Pipeline</h2><p>Run the full AI hiring pipeline for a client</p></div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           {candidates.length > 0 && (
             <input
               type="search"
@@ -1124,6 +1124,27 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
         </div>
       )}
 
+      {/* ── Empty: no client or job selected ── */}
+      {!loadingJob && !activeJob && !isClient && (
+        <div className="section-card">
+          <div className="empty-state">
+            <div style={{ fontSize: 28, marginBottom: 10, opacity: 0.3 }}>◧</div>
+            <div style={{ fontWeight: 400, color: 'var(--text-2)', marginBottom: 6 }}>
+              {clients.length === 0
+                ? 'No clients available'
+                : !clientId ? 'Select a client to begin' : 'Select a job to begin'}
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-3)' }}>
+              {clients.length === 0
+                ? 'Clients will appear once they are assigned to you.'
+                : !clientId
+                  ? 'Choose a client above to view their jobs and run the hiring pipeline.'
+                  : 'Choose an existing job or create a new one to start screening candidates.'}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── LinkedIn Sourced ── */}
       {!loadingJob && activeJob && (
         <div className="section-card">
@@ -1132,8 +1153,10 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
             <span className="mono text-muted" style={{ fontSize: 11 }}>{sourcedCandidates.length} profile{sourcedCandidates.length !== 1 ? 's' : ''}</span>
           </div>
           {sourcedCandidates.length === 0 ? (
-            <div className="empty-state" style={{ color: 'var(--text-3)', fontSize: 13 }}>
-              Sourcing in progress… LinkedIn profiles will appear here shortly.
+            <div className="empty-state">
+              <div style={{ fontSize: 28, marginBottom: 10, opacity: 0.3 }}>◌</div>
+              <div style={{ fontWeight: 400, color: 'var(--text-2)', marginBottom: 6 }}>No LinkedIn profiles yet</div>
+              <div style={{ fontSize: 12, color: 'var(--text-3)' }}>Sourcing in progress — matching profiles will appear here shortly.</div>
             </div>
           ) : (
             <div className="candidate-list">

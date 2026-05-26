@@ -208,7 +208,11 @@ export default function AdminSettings() {
         {plansLoading ? (
           <div style={{ padding: '24px', display: 'flex', justifyContent: 'center' }}><span className="spinner" /></div>
         ) : plans.length === 0 ? (
-          <div className="empty-state">No plans yet. Create your first plan above.</div>
+          <div className="empty-state">
+            <div style={{ fontSize: 28, marginBottom: 10, opacity: 0.3 }}>◧</div>
+            <div style={{ fontWeight: 400, color: 'var(--text-2)', marginBottom: 6 }}>No plans yet</div>
+            <div style={{ fontSize: 12, color: 'var(--text-3)' }}>Create your first plan above to start offering subscriptions.</div>
+          </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>

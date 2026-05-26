@@ -193,14 +193,19 @@ export default function Login() {
               <p className="login-sub">Sign in to your account</p>
 
               {/* Role selection hint */}
-              <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
-                <div style={{ flex: 1, padding: '10px 12px', border: '2px solid var(--accent)', borderRadius: 8, fontSize: 11, color: 'var(--accent)', textAlign: 'center', fontFamily: 'var(--font-mono)', letterSpacing: '0.04em' }}>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 24, flexWrap: 'wrap' }}>
+                <div style={{ flex: 1, padding: '10px 12px', border: '1px solid var(--accent)', background: 'var(--accent-d)', borderRadius: 'var(--r)', fontSize: 10, color: 'var(--accent)', textAlign: 'center', fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
                   ◎ Recruiter / Client
                 </div>
-                <div style={{ flex: 1, padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 8, fontSize: 11, color: 'var(--text-3)', textAlign: 'center', fontFamily: 'var(--font-mono)', letterSpacing: '0.04em', cursor: 'pointer' }}
-                  onClick={() => window.location.href = '/candidate/login'}>
+                <button
+                  type="button"
+                  onClick={() => window.location.href = '/candidate/login'}
+                  style={{ flex: 1, padding: '10px 12px', border: '1px solid var(--border2)', background: 'transparent', borderRadius: 'var(--r)', fontSize: 10, color: 'var(--text-3)', textAlign: 'center', fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer', transition: 'border-color 0.12s, color 0.12s' }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.color = 'var(--accent)' }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border2)'; e.currentTarget.style.color = 'var(--text-3)' }}
+                >
                   ◌ Candidate →
-                </div>
+                </button>
               </div>
 
               {error && <div className="error-banner">{error}</div>}

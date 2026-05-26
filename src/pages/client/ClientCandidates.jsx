@@ -645,7 +645,7 @@ export default function ClientCandidates() {
           <h2>Candidates</h2>
           <p>{byJob.length} candidate{byJob.length !== 1 ? 's' : ''} total</p>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           <input
             type="search"
             placeholder="Search by name, role, skills…"
@@ -715,7 +715,11 @@ export default function ClientCandidates() {
 
       <div className="section-card">
         {tabFiltered.length === 0 ? (
-          <div className="empty-state">No candidates in this category</div>
+          <div className="empty-state">
+            <div style={{ fontSize: 28, marginBottom: 10, opacity: 0.3 }}>◌</div>
+            <div style={{ fontWeight: 400, color: 'var(--text-2)', marginBottom: 6 }}>No candidates in this category</div>
+            <div style={{ fontSize: 12, color: 'var(--text-3)' }}>Candidates shortlisted by your recruiter will appear here.</div>
+          </div>
         ) : (
           tabFiltered.map(c => {
             const s = c.scores
