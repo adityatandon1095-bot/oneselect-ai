@@ -101,7 +101,7 @@ STEP 1 — CLIENT ONBOARDING
 
 When a company engages OneSelect, they are set up with a private client portal.
 The client receives a branded welcome email with login credentials for their
-personal portal, hosted at oneselect-ai-t6uo-phi.vercel.app. On first login,
+personal portal, hosted at oneselectai.com. On first login,
 they are prompted to set a secure password. Their dashboard immediately shows
 all their active roles, pipeline status, and any candidates already in the
 system. The onboarding process takes less than 24 hours.
@@ -566,8 +566,8 @@ advise on offer structure and provide templates as part of the service.
 SECTION 10 — CONTACT AND NEXT STEPS
 ================================================================================
 
-Website: oneselect.ai
-Client portal: oneselect-ai-t6uo-phi.vercel.app
+Website: oneselectai.com
+Client portal: oneselectai.com
 
 TO GET STARTED:
 The best first step is to book a free demo. The OneSelect team will walk

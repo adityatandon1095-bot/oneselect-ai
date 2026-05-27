@@ -57,7 +57,7 @@ function generateICS(slot: string, jobTitle: string, candidateName: string, orga
     `LOCATION:${roomUrl || 'To be confirmed'}`,
     `ORGANIZER:mailto:${organizerEmail}`,
     'STATUS:CONFIRMED',
-    `UID:${uid}@oneselect.ai`,
+    `UID:${uid}@oneselectai.com`,
     'END:VEVENT',
     'END:VCALENDAR',
   ].join('\r\n')
@@ -69,7 +69,7 @@ serve(async (req) => {
   try {
     const body = await req.json()
     const resendKey = Deno.env.get('RESEND_API_KEY') ?? ''
-    const appUrl = Deno.env.get('APP_URL') ?? 'https://oneselect-ai-t6uo-phi.vercel.app'
+    const appUrl = Deno.env.get('APP_URL') ?? 'https://oneselectai.com'
 
     // ── Propose: send slot options to candidate ────────────────────────────
     if (body.mode === 'propose') {

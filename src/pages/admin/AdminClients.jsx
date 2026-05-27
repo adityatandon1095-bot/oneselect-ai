@@ -207,7 +207,7 @@ export default function AdminClients() {
   function copyDetails() {
     if (!invResult) return
     navigator.clipboard.writeText(
-      `Portal: https://oneselect-ai-t6uo-phi.vercel.app\nEmail: ${invResult.email}\nNote: A one-time login link was sent to their email.`
+      `Portal: https://oneselectai.com\nEmail: ${invResult.email}\nNote: A one-time login link was sent to their email.`
     ).catch(() => {})
   }
 
@@ -627,7 +627,7 @@ export default function AdminClients() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                   <div style={{ display: 'flex', gap: 12, alignItems: 'baseline' }}>
                     <span style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--font-mono)', width: 72, flexShrink: 0 }}>Portal</span>
-                    <span style={{ fontSize: 12, color: 'var(--text-2)', fontFamily: 'var(--font-mono)' }}>oneselect-ai-t6uo-phi.vercel.app</span>
+                    <span style={{ fontSize: 12, color: 'var(--text-2)', fontFamily: 'var(--font-mono)' }}>oneselectai.com</span>
                   </div>
                   <div style={{ display: 'flex', gap: 12, alignItems: 'baseline' }}>
                     <span style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--font-mono)', width: 72, flexShrink: 0 }}>Email</span>

@@ -76,7 +76,7 @@ All edge functions read `RESEND_API_KEY` from Supabase secrets. Set this in the 
 
 ```
 supabase secrets set RESEND_API_KEY=re_xxxxxxxxxxxx
-supabase secrets set APP_URL=https://oneselect.ai
+supabase secrets set APP_URL=https://oneselectai.com
 ```
 
 The sending address (`noreply@oneselect.co.uk`) is hardcoded in each edge function. If the domain changes, update all `from:` fields and the DNS records above accordingly.

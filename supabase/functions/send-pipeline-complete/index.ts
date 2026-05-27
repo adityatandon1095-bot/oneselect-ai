@@ -43,7 +43,7 @@ serve(async (req) => {
     }
 
     const resendKey = Deno.env.get('RESEND_API_KEY') ?? ''
-    const appUrl    = 'https://oneselect-ai-t6uo-phi.vercel.app'
+    const appUrl    = 'https://oneselectai.com'
 
     const recColor = (r: string) => {
       if (r === 'Strong Hire') return '#2d7d4e'

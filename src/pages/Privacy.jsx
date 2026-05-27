@@ -59,7 +59,7 @@ export default function Privacy() {
               <li><strong>Withdraw consent</strong> at any time, which will result in removal from the talent pool.</li>
               <li><strong>Grievance redressal</strong> as provided under the DPDPA.</li>
             </ul>
-            <p style={{ marginTop: 12 }}>To exercise any of these rights, email <a href="mailto:privacy@oneselect.ai" style={{ color: 'var(--accent)' }}>privacy@oneselect.ai</a>.</p>
+            <p style={{ marginTop: 12 }}>To exercise any of these rights, email <a href="mailto:privacy@oneselectai.com" style={{ color: 'var(--accent)' }}>privacy@oneselectai.com</a>.</p>
           </section>
 
           <section>
@@ -77,7 +77,7 @@ export default function Privacy() {
             <p>For privacy questions, data requests, or complaints:</p>
             <p style={{ fontFamily: 'var(--font-mono)', fontSize: 13, marginTop: 8 }}>
               One Select<br />
-              <a href="mailto:privacy@oneselect.ai" style={{ color: 'var(--accent)' }}>privacy@oneselect.ai</a>
+              <a href="mailto:privacy@oneselectai.com" style={{ color: 'var(--accent)' }}>privacy@oneselectai.com</a>
             </p>
           </section>
         </div>

@@ -264,7 +264,7 @@ export default function AdminRecruiters() {
                 <div className="field span-2">
                   <label>Email Address *</label>
                   <input
-                    type="email" placeholder="jane@oneselect.ai"
+                    type="email" placeholder="jane@oneselectai.com"
                     value={inv.invEmail} onChange={e => updateInv('invEmail', e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleInvite() } }}
                   />

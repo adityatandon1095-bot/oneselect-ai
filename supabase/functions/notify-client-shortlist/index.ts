@@ -15,7 +15,7 @@ serve(async (req) => {
     }
 
     const resendKey = Deno.env.get('RESEND_API_KEY') ?? ''
-    const appUrl    = Deno.env.get('APP_URL') ?? 'https://oneselect.ai'
+    const appUrl    = Deno.env.get('APP_URL') ?? 'https://oneselectai.com'
     const name      = clientName ?? 'there'
     const n         = candidateCount ?? 'Several'
     const plural    = candidateCount === 1 ? 'candidate is' : 'candidates are'

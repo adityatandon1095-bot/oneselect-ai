@@ -36,7 +36,7 @@ serve(async (req) => {
   try {
     const { email, name, job_title, company_name, token, room_url } = await req.json()
     const resendKey = Deno.env.get('RESEND_API_KEY') ?? ''
-    const appUrl    = 'https://oneselect-ai-t6uo-phi.vercel.app'
+    const appUrl    = 'https://oneselectai.com'
     const link      = `${appUrl}/live/${token}`
 
     const { ok: emailSent } = await sendEmail(resendKey, {

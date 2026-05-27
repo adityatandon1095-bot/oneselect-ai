@@ -3,7 +3,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 import { corsHeaders } from "../_shared/cors.ts"
 
-const APP_URL = 'https://oneselect-ai-t6uo-phi.vercel.app'
+const APP_URL = 'https://oneselectai.com'
 
 async function sendEmail(resendKey: string, payload: Record<string, unknown>, fnName: string, recipient: string) {
   const call = () => fetch('https://api.resend.com/emails', {

@@ -43,7 +43,7 @@ serve(async (req) => {
     }
 
     const resendKey = Deno.env.get('RESEND_API_KEY') ?? ''
-    const appUrl    = Deno.env.get('APP_URL') ?? 'https://oneselect.ai'
+    const appUrl    = Deno.env.get('APP_URL') ?? 'https://oneselectai.com'
     const name      = candidateName ?? 'there'
     const role      = jobTitle ?? 'the role'
 

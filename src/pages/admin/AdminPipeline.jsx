@@ -65,7 +65,7 @@ function ScoreRing({ score, size = 48 }) {
 
 const DEFAULT_JOB_FORM = { title:'', experience_years:3, required_skills:[], preferred_skills:[], description:'', tech_weight:60, comm_weight:40 }
 const EMPTY_MANUAL = { full_name:'', email:'', phone:'', candidate_role:'', total_years:'', skills:'', education:'', summary:'', linkedin_url:'', github_url:'', portfolio_url:'', addToPool:false }
-const appUrl = 'https://oneselect-ai-t6uo-phi.vercel.app'
+const appUrl = 'https://oneselectai.com'
 
 export default function AdminPipeline({ allowedClientIds } = {}) {
   const { profile, user } = useAuth()
