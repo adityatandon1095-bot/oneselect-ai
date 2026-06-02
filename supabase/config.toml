@@ -1,0 +1,8 @@
+[functions.save-interview-recording]
+verify_jwt = false
+
+[functions.resend-interview-invite]
+verify_jwt = false
+
+[functions.cal-webhook]
+verify_jwt = false

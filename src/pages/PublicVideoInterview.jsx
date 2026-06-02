@@ -122,10 +122,11 @@ export default function PublicVideoInterview() {
   async function handleWithdraw() {
     setWithdrawState('withdrawing')
     const now = new Date().toISOString()
+    const update = { withdrawn_at: now, interview_invite_token: null }
     if (data?.table === 'candidates') {
-      await supabase.from('candidates').update({ withdrawn_at: now }).eq('id', data.candidate.id)
+      await supabase.from('candidates').update(update).eq('id', data.candidate.id)
     } else if (data?.table === 'job_matches') {
-      await supabase.from('job_matches').update({ withdrawn_at: now }).eq('id', data.candidate.id)
+      await supabase.from('job_matches').update(update).eq('id', data.candidate.id)
     }
     setWithdrawState('withdrawn')
   }

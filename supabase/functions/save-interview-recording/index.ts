@@ -1,3 +1,5 @@
+// Deployed with --no-verify-jwt: called from the public /interview/:token page
+// which has no authenticated session. Uses SUPABASE_SERVICE_ROLE_KEY internally.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 import { corsHeaders } from "../_shared/cors.ts"

@@ -5,7 +5,7 @@ import { useAuth } from '../../lib/AuthContext'
 import { usePersistentState } from '../../hooks/usePersistentState'
 import { useScheduling } from '../../hooks/useScheduling'
 
-import { callClaude, runAutomatedInterview, generateShortlistSummary, diagnosePipelineHealth } from '../../utils/api'
+import { callClaude, runAutomatedInterview, generateInterviewQuestions, generateShortlistSummary, diagnosePipelineHealth } from '../../utils/api'
 import { subscribeRunner, runnerStart, runnerComplete, runnerPause, runnerResume, runnerStop, awaitResume, getRunnerState } from '../../utils/pipelineRunner'
 import { generateAssessment, scoreAssessment } from '../../utils/assessments'
 import mammoth from 'mammoth'
@@ -350,6 +350,19 @@ Return the subject line first starting with "SUBJECT: ", then a blank line, then
     if (!email.trim()) return
     setAiInviteModal(m => ({ ...m, sending: true, error: null }))
 
+    // Pre-generate interview questions and save to the job record before sending
+    // the invite. The public /interview/:token page has no auth session, so
+    // callClaude() would return 401 if questions aren't pre-populated here.
+    if (activeJob && !activeJob.interview_questions?.length) {
+      try {
+        const qs = await generateInterviewQuestions(activeJob)
+        await supabase.from('jobs').update({ interview_questions: qs }).eq('id', activeJob.id)
+        setActiveJob(j => ({ ...j, interview_questions: qs }))
+      } catch {
+        // Non-blocking — VideoInterview will show an error if questions are missing
+      }
+    }
+
     let token = candidate.interview_invite_token
     if (!token) {
       token = crypto.randomUUID()
@@ -473,8 +486,9 @@ Return the subject line first starting with "SUBJECT: ", then a blank line, then
     const table = candidate._fromPool ? 'job_matches' : 'candidates'
     const updatePayload = { final_decision: decision, decision_notes: notes, decided_at: new Date().toISOString() }
 
-    // DPDPA: remove raw CV text when candidate is no longer in consideration
-    if (decision === 'rejected') updatePayload.raw_text = null
+    // DPDPA: remove raw CV text when candidate is no longer in consideration.
+    // Only the candidates table has raw_text — job_matches stores no CV text.
+    if (decision === 'rejected' && !candidate._fromPool) updatePayload.raw_text = null
 
     await supabase.from(table).update(updatePayload).eq('id', candidate.id)
     setDecisionModal(null)
@@ -933,6 +947,7 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
     try {
       await supabase.from('jobs').update({ pipeline_status: 'processing' }).eq('id', activeJob.id)
 
+      // Pass A: direct candidates table
       const { data: allPassed } = await supabase.from('candidates').select('*').eq('job_id', activeJob.id).eq('match_pass', true)
       const pool = allPassed ?? []
       const hasExplicit = pool.some(c => c.client_approved === true)
@@ -954,6 +969,37 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
           tsLog(`✓ ${c.full_name}: ${result.scores.overallScore}/100 — ${result.scores.recommendation}`, 'ok')
         } catch (err) {
           tsLog(`✗ ${c.full_name} interview error: ${err.message}`, 'err')
+        }
+      }
+
+      // Pass B: talent pool matches — these never go through the candidates table
+      if (!stopped) {
+        const { data: passedMatches } = await supabase
+          .from('job_matches')
+          .select('*, talent_pool(*)')
+          .eq('job_id', activeJob.id)
+          .eq('match_pass', true)
+          .is('scores', null)
+
+        const poolMatches = passedMatches ?? []
+        if (poolMatches.length > 0) {
+          tsLog(`Running interviews for ${poolMatches.length} talent pool match${poolMatches.length !== 1 ? 'es' : ''}…`, 'info')
+          for (const m of poolMatches) {
+            if (await awaitResume()) { tsLog('▣ Pipeline stopped.', 'err'); stopped = true; break }
+            const poolCandidate = mapMatchToCandidate(m)
+            tsLog(`Interviewing ${poolCandidate.full_name}…`, 'info')
+            try {
+              const result = await runAutomatedInterview(poolCandidate, activeJob)
+              await supabase.from('job_matches').update({
+                interview_transcript: result.transcript,
+                scores: result.scores,
+              }).eq('id', m.id)
+              setCandidates(p => p.map(x => x.id === m.id ? { ...x, interview_transcript: result.transcript, scores: result.scores } : x))
+              tsLog(`✓ ${poolCandidate.full_name}: ${result.scores.overallScore}/100 — ${result.scores.recommendation}`, 'ok')
+            } catch (err) {
+              tsLog(`✗ ${poolCandidate.full_name} interview error: ${err.message}`, 'err')
+            }
+          }
         }
       }
 
@@ -1587,7 +1633,7 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
           )}
           <div className="candidate-list">
             {srch(passedCandidates).map(c => {
-              const hasVideo  = c.video_urls?.length > 0
+              const hasVideo  = c.video_urls?.some(v => v?.url != null)
               const hasScores = !!c.scores?.overallScore
               const rec       = c.scores?.recommendation
               const dot       = slaDot(c)
@@ -1624,8 +1670,9 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
                     )}
                     {hasScores && (
                       <>
-                        <span className="badge badge-green">Interview Completed</span>
+                        <span className="badge badge-green">AI Screened</span>
                         <span className="mono" style={{ fontSize: 12, fontWeight: 700, color: dimColor(c.scores.overallScore) }}>{c.scores.overallScore}/100</span>
+                        <span style={{ fontSize: 10, color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>CV analysis</span>
                         {rec && <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: REC_COLOR[rec] ?? 'var(--text-3)' }}>{rec}</span>}
                         {hasVideo && <button className="btn btn-secondary" style={{ fontSize: 10, padding: '2px 8px' }} onClick={() => setVideoPlayerTarget(c)}>▶ Watch</button>}
                       </>

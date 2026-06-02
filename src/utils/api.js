@@ -24,6 +24,27 @@ export async function callClaude(messages, systemPrompt, maxTokens = 1000) {
   return data.text
 }
 
+// Generates 5 video interview questions for a job. Called from AdminPipeline
+// when sending an AI interview invite so questions are pre-saved to the job
+// record — the public interview page has no auth session and cannot call
+// callClaude() directly (call-claude requires a valid user JWT).
+export async function generateInterviewQuestions(job) {
+  const sys = `Generate exactly 5 video interview questions for a ${job.title} role.
+Required skills: ${(job.required_skills || []).join(', ')}
+Experience: ${job.experience_years || 0}+ years
+
+Return ONLY a valid JSON array (no markdown):
+[{"q":"question text","type":"technical|behavioral","seconds":90}]
+
+Rules: 3 technical (120 seconds each), 2 behavioral (90 seconds each). Be specific and role-relevant.`
+
+  const reply = await callClaude([{ role: 'user', content: 'Generate.' }], sys, 700)
+  const clean = reply.trim().replace(/^```(?:json)?\s*/i, '').replace(/```[\s]*$/m, '').trim()
+  return JSON.parse(clean)
+}
+
+// NOTE: scores here are generated from CV data via a simulated interview — they
+// are NOT derived from the candidate's video responses. Label accordingly in UI.
 export async function runAutomatedInterview(candidate, jobDef) {
   const systemPrompt = `You are simulating a job interview.
 You will play both the interviewer and the candidate.

@@ -84,6 +84,8 @@ export default function VideoInterview({ job, candidate, matchId, isFromPool, on
   const [uploadProgress, setUploadProgress] = useState([])  // 'pending'|'uploading'|'done'|'error'
   const [warning,        setWarning]        = useState('')
   const [error,          setError]          = useState('')
+  const [errorMsg,       setErrorMsg]       = useState('')
+  const [retryFn,        setRetryFn]        = useState(null)
   const [camOk,          setCamOk]          = useState(false)
   const [micLevel,       setMicLevel]       = useState(0)
 
@@ -152,12 +154,18 @@ export default function VideoInterview({ job, candidate, matchId, isFromPool, on
   async function confirmDevices() {
     stopMicMonitor()
     setStage(S.LOADING)
-    const customQs = Array.isArray(job.interview_questions) && job.interview_questions.length > 0
-      ? job.interview_questions
-      : await generateQuestions(job)
-    setQuestions(customQs)
-    setUploadProgress(customQs.map(() => 'pending'))
-    setStage(S.READY)
+    try {
+      const customQs = Array.isArray(job.interview_questions) && job.interview_questions.length > 0
+        ? job.interview_questions
+        : await generateQuestions(job)
+      setQuestions(customQs)
+      setUploadProgress(customQs.map(() => 'pending'))
+      setStage(S.READY)
+    } catch {
+      setErrorMsg('Could not load interview questions. Please check your connection and try again.')
+      setRetryFn(() => confirmDevices)
+      setStage(S.ERROR)
+    }
   }
 
   // Attach stream to video element on mount / when stream ready
@@ -298,11 +306,18 @@ export default function VideoInterview({ job, candidate, matchId, isFromPool, on
 
     // Save to DB
     const update = { video_urls: urls, integrity_score: integrityScore, integrity_flags: violationsRef.current }
-    if (onSave) {
-      await onSave(update)
-    } else {
-      const table = isFromPool ? 'job_matches' : 'candidates'
-      await supabase.from(table).update(update).eq('id', matchId)
+    try {
+      if (onSave) {
+        await onSave(update)
+      } else {
+        const table = isFromPool ? 'job_matches' : 'candidates'
+        await supabase.from(table).update(update).eq('id', matchId)
+      }
+    } catch {
+      setErrorMsg('Upload failed. Please check your connection and try again.')
+      setRetryFn(() => startUpload)
+      setStage(S.ERROR)
+      return
     }
 
     setStage(S.DONE)
@@ -605,6 +620,33 @@ export default function VideoInterview({ job, candidate, matchId, isFromPool, on
       </div>
     )
   }
+
+  // ── ERROR ─────────────────────────────────────────────────────────────────
+  if (stage === S.ERROR) return (
+    <div style={overlay}>
+      <div style={{ maxWidth: 440, width: '100%', padding: '0 32px', textAlign: 'center' }}>
+        <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'rgba(239,68,68,0.12)', border: '2px solid rgba(239,68,68,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px', fontSize: 24, color: 'var(--red)' }}>✗</div>
+        <h2 style={{ fontFamily: 'var(--font-head)', fontWeight: 300, fontSize: 22, margin: '0 0 10px' }}>Something went wrong</h2>
+        <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.45)', marginBottom: 28, lineHeight: 1.6 }}>{errorMsg}</p>
+        <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+          {retryFn && (
+            <button
+              onClick={() => retryFn()}
+              style={{ padding: '11px 28px', borderRadius: 8, background: 'rgba(99,102,241,1)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 13 }}
+            >
+              Retry
+            </button>
+          )}
+          <button
+            onClick={() => { streamRef.current?.getTracks().forEach(t => t.stop()); onClose() }}
+            style={{ padding: '11px 28px', borderRadius: 8, background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.6)', border: '1px solid rgba(255,255,255,0.12)', cursor: 'pointer', fontSize: 13 }}
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  )
 
   return null
 }
