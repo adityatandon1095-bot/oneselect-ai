@@ -133,17 +133,19 @@ export default function AdminRecruiters() {
       // 2. Delete the profile row directly — admin RLS policy allows this
       const { error: profileErr } = await supabase.from('profiles').delete().eq('id', removeModal.id)
       if (profileErr) throw new Error(profileErr.message)
-      // 3. Best-effort: delete auth account so the email can be freed.
-      //    Fire-and-forget — never await this so a slow/undeployed function
-      //    cannot block the UI from resolving.
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        if (!session) return
-        fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-user`, {
+      // 3. Delete auth account so the email can be freed.
+      const { data: { session: delSession } } = await supabase.auth.getSession()
+      if (delSession) {
+        const delRes = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-user`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${delSession.access_token}` },
           body: JSON.stringify({ userId: removeModal.id }),
-        }).catch(() => {})
-      }).catch(() => {})
+        })
+        if (!delRes.ok) {
+          const delErr = await delRes.json().catch(() => ({}))
+          throw new Error(delErr.error ?? 'Failed to delete auth account')
+        }
+      }
 
       setRecruiters(p => p.filter(x => x.id !== removeModal.id))
       setAssignments(p => p.filter(a => a.recruiter_id !== removeModal.id))

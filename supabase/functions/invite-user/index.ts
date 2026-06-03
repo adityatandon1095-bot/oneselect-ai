@@ -38,10 +38,8 @@ serve(async (req) => {
     return new Response('ok', { headers: corsHeaders })
   }
 
-  const apikey = req.headers.get('apikey') ||
-    req.headers.get('Authorization')?.replace('Bearer ', '')
-
-  if (!apikey) {
+  const authHeader = req.headers.get('Authorization')
+  if (!authHeader) {
     return new Response(
       JSON.stringify({ error: 'Missing authorization' }),
       { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -56,6 +54,27 @@ serve(async (req) => {
     const resendKey = Deno.env.get('RESEND_API_KEY') ?? ''
 
     const admin = createClient(supabaseUrl, serviceKey)
+
+    // Verify caller is an admin before creating any user
+    const callerToken = authHeader.replace('Bearer ', '')
+    const { data: { user: callerUser }, error: callerErr } = await admin.auth.getUser(callerToken)
+    if (callerErr || !callerUser) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid token' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+    const { data: callerProfile } = await admin
+      .from('profiles')
+      .select('user_role')
+      .eq('id', callerUser.id)
+      .single()
+    if (callerProfile?.user_role !== 'admin') {
+      return new Response(
+        JSON.stringify({ error: 'Insufficient permissions' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
 
     // Internal random password — never sent to the user; they authenticate via magic link.
     const internalPassword = crypto.randomUUID() + crypto.randomUUID()

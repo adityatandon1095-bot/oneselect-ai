@@ -2,6 +2,22 @@ import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 
+function sanitizeAuthError(msg) {
+  if (!msg) return 'An error occurred. Please try again.'
+  const m = String(msg).toLowerCase()
+  if (m.includes('invalid login') || m.includes('invalid credentials') || m.includes('user not found'))
+    return 'Invalid email or password.'
+  if (m.includes('email not confirmed'))
+    return 'Please verify your email address before signing in.'
+  if (m.includes('too many requests') || m.includes('rate limit'))
+    return 'Too many attempts. Please wait a few minutes and try again.'
+  if (m.includes('jwt') || m.includes('token') || m.includes('expired'))
+    return 'This link has expired or already been used. Please request a new one.'
+  if (m.includes('network') || m.includes('fetch'))
+    return 'Connection error. Please check your internet and try again.'
+  return 'An error occurred. Please try again or contact support.'
+}
+
 export default function CandidateLogin() {
   const [mode, setMode]         = useState('login') // fix: add forgot-password mode
   const [email, setEmail]       = useState('')
@@ -45,7 +61,8 @@ export default function CandidateLogin() {
     setLoading(false)
   }
 
-  // fix: forgot password — sends Supabase reset email; reset form lives on /login (handles all roles)
+  // fix: forgot password — sends Supabase reset email; reset form is on /login (handles all roles).
+  // redirectTo must stay as /login because CandidateLogin has no PASSWORD_RECOVERY handler.
   async function handleForgot(e) {
     e.preventDefault()
     if (!email.trim()) { setError('Please enter your email address'); return }
@@ -54,7 +71,7 @@ export default function CandidateLogin() {
       redirectTo: window.location.origin + '/login',
     })
     setLoading(false)
-    if (resetError) { setError('Could not send reset email. Please try again.'); return }
+    if (resetError) { setError(sanitizeAuthError(resetError.message)); return }
     setInfo(`Reset link sent to ${email.trim()}. Check your inbox and click the link to set a new password.`)
   }
 

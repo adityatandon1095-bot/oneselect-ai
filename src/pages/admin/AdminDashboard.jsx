@@ -1,8 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../lib/AuthContext'
 
 export default function AdminDashboard() {
+  const { user, profile, profileLoading } = useAuth()
   const navigate = useNavigate()
   const [stats, setStats] = useState({ clients: 0, jobs: 0, candidates: 0, interviews: 0, poolTotal: 0, poolAvailable: 0, mrr: 0, placements: 0 })
   const [recentJobs, setRecentJobs] = useState([])
@@ -10,7 +12,29 @@ export default function AdminDashboard() {
   const [sendingUpdates, setSendingUpdates] = useState(false)
   const [updateResult, setUpdateResult] = useState(null)
 
-  useEffect(() => { load() }, [])
+  // First-login password change
+  const [showPasswordChange, setShowPasswordChange] = useState(false)
+  const [newPassword,     setNewPassword]     = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [passwordError,   setPasswordError]   = useState('')
+  const [passwordSaving,  setPasswordSaving]  = useState(false)
+
+  const initRef = useRef(false)
+
+  useEffect(() => {
+    if (!user || profileLoading) return
+    if (initRef.current) return
+    initRef.current = true
+
+    supabase.from('profiles').update({ last_seen_at: new Date().toISOString() }).eq('id', user.id)
+
+    if (profile?.first_login && !sessionStorage.getItem(`pw_set_${user.id}`)) {
+      setLoading(false)
+      setShowPasswordChange(true)
+    } else {
+      load()
+    }
+  }, [user, profileLoading])
 
   async function load() {
     try {
@@ -48,6 +72,26 @@ export default function AdminDashboard() {
     }
   }
 
+  async function handlePasswordChange(e) {
+    e.preventDefault()
+    setPasswordError('')
+    if (newPassword.length < 8) { setPasswordError('Password must be at least 8 characters'); return }
+    if (newPassword !== confirmPassword) { setPasswordError('Passwords do not match'); return }
+
+    setPasswordSaving(true)
+    const { error: updateErr } = await supabase.auth.updateUser({ password: newPassword })
+    if (updateErr) { setPasswordError(updateErr.message); setPasswordSaving(false); return }
+
+    await supabase.from('profiles').update({ first_login: false }).eq('id', user.id)
+    sessionStorage.setItem(`pw_set_${user.id}`, '1')
+
+    setNewPassword('')
+    setConfirmPassword('')
+    setPasswordSaving(false)
+    setShowPasswordChange(false)
+    load()
+  }
+
   async function sendWeeklyUpdates() {
     setSendingUpdates(true)
     setUpdateResult(null)
@@ -58,6 +102,56 @@ export default function AdminDashboard() {
       setUpdateResult({ ok: false, msg: e.message })
     }
     setSendingUpdates(false)
+  }
+
+  // First-login password change screen — no dismissal allowed
+  if (showPasswordChange) {
+    return (
+      <div className="modal-overlay" style={{ zIndex: 1000 }}>
+        <div className="modal" style={{ maxWidth: 420 }}>
+          <div className="modal-head">
+            <div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.2em', color: 'var(--accent)', marginBottom: 4 }}>
+                One Select
+              </div>
+              <h3 style={{ margin: 0 }}>Welcome to One Select</h3>
+            </div>
+          </div>
+          <div className="modal-body">
+            <p style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.7, marginBottom: 24 }}>
+              Please set a new password to secure your admin account before continuing.
+            </p>
+            {passwordError && <div className="error-banner" style={{ marginBottom: 16 }}>{passwordError}</div>}
+            <form onSubmit={handlePasswordChange}>
+              <div className="field" style={{ marginBottom: 14 }}>
+                <label>New Password</label>
+                <input
+                  type="password"
+                  placeholder="At least 8 characters"
+                  value={newPassword}
+                  onChange={e => setNewPassword(e.target.value)}
+                  autoFocus
+                  autoComplete="new-password"
+                />
+              </div>
+              <div className="field" style={{ marginBottom: 24 }}>
+                <label>Confirm Password</label>
+                <input
+                  type="password"
+                  placeholder="Repeat your new password"
+                  value={confirmPassword}
+                  onChange={e => setConfirmPassword(e.target.value)}
+                  autoComplete="new-password"
+                />
+              </div>
+              <button type="submit" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }} disabled={passwordSaving}>
+                {passwordSaving ? <><span className="spinner" style={{ width: 13, height: 13 }} /> Saving…</> : 'Set Password & Continue'}
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   if (loading) return <div className="page"><span className="spinner" /></div>

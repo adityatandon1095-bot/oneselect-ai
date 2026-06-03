@@ -51,6 +51,11 @@ export default function Login() {
     const prefilledEmail = searchParams.get('email') ?? ''
     if (prefilledEmail) setEmail(prefilledEmail)
 
+    // Show error if redirected here because profile row was missing
+    if (searchParams.get('error') === 'profile_missing') {
+      setError('Your account profile could not be loaded. Please sign in again or contact support.')
+    }
+
     if (urlType === 'recovery' || urlType === 'invite') {
       // Legacy implicit-flow link — type is explicit in the hash
       setMode('reset')
@@ -63,14 +68,23 @@ export default function Login() {
     // the code and fire PASSWORD_RECOVERY. Signing out here wipes the session
     // before updateUser() can use it, which is the cause of the "error" on submit.
 
+    // Tracks whether the ?code= exchange fired a successful auth event.
+    // Used by the expired-link timeout below.
+    let codeResolved = false
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'PASSWORD_RECOVERY') {
+        codeResolved = true
         setMode('reset')
         setError('')
         setInfo('')
-      } else if (event === 'SIGNED_IN' && hasCode && urlType !== 'recovery' && urlType !== 'invite') {
-        // Magic link login completed — redirect to role dashboard
-        navigate('/', { replace: true })
+      } else if (event === 'SIGNED_IN' && hasCode) {
+        codeResolved = true
+        if (urlType !== 'recovery' && urlType !== 'invite') {
+          // Magic link login completed — redirect to role dashboard
+          navigate('/', { replace: true })
+        }
+        // For invite: mode is already 'reset' (set at line 54), nothing else needed
       }
     })
 
@@ -79,11 +93,26 @@ export default function Login() {
     // for recovery flows — magic link ?code= must NOT set mode='reset'.
     if (hasCode && urlType === 'recovery') {
       supabase.auth.getSession().then(({ data: { session } }) => {
-        if (session) { setMode('reset'); setError(''); setInfo('') }
+        if (session) { codeResolved = true; setMode('reset'); setError(''); setInfo('') }
       })
     }
 
-    return () => subscription.unsubscribe()
+    // Expired-link detection: if the page loaded with a ?code= but no auth event
+    // fires within 5 seconds, the link has expired or was already used.
+    let expiredTimer = null
+    if (hasCode) {
+      expiredTimer = setTimeout(() => {
+        if (!codeResolved) {
+          setError('This link has expired or has already been used. Please request a new one.')
+          setMode('login')
+        }
+      }, 5000)
+    }
+
+    return () => {
+      subscription.unsubscribe()
+      if (expiredTimer) clearTimeout(expiredTimer)
+    }
   }, [])
 
   // ── Sign in ────────────────────────────────────────────────────────────────
@@ -128,17 +157,9 @@ export default function Login() {
       return
     }
 
-    // Self-heal: if user_metadata has a role and it disagrees with the profile,
-    // the profile was probably written by a stale edge function. Correct it now —
-    // users are allowed to update their own profile row (profiles_update_own policy).
-    const validRoles = ['admin', 'recruiter', 'client', 'candidate']
-    if (metaRole && validRoles.includes(metaRole) && profile.user_role !== metaRole) {
-      await supabase.from('profiles').update({ user_role: metaRole }).eq('id', userId)
-      navigate(roleHome(metaRole), { replace: true })
-      setLoading(false)
-      return
-    }
-
+    // Trust the DB role for existing profiles. user_metadata.role was set at invite
+    // time and is never updated — overwriting the DB role on every sign-in would
+    // silently revert intentional admin role changes.
     navigate(roleHome(profile.user_role), { replace: true })
     setLoading(false)
   }
@@ -171,8 +192,8 @@ export default function Login() {
 
     if (updateError) { setError(sanitizeAuthError(updateError.message)); return }
 
-    // Navigate to dashboard — auth state will route correctly
-    navigate('/', { replace: true })
+    setInfo('Password updated successfully')
+    setTimeout(() => navigate('/', { replace: true }), 1500)
   }
 
   if (signingOut) return <div className="page"><span className="spinner" /></div>
@@ -278,6 +299,7 @@ export default function Login() {
               <p className="login-sub">Choose a secure password for your account</p>
 
               {error && <div className="error-banner">{error}</div>}
+              {info  && <div className="error-banner" style={{ background: 'var(--green-d)', borderColor: 'var(--green)', color: 'var(--green)' }}>{info}</div>}
 
               <form className="login-form" onSubmit={handleReset}>
                 <div className="field">

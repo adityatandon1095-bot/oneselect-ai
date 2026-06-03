@@ -74,7 +74,10 @@ function ProtectedRoute({ children, role }) {
   const { user, profile, profileLoading, loading } = useAuth()
   if (loading || profileLoading) return <Loader />
   if (!user) return <Navigate to="/login" replace />
-  if (role && profile && profile.user_role !== role) {
+  // Profile genuinely missing (not loading) — send back to login rather than
+  // rendering a protected route with no role context.
+  if (!profile) return <Navigate to="/login?error=profile_missing" replace />
+  if (role && profile.user_role !== role) {
     return <Navigate to={roleHome(profile.user_role)} replace />
   }
   return children
@@ -88,7 +91,9 @@ function RootRedirect() {
     // fix: preserve ?code= so Supabase PKCE reset links that land on / still reach Login with the code intact
     return <Navigate to={`/login${location.search}`} replace />
   }
-  return <Navigate to={roleHome(profile?.user_role)} replace />
+  // Profile genuinely missing — send to login rather than defaulting to recruiter dashboard
+  if (!profile) return <Navigate to="/login?error=profile_missing" replace />
+  return <Navigate to={roleHome(profile.user_role)} replace />
 }
 
 export default function App() {

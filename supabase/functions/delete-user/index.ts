@@ -22,6 +22,27 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
     const admin = createClient(supabaseUrl, serviceKey)
 
+    // Verify caller is an admin before allowing any deletion
+    const callerToken = authHeader.replace('Bearer ', '')
+    const { data: { user: callerUser }, error: callerErr } = await admin.auth.getUser(callerToken)
+    if (callerErr || !callerUser) {
+      return new Response(JSON.stringify({ error: 'Invalid token' }), {
+        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    const { data: callerProfile } = await admin
+      .from('profiles')
+      .select('user_role')
+      .eq('id', callerUser.id)
+      .single()
+
+    if (callerProfile?.user_role !== 'admin') {
+      return new Response(JSON.stringify({ error: 'Insufficient permissions' }), {
+        status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
     // Delete profile first (cascades recruiter_clients rows)
     await admin.from('profiles').delete().eq('id', userId)
 

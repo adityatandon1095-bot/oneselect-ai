@@ -41,9 +41,15 @@ export default function ClientSettings() {
     e.preventDefault()
     if (!inviteEmail.trim()) return
     setInviting(true); setInviteMsg('')
+    const { data: sessionData } = await supabase.auth.getSession()
+    const session = sessionData?.session
     const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/invite-user`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY },
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+      },
       body: JSON.stringify({
         email:          inviteEmail.trim(),
         contact_name:   inviteName.trim() || inviteEmail.split('@')[0],
