@@ -3,19 +3,22 @@ import { supabase } from './supabase'
 
 const AuthContext = createContext(null)
 
-// Detect Supabase invite/recovery tokens in the URL before any auth init.
+// Detect Supabase token type in the URL before any auth init.
+// The three PKCE flows each need distinct handling in init():
+//   type=invite    → sign out first so invited user's session isn't layered on top of an existing one
+//   type=recovery  → don't sign out (would clear PKCE verifier); let SDK exchange code → PASSWORD_RECOVERY
+//   type=magiclink → treat as normal login; let SDK exchange code → SIGNED_IN → redirect to dashboard
+//   (no type)      → also treated as magic link / normal code exchange
 const _urlHash   = new URLSearchParams(window.location.hash.slice(1))
 const _urlSearch = new URLSearchParams(window.location.search)
 const _urlType   = _urlHash.get('type') || _urlSearch.get('type')
 const _hasToken  = !!(_urlHash.get('access_token') || _urlSearch.get('code'))
-// Invite: sign out any existing session first so the new user's session takes
-// over rather than whoever happens to be logged in already.
-const HAS_INVITE_TOKEN = (_urlType === 'invite') && _hasToken
-// Recovery: do NOT sign out. Calling signOut() clears the PKCE code verifier
-// stored in localStorage, which breaks the code→session exchange and causes
-// updateUser() to fail with "An error has occurred". Let the SDK exchange the
-// ?code= naturally and fire PASSWORD_RECOVERY.
-const HAS_RECOVERY_TOKEN = (_urlType === 'recovery') && _hasToken
+const HAS_INVITE_TOKEN    = (_urlType === 'invite')   && _hasToken
+const HAS_RECOVERY_TOKEN  = (_urlType === 'recovery') && _hasToken
+// Magic link: type=magiclink, or a bare ?code= with no type param.
+// Neither HAS_INVITE_TOKEN nor HAS_RECOVERY_TOKEN will match these — they
+// fall through to the normal getSession() path in init(), which is correct.
+const HAS_MAGIC_LINK_TOKEN = _hasToken && !HAS_INVITE_TOKEN && !HAS_RECOVERY_TOKEN
 
 export function AuthProvider({ children }) {
   const [user, setUser]                     = useState(null)

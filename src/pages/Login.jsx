@@ -68,13 +68,16 @@ export default function Login() {
         setMode('reset')
         setError('')
         setInfo('')
+      } else if (event === 'SIGNED_IN' && hasCode && urlType !== 'recovery' && urlType !== 'invite') {
+        // Magic link login completed — redirect to role dashboard
+        navigate('/', { replace: true })
       }
     })
 
     // Race-condition fallback: the SDK may exchange the PKCE code and fire
-    // PASSWORD_RECOVERY before the listener above is registered. getSession()
-    // resolves after the exchange, so if there's already a session we show the form.
-    if (hasCode) {
+    // PASSWORD_RECOVERY before the listener above is registered. Only applicable
+    // for recovery flows — magic link ?code= must NOT set mode='reset'.
+    if (hasCode && urlType === 'recovery') {
       supabase.auth.getSession().then(({ data: { session } }) => {
         if (session) { setMode('reset'); setError(''); setInfo('') }
       })
