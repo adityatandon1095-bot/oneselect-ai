@@ -372,7 +372,7 @@ export default function VideoInterview({ job, candidate, matchId, isFromPool, on
               ['One take', 'No pausing or re-recording'],
             ].map(([title, desc]) => (
               <div key={title} style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-                <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'rgba(99,102,241,0.8)', marginTop: 5, flexShrink: 0 }} />
+                <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--accent)', marginTop: 5, flexShrink: 0 }} />
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 500, color: 'rgba(255,255,255,0.85)' }}>{title}</div>
                   <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>{desc}</div>
@@ -383,7 +383,7 @@ export default function VideoInterview({ job, candidate, matchId, isFromPool, on
           {error && <div style={{ fontSize: 12, color: 'var(--red)', background: 'rgba(239,68,68,0.1)', padding: '10px 14px', borderRadius: 8, lineHeight: 1.5 }}>{error}</div>}
           <button
             onClick={initCamera}
-            style={{ padding: '13px 24px', borderRadius: 8, background: 'rgba(99,102,241,1)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 14, fontWeight: 500 }}
+            style={{ padding: '13px 24px', borderRadius: 8, background: 'var(--accent)', color: '#0F0F0F', border: 'none', cursor: 'pointer', fontSize: 14, fontWeight: 500 }}
           >Allow Camera & Start →</button>
         </div>
       </div>
@@ -410,15 +410,15 @@ export default function VideoInterview({ job, candidate, matchId, isFromPool, on
         <div>
           <div style={{ fontSize: 11, ...mono, color: 'rgba(255,255,255,0.35)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Microphone Level</div>
           <div style={{ height: 8, background: 'rgba(255,255,255,0.08)', borderRadius: 4, overflow: 'hidden' }}>
-            <div style={{ height: '100%', width: `${micLevel}%`, background: micLevel < 5 ? '#ef4444' : micLevel < 30 ? '#f59e0b' : '#22c55e', borderRadius: 4, transition: 'width 0.07s ease, background 0.3s' }} />
+            <div style={{ height: '100%', width: `${micLevel}%`, background: micLevel < 5 ? 'var(--red)' : micLevel < 30 ? 'var(--amber)' : 'var(--green)', borderRadius: 4, transition: 'width 0.07s ease, background 0.3s' }} />
           </div>
           {micLevel < 4 && (
-            <p style={{ fontSize: 11, color: '#fbbf24', marginTop: 6, margin: '6px 0 0' }}>No audio detected — speak to test your mic</p>
+            <p style={{ fontSize: 11, color: 'var(--amber)', marginTop: 6, margin: '6px 0 0' }}>No audio detected — speak to test your mic</p>
           )}
         </div>
 
         <button onClick={confirmDevices}
-          style={{ padding: '13px 0', background: '#B8924A', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 14, ...mono, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+          style={{ padding: '13px 0', background: 'var(--accent)', color: '#0F0F0F', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 14, ...mono, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
           Camera &amp; Mic Working — Continue →
         </button>
       </div>
@@ -428,7 +428,7 @@ export default function VideoInterview({ job, candidate, matchId, isFromPool, on
   // ── LOADING ───────────────────────────────────────────────────────────────
   if (stage === S.LOADING) return (
     <div style={overlay}>
-      <span className="spinner" style={{ width: 40, height: 40, borderColor: 'rgba(255,255,255,0.15)', borderTopColor: 'rgba(99,102,241,0.9)', borderWidth: 3 }} />
+      <span className="spinner" style={{ width: 40, height: 40, borderColor: 'rgba(255,255,255,0.15)', borderTopColor: 'var(--accent)', borderWidth: 3 }} />
       <div style={{ marginTop: 20, fontSize: 14, color: 'rgba(255,255,255,0.5)' }}>Preparing your interview…</div>
     </div>
   )
@@ -452,14 +452,14 @@ export default function VideoInterview({ job, candidate, matchId, isFromPool, on
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 32, textAlign: 'left' }}>
           {questions.map((q, i) => (
             <div key={i} style={{ display: 'flex', gap: 12, padding: '10px 14px', background: 'rgba(255,255,255,0.04)', borderRadius: 8 }}>
-              <span style={{ ...mono, fontSize: 11, color: 'rgba(99,102,241,0.7)', minWidth: 18 }}>Q{i+1}</span>
+              <span style={{ ...mono, fontSize: 11, color: 'var(--accent)', minWidth: 18 }}>Q{i+1}</span>
               <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', lineHeight: 1.5 }}>{q.q}</span>
               <span style={{ ...mono, fontSize: 10, color: 'rgba(255,255,255,0.25)', flexShrink: 0, marginTop: 2 }}>{q.seconds}s</span>
             </div>
           ))}
         </div>
         <button onClick={startCountdown}
-          style={{ padding: '14px 40px', borderRadius: 8, background: 'rgba(99,102,241,1)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 15, fontWeight: 500 }}>
+          style={{ padding: '14px 40px', borderRadius: 8, background: 'var(--accent)', color: '#0F0F0F', border: 'none', cursor: 'pointer', fontSize: 15, fontWeight: 500 }}>
           Begin Interview →
         </button>
       </div>
@@ -602,7 +602,7 @@ export default function VideoInterview({ job, candidate, matchId, isFromPool, on
               'If progressed, your recruiter will reach out to discuss next steps',
             ].map((step, i) => (
               <div key={i} style={{ display: 'flex', gap: 12, marginBottom: i < 2 ? 10 : 0, alignItems: 'flex-start' }}>
-                <div style={{ width: 18, height: 18, borderRadius: '50%', background: 'rgba(184,146,74,0.2)', border: '1px solid rgba(184,146,74,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 10, ...mono, color: '#B8924A', marginTop: 1 }}>{i + 1}</div>
+                <div style={{ width: 18, height: 18, borderRadius: '50%', background: 'var(--accent-d)', border: '1px solid var(--accent-d2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 10, ...mono, color: 'var(--accent)', marginTop: 1 }}>{i + 1}</div>
                 <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', lineHeight: 1.6 }}>{step}</div>
               </div>
             ))}
@@ -617,7 +617,7 @@ export default function VideoInterview({ job, candidate, matchId, isFromPool, on
           </div>
 
           <button onClick={() => { streamRef.current?.getTracks().forEach(t => t.stop()); onClose() }}
-            style={{ padding: '13px 32px', borderRadius: 8, background: 'rgba(99,102,241,1)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 14 }}>
+            style={{ padding: '13px 32px', borderRadius: 8, background: 'var(--accent)', color: '#0F0F0F', border: 'none', cursor: 'pointer', fontSize: 14 }}>
             Close
           </button>
         </div>
@@ -636,7 +636,7 @@ export default function VideoInterview({ job, candidate, matchId, isFromPool, on
           {retryFn && (
             <button
               onClick={() => retryFn()}
-              style={{ padding: '11px 28px', borderRadius: 8, background: 'rgba(99,102,241,1)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 13 }}
+              style={{ padding: '11px 28px', borderRadius: 8, background: 'var(--accent)', color: '#0F0F0F', border: 'none', cursor: 'pointer', fontSize: 13 }}
             >
               Retry
             </button>

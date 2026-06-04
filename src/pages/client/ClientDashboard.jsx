@@ -214,7 +214,7 @@ export default function ClientDashboard() {
     <div className="page">
       {showWelcome && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000, padding: 24 }}>
-          <div style={{ background: '#F8F7F4', width: '100%', maxWidth: 480, border: '1px solid #E8E4DC', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ background: 'var(--surface2)', width: '100%', maxWidth: 480, border: '1px solid var(--border)', display: 'flex', flexDirection: 'column' }}>
             <div style={{ padding: '28px 32px 0' }}>
               <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.2em', color: 'var(--accent)', marginBottom: 8 }}>One Select</div>
               <h2 style={{ fontFamily: 'var(--font-head)', fontWeight: 300, fontSize: 24, margin: 0, color: 'var(--text)' }}>Welcome to One Select</h2>
@@ -229,7 +229,7 @@ export default function ClientDashboard() {
                 { n: 3, text: 'Review scores and interview results here', desc: 'Approve shortlisted candidates and watch their video interviews.' },
               ].map(step => (
                 <div key={step.n} style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
-                  <div style={{ width: 26, height: 26, borderRadius: '50%', background: 'var(--accent)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-mono)', fontSize: 12, flexShrink: 0, fontWeight: 700 }}>{step.n}</div>
+                  <div style={{ width: 26, height: 26, borderRadius: '50%', background: 'var(--accent)', color: 'var(--text)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-mono)', fontSize: 12, flexShrink: 0, fontWeight: 700 }}>{step.n}</div>
                   <div>
                     <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)' }}>{step.text}</div>
                     <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>{step.desc}</div>

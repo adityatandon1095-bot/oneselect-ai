@@ -72,22 +72,22 @@ function VideoModal({ candidate, onClose }) {
       style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000, padding: 20 }}
       onClick={e => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div style={{ background: '#F8F7F4', width: '100%', maxWidth: 860, maxHeight: '90vh', overflow: 'auto', display: 'flex', flexDirection: 'column', border: '1px solid #E8E4DC' }}>
+      <div style={{ background: 'var(--surface2)', width: '100%', maxWidth: 860, maxHeight: '90vh', overflow: 'auto', display: 'flex', flexDirection: 'column', border: '1px solid var(--border)' }}>
 
         {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 28px', borderBottom: '1px solid #E8E4DC', flexShrink: 0 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 28px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
           <div>
-            <div style={{ fontSize: 10, ...mono, textTransform: 'uppercase', letterSpacing: '0.12em', color: '#9CA3AF', marginBottom: 4 }}>Video Interview</div>
-            <div style={{ fontSize: 18, fontFamily: 'Georgia, serif', fontWeight: 400, color: '#2D3748' }}>{full_name}</div>
+            <div style={{ fontSize: 10, ...mono, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--text-3)', marginBottom: 4 }}>Video Interview</div>
+            <div style={{ fontSize: 18, fontFamily: 'Georgia, serif', fontWeight: 400, color: 'var(--text)' }}>{full_name}</div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
             {s.overallScore != null && (
               <div style={{ textAlign: 'right' }}>
-                <div style={{ fontSize: 24, fontWeight: 700, color: REC_COLOR[rec] ?? '#B8924A' }}>{(s.overallScore / 10).toFixed(1)}/10</div>
-                {rec && <div style={{ fontSize: 11, ...mono, textTransform: 'uppercase', letterSpacing: '0.05em', color: REC_COLOR[rec] ?? '#9CA3AF' }}>{rec}</div>}
+                <div style={{ fontSize: 24, fontWeight: 700, color: REC_COLOR[rec] ?? 'var(--accent)' }}>{(s.overallScore / 10).toFixed(1)}/10</div>
+                {rec && <div style={{ fontSize: 11, ...mono, textTransform: 'uppercase', letterSpacing: '0.05em', color: REC_COLOR[rec] ?? 'var(--text-3)' }}>{rec}</div>}
               </div>
             )}
-            <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: '#9CA3AF', padding: '4px 8px', lineHeight: 1 }}>✕</button>
+            <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: 'var(--text-3)', padding: '4px 8px', lineHeight: 1 }}>✕</button>
           </div>
         </div>
 
@@ -103,18 +103,18 @@ function VideoModal({ candidate, onClose }) {
               }
             </div>
             {video_urls[activeIdx]?.q && (
-              <div style={{ padding: '10px 14px', background: 'white', border: '1px solid #E8E4DC', borderLeft: '3px solid #B8924A', marginTop: 10 }}>
-                <div style={{ fontSize: 10, ...mono, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#9CA3AF', marginBottom: 4 }}>Question {activeIdx + 1}</div>
-                <div style={{ fontSize: 13, color: '#4A5568', lineHeight: 1.6 }}>{video_urls[activeIdx].q}</div>
+              <div style={{ padding: '10px 14px', background: 'var(--surface)', border: '1px solid var(--border)', borderLeft: '3px solid var(--accent)', marginTop: 10 }}>
+                <div style={{ fontSize: 10, ...mono, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-3)', marginBottom: 4 }}>Question {activeIdx + 1}</div>
+                <div style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.6 }}>{video_urls[activeIdx].q}</div>
               </div>
             )}
             {video_urls.length > 1 && (
               <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
                 {video_urls.map((v, i) => (
                   <button key={i} onClick={() => setActiveIdx(i)} style={{
-                    padding: '5px 14px', border: `1px solid ${i === activeIdx ? '#B8924A' : '#E8E4DC'}`,
-                    background: i === activeIdx ? 'rgba(184,146,74,0.08)' : 'white',
-                    color: i === activeIdx ? '#B8924A' : '#9CA3AF',
+                    padding: '5px 14px', border: `1px solid ${i === activeIdx ? 'var(--accent)' : 'var(--border)'}`,
+                    background: i === activeIdx ? 'var(--accent-d)' : 'var(--surface)',
+                    color: i === activeIdx ? 'var(--accent)' : 'var(--text-3)',
                     cursor: 'pointer', fontSize: 12, fontFamily: 'var(--font-mono)',
                   }}>
                     Q{i + 1}{!v.url ? ' ⚠' : ''}
@@ -126,13 +126,13 @@ function VideoModal({ candidate, onClose }) {
 
           {/* AI score dimensions */}
           {s.overallScore != null && (
-            <div style={{ background: 'white', border: '1px solid #E8E4DC', padding: '20px 24px' }}>
-              <div style={{ fontSize: 10, ...mono, textTransform: 'uppercase', letterSpacing: '0.12em', color: '#9CA3AF', marginBottom: 16 }}>AI Assessment</div>
+            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', padding: '20px 24px' }}>
+              <div style={{ fontSize: 10, ...mono, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--text-3)', marginBottom: 16 }}>AI Assessment</div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 16, marginBottom: s.insight ? 16 : 0 }}>
                 {DIMS.map(([key, label]) => (
                   <div key={key}>
-                    <div style={{ fontSize: 11, color: '#9CA3AF', fontFamily: 'var(--font-mono)', marginBottom: 5 }}>{label}</div>
-                    <div style={{ height: 3, background: '#E8E4DC', overflow: 'hidden' }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--font-mono)', marginBottom: 5 }}>{label}</div>
+                    <div style={{ height: 3, background: 'var(--border)', overflow: 'hidden' }}>
                       <div style={{ height: '100%', width: `${s[key] ?? 0}%`, background: dimColor(s[key] ?? 0), transition: 'width 0.4s' }} />
                     </div>
                     <div style={{ fontSize: 13, fontWeight: 600, color: dimColor(s[key] ?? 0), marginTop: 4 }}>{s[key] != null ? (s[key] / 10).toFixed(1) : '—'}</div>
@@ -140,7 +140,7 @@ function VideoModal({ candidate, onClose }) {
                 ))}
               </div>
               {s.insight && (
-                <p style={{ fontSize: 13, color: '#6B7280', lineHeight: 1.7, margin: 0, paddingTop: 16, borderTop: '1px solid #E8E4DC', fontStyle: 'italic' }}>
+                <p style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.7, margin: 0, paddingTop: 16, borderTop: '1px solid var(--border)', fontStyle: 'italic' }}>
                   {s.insight}
                 </p>
               )}
@@ -149,8 +149,8 @@ function VideoModal({ candidate, onClose }) {
 
           {/* Transcript */}
           {interview_transcript.length > 0 && (
-            <div style={{ background: 'white', border: '1px solid #E8E4DC', padding: '20px 24px' }}>
-              <div style={{ fontSize: 10, ...mono, textTransform: 'uppercase', letterSpacing: '0.12em', color: '#9CA3AF', marginBottom: 16 }}>Interview Transcript</div>
+            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', padding: '20px 24px' }}>
+              <div style={{ fontSize: 10, ...mono, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--text-3)', marginBottom: 16 }}>Interview Transcript</div>
               <div className="transcript-wrap">
                 {interview_transcript.map((msg, i) => (
                   <div key={i} className={`bubble ${msg.role}`}>
@@ -186,26 +186,26 @@ function CVModal({ candidate, onClose }) {
       style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2100, padding: 20 }}
       onClick={e => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div style={{ background: '#F8F7F4', width: '100%', maxWidth: 760, maxHeight: '88vh', display: 'flex', flexDirection: 'column', border: '1px solid #E8E4DC' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px 24px', borderBottom: '1px solid #E8E4DC', flexShrink: 0 }}>
+      <div style={{ background: 'var(--surface2)', width: '100%', maxWidth: 760, maxHeight: '88vh', display: 'flex', flexDirection: 'column', border: '1px solid var(--border)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px 24px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
           <div>
-            <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.12em', color: '#9CA3AF', marginBottom: 3 }}>CV / Resume</div>
-            <div style={{ fontSize: 17, fontFamily: 'Georgia, serif', fontWeight: 400, color: '#2D3748' }}>{full_name}</div>
+            <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--text-3)', marginBottom: 3 }}>CV / Resume</div>
+            <div style={{ fontSize: 17, fontFamily: 'Georgia, serif', fontWeight: 400, color: 'var(--text)' }}>{full_name}</div>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <button
               onClick={download}
-              style={{ padding: '6px 14px', border: '1px solid #B8924A', background: 'rgba(184,146,74,0.08)', color: '#B8924A', cursor: 'pointer', fontSize: 12, fontFamily: 'var(--font-mono)' }}
+              style={{ padding: '6px 14px', border: '1px solid var(--accent)', background: 'var(--accent-d)', color: 'var(--accent)', cursor: 'pointer', fontSize: 12, fontFamily: 'var(--font-mono)' }}
             >
               ↓ Download .txt
             </button>
-            <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: '#9CA3AF', padding: '4px 8px', lineHeight: 1 }}>✕</button>
+            <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: 'var(--text-3)', padding: '4px 8px', lineHeight: 1 }}>✕</button>
           </div>
         </div>
         <div style={{ flex: 1, overflow: 'auto', padding: '24px' }}>
           {text
-            ? <pre style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: 12, lineHeight: 1.75, color: '#4A5568', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{text}</pre>
-            : <div style={{ textAlign: 'center', padding: '40px 0', color: '#9CA3AF', fontFamily: 'var(--font-mono)', fontSize: 13 }}>No CV text available for this candidate.</div>
+            ? <pre style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: 12, lineHeight: 1.75, color: 'var(--text-2)', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{text}</pre>
+            : <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-3)', fontFamily: 'var(--font-mono)', fontSize: 13 }}>No CV text available for this candidate.</div>
           }
         </div>
       </div>

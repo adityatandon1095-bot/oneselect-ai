@@ -212,11 +212,11 @@ export default function RecruiterDashboard() {
           <div className="section-card-head"><h3>Pipeline Conversion</h3></div>
           <div style={{ padding: '12px 20px 20px', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {[
-              { label: 'CVs',           value: funnel.total,     color: '#9ca3af',  rate: null },
-              { label: 'Screening Pass', value: funnel.passed,   color: '#B8924A',  rate: funnel.total     ? Math.round(funnel.passed    / funnel.total     * 100) : 0 },
-              { label: 'Video Done',    value: funnel.videoComp, color: '#6366f1',  rate: funnel.passed    ? Math.round(funnel.videoComp / funnel.passed    * 100) : 0 },
-              { label: 'Live Interview', value: funnel.liveSched, color: '#22c55e',  rate: funnel.videoComp ? Math.round(funnel.liveSched / funnel.videoComp * 100) : 0 },
-              { label: 'Hired',         value: funnel.hired,     color: '#10b981',  rate: funnel.liveSched ? Math.round(funnel.hired     / funnel.liveSched  * 100) : 0 },
+              { label: 'CVs',           value: funnel.total,     color: 'var(--text-3)', rate: null },
+              { label: 'Screening Pass', value: funnel.passed,   color: 'var(--accent)', rate: funnel.total     ? Math.round(funnel.passed    / funnel.total     * 100) : 0 },
+              { label: 'Video Done',    value: funnel.videoComp, color: 'var(--blue)',   rate: funnel.passed    ? Math.round(funnel.videoComp / funnel.passed    * 100) : 0 },
+              { label: 'Live Interview', value: funnel.liveSched, color: 'var(--green)', rate: funnel.videoComp ? Math.round(funnel.liveSched / funnel.videoComp * 100) : 0 },
+              { label: 'Hired',         value: funnel.hired,     color: 'var(--green)', rate: funnel.liveSched ? Math.round(funnel.hired     / funnel.liveSched  * 100) : 0 },
             ].map(s => (
               <div key={s.label} style={{ flex: '1 1 90px', minWidth: 80, padding: '12px 14px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, borderLeft: `3px solid ${s.color}` }}>
                 <div style={{ fontSize: 22, fontWeight: 300, fontFamily: 'var(--font-head)', color: s.color }}>{s.value}</div>
