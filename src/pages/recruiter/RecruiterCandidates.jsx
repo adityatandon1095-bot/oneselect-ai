@@ -64,7 +64,7 @@ function ScoreRing({ score, size = 72 }) {
         <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth="5"
           strokeDasharray={`${fill} ${circ}`} strokeLinecap="round" transform={`rotate(-90 ${size/2} ${size/2})`}/>
       </svg>
-      <div className="ring-inner"><span className="ring-val-lg">{score}</span></div>
+      <div className="ring-inner"><span className="ring-val-lg">{(score / 10).toFixed(1)}</span></div>
     </div>
   )
 }
@@ -230,7 +230,7 @@ function CandidateProfile({ candidate, job, onBack }) {
           {candidate.match_score != null && (
             <div style={{ marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
               <span className={`badge ${candidate.match_pass ? 'badge-green' : 'badge-red'}`}>
-                Screen {candidate.match_score}/100
+                Screen {(candidate.match_score / 10).toFixed(1)}/10
               </span>
               {candidate.match_rank && (
                 <span className={`badge ${candidate.match_rank === 'top10' ? 'badge-blue' : candidate.match_rank === 'strong' ? 'badge-green' : 'badge-amber'}`}>
@@ -417,7 +417,7 @@ function CandidateProfile({ candidate, job, onBack }) {
                 <div key={key} className="score-dim">
                   <span className="dim-label">{label}</span>
                   <div className="dim-track"><div className="dim-fill" style={{ width: `${s[key] ?? 0}%`, background: dimColor(s[key] ?? 0) }} /></div>
-                  <span className="dim-val">{s[key] ?? '—'}</span>
+                  <span className="dim-val">{s[key] != null ? (s[key] / 10).toFixed(1) : '—'}</span>
                 </div>
               ))}
               {s.confidence != null && (
@@ -1332,10 +1332,10 @@ export default function RecruiterCandidates() {
                   </div>
                   <div className="col-right">
                     {c.match_score != null && (
-                      <span className="mono" style={{ fontSize: 11, color: 'var(--text-3)' }}>Screen {c.match_score}</span>
+                      <span className="mono" style={{ fontSize: 11, color: 'var(--text-3)' }}>Screen {(c.match_score / 10).toFixed(1)}/10</span>
                     )}
                     {s?.overallScore != null && (
-                      <span className="mono" style={{ fontSize: 13, fontWeight: 700, color: dimColor(s.overallScore) }}>{s.overallScore}</span>
+                      <span className="mono" style={{ fontSize: 13, fontWeight: 700, color: dimColor(s.overallScore) }}>{(s.overallScore / 10).toFixed(1)}/10</span>
                     )}
                     {rec && (
                       <span style={{ fontSize: 11, fontWeight: 600, color: REC_COLOR[rec], fontFamily: 'var(--font-mono)' }}>{rec}</span>

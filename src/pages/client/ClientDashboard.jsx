@@ -466,7 +466,7 @@ export default function ClientDashboard() {
                   <div className="col-right">
                     {c.scores?.overallScore != null && (
                       <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 700, color: c.scores.overallScore >= 70 ? 'var(--green)' : c.scores.overallScore >= 50 ? 'var(--accent)' : 'var(--red)' }}>
-                        {c.scores.overallScore}
+                        {(c.scores.overallScore / 10).toFixed(1)}/10
                       </span>
                     )}
                     <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: st.color, background: st.bg, padding: '2px 7px', borderRadius: 'var(--r)', textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap' }}>

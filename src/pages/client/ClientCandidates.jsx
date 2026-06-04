@@ -34,7 +34,7 @@ const DIMS = [
   ['experienceRelevance','Experience Relevance'],
 ]
 const INTERVIEW_COMPLETE = 'INTERVIEW_COMPLETE'
-const TABS = ['All', 'Interview Pending', 'Interview Done', 'Screened Out']
+const TABS = ['Approved', 'For Review', 'All']
 
 function dimColor(v) { return v >= 70 ? 'var(--green)' : v >= 50 ? 'var(--accent)' : 'var(--red)' }
 
@@ -47,7 +47,7 @@ function ScoreRing({ score, size = 72 }) {
         <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth="5"
           strokeDasharray={`${fill} ${circ}`} strokeLinecap="round" transform={`rotate(-90 ${size/2} ${size/2})`}/>
       </svg>
-      <div className="ring-inner"><span className="ring-val-lg">{score}</span></div>
+      <div className="ring-inner"><span className="ring-val-lg">{(score / 10).toFixed(1)}</span></div>
     </div>
   )
 }
@@ -83,7 +83,7 @@ function VideoModal({ candidate, onClose }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
             {s.overallScore != null && (
               <div style={{ textAlign: 'right' }}>
-                <div style={{ fontSize: 24, fontWeight: 700, color: REC_COLOR[rec] ?? '#B8924A' }}>{s.overallScore}</div>
+                <div style={{ fontSize: 24, fontWeight: 700, color: REC_COLOR[rec] ?? '#B8924A' }}>{(s.overallScore / 10).toFixed(1)}/10</div>
                 {rec && <div style={{ fontSize: 11, ...mono, textTransform: 'uppercase', letterSpacing: '0.05em', color: REC_COLOR[rec] ?? '#9CA3AF' }}>{rec}</div>}
               </div>
             )}
@@ -135,7 +135,7 @@ function VideoModal({ candidate, onClose }) {
                     <div style={{ height: 3, background: '#E8E4DC', overflow: 'hidden' }}>
                       <div style={{ height: '100%', width: `${s[key] ?? 0}%`, background: dimColor(s[key] ?? 0), transition: 'width 0.4s' }} />
                     </div>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: dimColor(s[key] ?? 0), marginTop: 4 }}>{s[key] ?? '—'}</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: dimColor(s[key] ?? 0), marginTop: 4 }}>{s[key] != null ? (s[key] / 10).toFixed(1) : '—'}</div>
                   </div>
                 ))}
               </div>
@@ -273,7 +273,7 @@ function CandidateProfile({ candidate, onBack, onWatch, onViewCV, onOffer, onDec
           {candidate.match_score != null && (
             <div style={{ marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
               <span className={`badge ${candidate.match_pass ? 'badge-green' : 'badge-red'}`}>
-                Screen {candidate.match_score}/100
+                Screen {(candidate.match_score / 10).toFixed(1)}/10
               </span>
             </div>
           )}
@@ -315,7 +315,7 @@ function CandidateProfile({ candidate, onBack, onWatch, onViewCV, onOffer, onDec
               <div key={key} className="score-dim">
                 <span className="dim-label">{label}</span>
                 <div className="dim-track"><div className="dim-fill" style={{ width: `${s[key] ?? 0}%`, background: dimColor(s[key] ?? 0) }} /></div>
-                <span className="dim-val">{s[key] ?? '—'}</span>
+                <span className="dim-val">{s[key] != null ? (s[key] / 10).toFixed(1) : '—'}</span>
               </div>
             ))}
           </div>
@@ -379,7 +379,7 @@ export default function ClientCandidates() {
   const [candidates, setCandidates] = useState([])
   const [loading, setLoading] = useState(true)
   const [jobFilter, setJobFilter] = useState('all')
-  const [tab, setTab] = useState('All')
+  const [tab, setTab] = useState('Approved')
   const [selectedId, setSelectedId] = useState(null)
   const [watchId, setWatchId] = useState(null)
   const [cvId, setCvId] = useState(null)
@@ -532,15 +532,18 @@ export default function ClientCandidates() {
     const hay = [c.full_name, c.candidate_role, c.email, c.summary, ...(c.skills ?? [])].join(' ').toLowerCase()
     return words.every(w => hay.includes(w))
   })
-  const tabFilteredAll = searchActive.filter(c => tab === 'All' || getStatus(c) === tab)
+  const tabFilteredAll = searchActive.filter(c => {
+    if (tab === 'Approved')   return c.client_approved === true
+    if (tab === 'For Review') return c.client_approved == null
+    return true // 'All'
+  })
   const tabFiltered = tabFilteredAll
   const trialHidden = 0
 
   const counts = {
-    'All': searchActive.length,
-    'Interview Pending': searchActive.filter(c => getStatus(c) === 'Interview Pending').length,
-    'Interview Done': searchActive.filter(c => getStatus(c) === 'Interview Done').length,
-    'Screened Out': searchActive.filter(c => getStatus(c) === 'Screened Out').length,
+    'Approved':   searchActive.filter(c => c.client_approved === true).length,
+    'For Review': searchActive.filter(c => c.client_approved == null).length,
+    'All':        searchActive.length,
   }
 
   const selected    = candidates.find(c => c.id === selectedId)
@@ -717,8 +720,14 @@ export default function ClientCandidates() {
         {tabFiltered.length === 0 ? (
           <div className="empty-state">
             <div style={{ fontSize: 28, marginBottom: 10, opacity: 0.3 }}>◌</div>
-            <div style={{ fontWeight: 400, color: 'var(--text-2)', marginBottom: 6 }}>No candidates in this category</div>
-            <div style={{ fontSize: 12, color: 'var(--text-3)' }}>Candidates shortlisted by your recruiter will appear here.</div>
+            <div style={{ fontWeight: 400, color: 'var(--text-2)', marginBottom: 6 }}>
+              {tab === 'For Review' ? 'No candidates awaiting review' : tab === 'Approved' ? 'No approved candidates yet' : 'No candidates found'}
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-3)' }}>
+              {tab === 'Approved'
+                ? 'Candidates you approve will appear here. Switch to "For Review" to approve screened candidates.'
+                : 'Candidates shortlisted by your recruiter will appear here.'}
+            </div>
           </div>
         ) : (
           tabFiltered.map(c => {
@@ -758,12 +767,12 @@ export default function ClientCandidates() {
                 <div className="col-right">
                   {c.match_score != null && (
                     <span className="mono" style={{ fontSize: 11, color: 'var(--text-3)' }}>
-                      Screen {c.match_score}
+                      Screen {(c.match_score / 10).toFixed(1)}/10
                     </span>
                   )}
                   {s?.overallScore != null && (
                     <span className="mono" style={{ fontSize: 13, fontWeight: 700, color: dimColor(s.overallScore) }}>
-                      {s.overallScore}
+                      {(s.overallScore / 10).toFixed(1)}/10
                     </span>
                   )}
                   {rec && (
@@ -930,15 +939,15 @@ export default function ClientCandidates() {
                   </thead>
                   <tbody>
                     {[
-                      { label: 'Screen Score', render: c => c.match_score != null ? <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: dimColor(c.match_score) }}>{c.match_score}</span> : <span style={{ color: '#9CA3AF' }}>—</span> },
-                      { label: 'Interview Score', render: c => c.scores?.overallScore != null ? <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: dimColor(c.scores.overallScore) }}>{c.scores.overallScore}</span> : <span style={{ color: '#9CA3AF' }}>—</span> },
+                      { label: 'Screen Score', render: c => c.match_score != null ? <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: dimColor(c.match_score) }}>{(c.match_score / 10).toFixed(1)}/10</span> : <span style={{ color: '#9CA3AF' }}>—</span> },
+                      { label: 'Interview Score', render: c => c.scores?.overallScore != null ? <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: dimColor(c.scores.overallScore) }}>{(c.scores.overallScore / 10).toFixed(1)}/10</span> : <span style={{ color: '#9CA3AF' }}>—</span> },
                       { label: 'Recommendation', render: c => c.scores?.recommendation ? <span style={{ fontWeight: 600, color: REC_COLOR[c.scores.recommendation], fontFamily: 'var(--font-mono)', fontSize: 11 }}>{c.scores.recommendation}</span> : <span style={{ color: '#9CA3AF' }}>—</span> },
                       { label: 'Experience', render: c => c.total_years != null ? `${c.total_years}y` : '—' },
                       ...DIMS.map(([key, label]) => ({
                         label,
                         render: c => {
                           const v = c.scores?.[key]
-                          return v != null ? <span style={{ fontFamily: 'var(--font-mono)', color: dimColor(v) }}>{v}</span> : <span style={{ color: '#9CA3AF' }}>—</span>
+                          return v != null ? <span style={{ fontFamily: 'var(--font-mono)', color: dimColor(v) }}>{(v / 10).toFixed(1)}</span> : <span style={{ color: '#9CA3AF' }}>—</span>
                         },
                       })),
                       { label: 'Skills', render: c => (c.skills ?? []).length > 0 ? (

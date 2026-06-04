@@ -80,6 +80,54 @@ function SourcingActivityPanel({ stats }) {
   )
 }
 
+function HiringStageTracker({ job, candidates }) {
+  const STAGES = [
+    { key: 'pending_review', label: 'Under Review' },
+    { key: 'active',         label: 'Active' },
+    { key: 'screening',      label: 'Screening' },
+    { key: 'shortlisted',    label: 'Shortlisted' },
+    { key: 'interviews',     label: 'Interviews' },
+    { key: 'offer',          label: 'Offer Stage' },
+  ]
+  let current
+  if (job.status === 'pending_review') {
+    current = 'pending_review'
+  } else if (job.status === 'closed') {
+    current = 'offer'
+  } else {
+    const hired = candidates.filter(c => c.final_decision === 'hired' || c.offer_status === 'sent')
+    const interviewed = candidates.filter(c => c.scores?.overallScore != null)
+    const passed = candidates.filter(c => c.match_pass === true)
+    if (hired.length > 0)       current = 'offer'
+    else if (interviewed.length > 0) current = 'interviews'
+    else if (passed.length > 0) current = 'shortlisted'
+    else if (candidates.length > 0) current = 'screening'
+    else                         current = 'active'
+  }
+  const currentIdx = STAGES.findIndex(s => s.key === current)
+  return (
+    <div style={{ padding: '16px 20px', background: 'var(--surface)', border: '1px solid var(--border)', marginBottom: 20, borderTop: '2px solid var(--accent)' }}>
+      <div style={{ fontSize: 10, ...mono, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-3)', marginBottom: 14 }}>Hiring Stage</div>
+      <div style={{ display: 'flex', alignItems: 'flex-start' }}>
+        {STAGES.map((s, i) => {
+          const isDone = i < currentIdx
+          const isCurrent = i === currentIdx
+          const color = isCurrent ? '#B8924A' : isDone ? 'var(--green)' : 'var(--border2)'
+          return (
+            <div key={s.key} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative', minWidth: 0 }}>
+              {i > 0 && <div style={{ position: 'absolute', top: 5, right: '50%', left: '-50%', height: 2, background: isDone ? 'var(--green)' : 'var(--border)', zIndex: 0 }} />}
+              <div style={{ width: 12, height: 12, borderRadius: '50%', background: isCurrent ? '#B8924A' : isDone ? 'var(--green)' : 'var(--surface)', border: `2px solid ${color}`, zIndex: 1, flexShrink: 0 }} />
+              <div style={{ marginTop: 8, fontSize: 9, ...mono, textTransform: 'uppercase', letterSpacing: '0.06em', color: isCurrent ? '#B8924A' : isDone ? 'var(--green)' : 'var(--text-3)', textAlign: 'center', lineHeight: 1.3, wordBreak: 'break-word' }}>
+                {s.label}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 function JobDetail({ job: initialJob, onBack, onUpdate }) {
   const [job, setJob] = useState(initialJob)
   const [candidates, setCandidates] = useState([])
@@ -157,13 +205,13 @@ function JobDetail({ job: initialJob, onBack, onUpdate }) {
             <p>{selected.candidate_role}{selected.total_years ? ` · ${selected.total_years}y exp` : ''}</p>
             {selected.match_score != null && (
               <div style={{ marginTop: 8 }}>
-                <span className={`badge ${selected.match_pass ? 'badge-green' : 'badge-red'}`}>Screen {selected.match_score}/100</span>
+                <span className={`badge ${selected.match_pass ? 'badge-green' : 'badge-red'}`}>Screen {(selected.match_score / 10).toFixed(1)}/10</span>
               </div>
             )}
           </div>
           {s.overallScore != null && (
             <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: 32, fontWeight: 700, color: dimColor(s.overallScore), lineHeight: 1 }}>{s.overallScore}</div>
+              <div style={{ fontSize: 32, fontWeight: 700, color: dimColor(s.overallScore), lineHeight: 1 }}>{(s.overallScore / 10).toFixed(1)}/10</div>
               {rec && <div style={{ fontSize: 11, ...mono, textTransform: 'uppercase', color: REC_COLOR[rec] ?? 'var(--text-3)' }}>{rec}</div>}
             </div>
           )}
@@ -182,7 +230,7 @@ function JobDetail({ job: initialJob, onBack, onUpdate }) {
                 <div key={key} className="score-dim" style={{ marginBottom: 10 }}>
                   <span className="dim-label">{label}</span>
                   <div className="dim-track"><div className="dim-fill" style={{ width: `${s[key] ?? 0}%`, background: dimColor(s[key] ?? 0) }} /></div>
-                  <span className="dim-val">{s[key] ?? '—'}</span>
+                  <span className="dim-val">{s[key] != null ? (s[key] / 10).toFixed(1) : '—'}</span>
                 </div>
               ))}
               {s.insight && <p style={{ marginTop: 12, fontSize: 13, color: 'var(--text-2)', lineHeight: 1.7, fontStyle: 'italic' }}>{s.insight}</p>}
@@ -204,12 +252,16 @@ function JobDetail({ job: initialJob, onBack, onUpdate }) {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <span className={`badge ${job.status === 'active' ? 'badge-green' : 'badge-amber'}`}>{job.status}</span>
+          <span className={`badge ${job.status === 'active' ? 'badge-green' : job.status === 'pending_review' ? 'badge-amber' : 'badge-red'}`}>
+            {job.status === 'pending_review' ? 'Under Review' : job.status}
+          </span>
           <button className="btn btn-secondary" style={{ fontSize: 12, padding: '5px 12px' }} onClick={() => setEditing(v => !v)}>
             {editing ? 'Cancel Edit' : '✎ Edit Job'}
           </button>
         </div>
       </div>
+
+      <HiringStageTracker job={job} candidates={candidates} />
 
       {editing && (
         <div className="section-card" style={{ marginBottom: 20 }}>
@@ -298,10 +350,10 @@ function JobDetail({ job: initialJob, onBack, onUpdate }) {
                   </div>
                   <div className="col-right">
                     {c.match_score != null && (
-                      <span style={{ fontSize: 11, ...mono, color: 'var(--text-3)' }}>Screen {c.match_score}</span>
+                      <span style={{ fontSize: 11, ...mono, color: 'var(--text-3)' }}>Screen {(c.match_score / 10).toFixed(1)}/10</span>
                     )}
                     {s.overallScore != null && (
-                      <span style={{ fontSize: 13, fontWeight: 700, ...mono, color: dimColor(s.overallScore) }}>{s.overallScore}</span>
+                      <span style={{ fontSize: 13, fontWeight: 700, ...mono, color: dimColor(s.overallScore) }}>{(s.overallScore / 10).toFixed(1)}/10</span>
                     )}
                     {s.recommendation && (
                       <span style={{ fontSize: 11, fontWeight: 600, ...mono, color: REC_COLOR[s.recommendation] ?? 'var(--text-3)' }}>{s.recommendation}</span>
@@ -400,7 +452,7 @@ export default function ClientJobs() {
       salary_min: form.salary_min ? parseInt(form.salary_min, 10) : null,
       salary_max: form.salary_max ? parseInt(form.salary_max, 10) : null,
       salary_currency: form.salary_currency || DEFAULT_CURRENCY,
-      status: 'active',
+      status: 'pending_review',
     }).select().single()
     setSaving(false)
     if (err) { setError(err.message); return }
@@ -423,7 +475,7 @@ export default function ClientJobs() {
     }
     const { data, error: err } = await supabase.from('jobs').insert({
       recruiter_id:    user.id,
-      status:          'active',
+      status:          'pending_review',
       title:           jobData.title,
       description:     jobData.description,
       required_skills: jobData.required_skills,
@@ -449,7 +501,7 @@ export default function ClientJobs() {
     }
     const { data, error: err } = await supabase.from('jobs').insert({
       recruiter_id: user.id,
-      status: 'active',
+      status: 'pending_review',
       title:            jobData.title,
       description:      jobData.description,
       required_skills:  jobData.required_skills,
@@ -470,13 +522,13 @@ export default function ClientJobs() {
 
   async function toggleStatus(job, e) {
     e.stopPropagation()
-    const newStatus = job.status === 'active' ? 'closed' : 'active'
+    const newStatus = job.status === 'closed' ? 'active' : 'closed'
     await supabase.from('jobs').update({ status: newStatus }).eq('id', job.id)
     setJobs(p => p.map(j => j.id === job.id ? { ...j, status: newStatus } : j))
   }
 
-  const activeJobs = jobs.filter(j => j.status === 'active')
-  const closedJobs = jobs.filter(j => j.status !== 'active')
+  const activeJobs = jobs.filter(j => j.status !== 'closed')
+  const closedJobs = jobs.filter(j => j.status === 'closed')
 
   if (loading) return <div className="page"><span className="spinner" /></div>
 
@@ -613,6 +665,9 @@ export default function ClientJobs() {
                     </div>
                   </div>
                   <div className="col-right">
+                    {j.status === 'pending_review' && (
+                      <span className="badge badge-amber" style={{ fontSize: 10 }}>Under Review</span>
+                    )}
                     <span className="mono" style={{ fontSize: 11, color: 'var(--text-3)' }}>
                       {j.candidates?.[0]?.count ?? 0} candidate{j.candidates?.[0]?.count !== 1 ? 's' : ''}
                     </span>

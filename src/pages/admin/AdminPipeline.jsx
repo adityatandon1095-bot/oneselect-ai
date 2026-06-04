@@ -59,7 +59,7 @@ function ScoreRing({ score, size = 48 }) {
         <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth="4"
           strokeDasharray={`${fill} ${circ}`} strokeLinecap="round" transform={`rotate(-90 ${size/2} ${size/2})`}/>
       </svg>
-      <div className="ring-inner"><span className="ring-val">{score}</span></div>
+      <div className="ring-inner"><span className="ring-val">{(score / 10).toFixed(1)}</span></div>
     </div>
   )
 }
@@ -1376,7 +1376,7 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
                         <div key={c.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 'var(--r)' }}>
                           <div>
                             <div style={{ fontSize: 13, fontWeight: 500 }}>{c.full_name}</div>
-                            <div style={{ fontSize: 11, color: 'var(--text-3)' }}>{c.candidate_role} · Score {c.match_score}</div>
+                            <div style={{ fontSize: 11, color: 'var(--text-3)' }}>{c.candidate_role} · Score {(c.match_score / 10).toFixed(1)}/10</div>
                           </div>
                           {!c.scores?.overallScore && (
                             <button
@@ -1671,7 +1671,7 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
                     {hasScores && (
                       <>
                         <span className="badge badge-green">AI Screened</span>
-                        <span className="mono" style={{ fontSize: 12, fontWeight: 700, color: dimColor(c.scores.overallScore) }}>{c.scores.overallScore}/100</span>
+                        <span className="mono" style={{ fontSize: 12, fontWeight: 700, color: dimColor(c.scores.overallScore) }}>{(c.scores.overallScore / 10).toFixed(1)}/10</span>
                         <span style={{ fontSize: 10, color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>CV analysis</span>
                         {rec && <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: REC_COLOR[rec] ?? 'var(--text-3)' }}>{rec}</span>}
                         {hasVideo && <button className="btn btn-secondary" style={{ fontSize: 10, padding: '2px 8px' }} onClick={() => setVideoPlayerTarget(c)}>▶ Watch</button>}

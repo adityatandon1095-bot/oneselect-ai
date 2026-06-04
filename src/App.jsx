@@ -33,6 +33,7 @@ import ClientSettings from './pages/client/ClientSettings'
 import ClientChat from './pages/client/ClientChat'
 import PublicVideoInterview from './pages/PublicVideoInterview'
 import PublicLiveInterview from './pages/PublicLiveInterview'
+import PreInterviewQuestionnaire from './pages/PreInterviewQuestionnaire'
 import PublicScheduleConfirm from './pages/PublicScheduleConfirm'
 import PublicAssessment from './pages/PublicAssessment'
 import PublicJobs from './pages/PublicJobs'
@@ -108,6 +109,7 @@ export default function App() {
           <Route path="/trial" element={<TrialSignup />} />
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/terms"   element={<Terms />} />
+          <Route path="/questionnaire/:token" element={<PreInterviewQuestionnaire />} />
           <Route path="/interview/:token" element={<PublicVideoInterview />} />
           <Route path="/live/:token" element={<PublicLiveInterview />} />
           <Route path="/schedule/:token" element={<PublicScheduleConfirm />} />

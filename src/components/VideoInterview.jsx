@@ -110,6 +110,10 @@ export default function VideoInterview({ job, candidate, matchId, isFromPool, on
   // ── Camera setup ──────────────────────────────────────────────────────────
   async function initCamera() {
     setError('')
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setError('Camera access requires a secure (HTTPS) connection and a modern browser. Please check your browser settings and try again.')
+      return
+    }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
       streamRef.current = stream
@@ -168,13 +172,13 @@ export default function VideoInterview({ job, candidate, matchId, isFromPool, on
     }
   }
 
-  // Attach stream to video element on mount / when stream ready
+  // Attach stream to video element when stage changes (a new <video> element may have mounted)
   useEffect(() => {
     if (videoRef.current && streamRef.current) {
       videoRef.current.srcObject = streamRef.current
       videoRef.current.muted = true
     }
-  })
+  }, [stage])
 
   // ── Cleanup on unmount ────────────────────────────────────────────────────
   useEffect(() => {
