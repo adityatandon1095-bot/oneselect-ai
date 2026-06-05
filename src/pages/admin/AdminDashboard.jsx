@@ -164,7 +164,7 @@ export default function AdminDashboard() {
           <p>Platform-wide overview</p>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
-          <button className="btn btn-secondary" disabled={sendingUpdates} onClick={sendWeeklyUpdates}>
+          <button className="btn btn-secondary" disabled={sendingUpdates} onClick={sendWeeklyUpdates} style={{ background: 'var(--accent)', color: '#fff', border: 'none' }}>
             {sendingUpdates ? <><span className="spinner" style={{ width: 11, height: 11 }} /> Sending…</> : '✉ Send Weekly Updates'}
           </button>
           {updateResult && (

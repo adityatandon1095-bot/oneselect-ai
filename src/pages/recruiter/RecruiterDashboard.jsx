@@ -183,7 +183,7 @@ export default function RecruiterDashboard() {
           <h2>Recruiter Dashboard</h2>
           <p>Your assigned clients and their hiring pipelines</p>
         </div>
-        <button className="btn btn-primary" onClick={() => navigate('/recruiter/pipeline')}>
+        <button className="btn btn-primary" onClick={() => navigate('/recruiter/pipeline')} style={{ background: 'var(--accent)', color: '#fff', border: 'none' }}>
           Open Pipeline
         </button>
       </div>
