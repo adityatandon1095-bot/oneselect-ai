@@ -346,12 +346,12 @@ export default function AdminClients() {
             <button
               key={val}
               className={`btn ${statusFilter === val ? 'btn-primary' : 'btn-secondary'}`}
-              style={{ padding: '6px 12px', fontSize: 12 }}
+              style={{ padding: '6px 12px', fontSize: 12, ...(statusFilter !== val ? { background: 'transparent', border: '1px solid var(--border-2)', color: 'var(--text-2)' } : {}) }}
               onClick={() => setStatusFilter(val)}
             >{lbl}</button>
           ))}
         </div>
-        <select value={sortBy} onChange={e => setSortBy(e.target.value)} style={{ fontSize: 12, padding: '6px 10px' }}>
+        <select value={sortBy} onChange={e => setSortBy(e.target.value)} style={{ fontSize: 12, padding: '6px 10px', border: '1px solid var(--border-2)', background: 'var(--surface-2)', color: 'var(--text)' }}>
           <option value="newest">Newest first</option>
           <option value="company">Company name</option>
           <option value="jobs">Most jobs</option>
@@ -401,7 +401,7 @@ export default function AdminClients() {
                       {c.full_name && <span style={{ fontSize: 11, color: 'var(--text-3)' }}>{c.full_name}</span>}
                       <span className={`badge ${scfg.cls}`} style={{ fontSize: 10, ...(st === 'inactive' ? { color: 'var(--text-3)', background: 'var(--surface2)' } : {}) }}>{scfg.label}</span>
                     </div>
-                    <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-3)', marginTop: 2 }}>{c.email}</div>
+                    <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-2)', marginTop: 2 }}>{c.email}</div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
                       <span className={`badge ${sbcfg.cls}`} style={{ fontSize: 10 }}>{sbcfg.label}</span>
                       {planName && <span style={{ fontSize: 11, color: 'var(--text-3)' }}>{planName}</span>}
@@ -409,26 +409,26 @@ export default function AdminClients() {
 
                     {/* Stats row */}
                     <div style={{ display: 'flex', gap: 16, marginTop: 6, flexWrap: 'wrap' }}>
-                      <span style={{ fontSize: 11, color: 'var(--text-3)' }}>
+                      <span style={{ fontSize: 11, color: 'var(--text-2)' }}>
                         <span style={{ fontFamily: 'var(--font-mono)', color: active.length > 0 ? 'var(--green)' : 'var(--text-3)', fontWeight: 600 }}>{active.length}</span> active job{active.length !== 1 ? 's' : ''}
                         {jobs.length > active.length ? ` / ${jobs.length} total` : ''}
                       </span>
-                      <span style={{ fontSize: 11, color: 'var(--text-3)' }}>
+                      <span style={{ fontSize: 11, color: 'var(--text-2)' }}>
                         <span style={{ fontFamily: 'var(--font-mono)', color: cands > 0 ? 'var(--text)' : 'var(--text-3)', fontWeight: 600 }}>{cands}</span> candidate{cands !== 1 ? 's' : ''}
                       </span>
-                      <span style={{ fontSize: 11, color: 'var(--text-3)' }}>
+                      <span style={{ fontSize: 11, color: 'var(--text-2)' }}>
                         last active {new Date(lastActive).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: '2-digit' })}
                       </span>
                     </div>
 
                     {/* Recruiter assignment row */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
-                      <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-3)', marginRight: 2 }}>Recruiter:</span>
+                      <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-3)', marginRight: 2 }}>Recruiter:</span>
                       {assignedRecs.length === 0 ? (
                         <span style={{ fontSize: 11, color: 'var(--text-3)', fontStyle: 'italic' }}>None assigned</span>
                       ) : (
                         assignedRecs.map(r => (
-                          <span key={r.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, background: 'var(--accent-d)', border: '1px solid var(--border)', borderRadius: 'var(--r)', padding: '2px 8px', color: 'var(--accent)' }}>
+                          <span key={r.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, background: 'var(--accent-d)', border: '1px solid rgba(205,127,69,0.25)', borderRadius: 'var(--r)', padding: '2px 8px', color: 'var(--accent)' }}>
                             {r.full_name || r.email}
                             <button
                               onClick={() => handleUnassign(c.id, r.id)}
@@ -440,7 +440,9 @@ export default function AdminClients() {
                       )}
                       <button
                         className="btn btn-secondary"
-                        style={{ fontSize: 10, padding: '2px 8px' }}
+                        style={{ fontSize: 10, padding: '2px 8px', color: 'var(--accent)', border: '1px solid var(--border-2)', background: 'transparent' }}
+                        onMouseEnter={e => { e.currentTarget.style.textDecoration = 'underline'; e.currentTarget.style.borderColor = 'var(--accent)' }}
+                        onMouseLeave={e => { e.currentTarget.style.textDecoration = ''; e.currentTarget.style.borderColor = 'var(--border-2)' }}
                         onClick={() => openAssign(c)}
                       >+ Assign Recruiter</button>
                     </div>
@@ -450,22 +452,30 @@ export default function AdminClients() {
                   <div style={{ display: 'flex', gap: 5, flexShrink: 0, flexWrap: 'wrap' }}>
                     <button
                       className="btn btn-secondary"
-                      style={{ fontSize: 10, padding: '3px 8px' }}
+                      style={{ fontSize: 10, padding: '3px 8px', border: '1px solid var(--border-2)', color: 'var(--text-2)', background: 'transparent' }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.color = 'var(--accent)' }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-2)'; e.currentTarget.style.color = 'var(--text-2)' }}
                       onClick={() => navigate('/admin/jobs', { state: { clientId: c.id, clientName: c.company_name || c.email } })}
                     >Jobs</button>
                     <button
                       className="btn btn-secondary"
-                      style={{ fontSize: 10, padding: '3px 8px', color: 'var(--accent)' }}
+                      style={{ fontSize: 10, padding: '3px 8px', border: '1px solid var(--border-2)', color: 'var(--text-2)', background: 'transparent' }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.color = 'var(--accent)' }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-2)'; e.currentTarget.style.color = 'var(--text-2)' }}
                       onClick={() => navigate(`/admin/pipeline?client=${c.id}`)}
                     >Pipeline</button>
                     <button
                       className="btn btn-secondary"
-                      style={{ fontSize: 10, padding: '3px 8px', color: 'var(--accent)' }}
+                      style={{ fontSize: 10, padding: '3px 8px', border: '1px solid var(--border-2)', color: 'var(--text-2)', background: 'transparent' }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.color = 'var(--accent)' }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-2)'; e.currentTarget.style.color = 'var(--text-2)' }}
                       onClick={() => openSubModal(c)}
                     >Subscription</button>
                     <button
                       className="btn btn-secondary"
-                      style={{ fontSize: 10, padding: '3px 8px', color: 'var(--red)' }}
+                      style={{ fontSize: 10, padding: '3px 8px', border: '1px solid var(--red-d)', color: 'var(--red)', background: 'transparent' }}
+                      onMouseEnter={e => { e.currentTarget.style.background = 'var(--red-d)' }}
+                      onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
                       onClick={() => { setRemoveModal(c); setRemoveError('') }}
                     >Remove</button>
                   </div>

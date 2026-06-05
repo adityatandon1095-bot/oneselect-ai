@@ -14,13 +14,13 @@
   --surface:   #E8E2D6;
   --surface-2: #DFD8CB;
   --surface-3: #D6CEBI;
-  --border:    #E2DDD5;
-  --border-2:  #D4CEC4;
+  --border:    #C8C0B0;
+  --border-2:  #B8B0A0;
 
   /* Text colours (for use on light surfaces) */
   --text:   #0F0C08;
-  --text-2: #2E2518;
-  --text-3: #5A4E40;
+  --text-2: #1E1508;
+  --text-3: #3D3428;
 
   /* Accent */
   --accent:       #CD7F45;
@@ -112,7 +112,7 @@ p  { color: var(--text-2); font-size: 14px; font-weight: 300; }
 .btn-primary  { background: var(--accent); color: #fff; border-color: var(--accent); }
 .btn-primary:not(:disabled):hover  { background: var(--accent-hover); border-color: var(--accent-hover); }
 
-.btn-secondary { background: transparent; color: var(--text-2); border-color: var(--border2); }
+.btn-secondary { background: transparent; color: var(--text-2); border: 1px solid var(--border-2); }
 .btn-secondary:not(:disabled):hover { border-color: var(--accent); color: var(--accent); background: var(--accent-d); }
 
 .btn-ghost { background: transparent; color: var(--text-3); border-color: transparent; padding: 6px 10px; }
