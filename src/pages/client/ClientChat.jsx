@@ -2,18 +2,6 @@ import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../../lib/AuthContext'
 import { useChat } from '../../hooks/useChat'
 
-function getDateLabel(dateStr) {
-  const d         = new Date(dateStr)
-  const now       = new Date()
-  const yesterday = new Date(now.getTime() - 86400000)
-  if (d.toDateString() === now.toDateString())       return 'Today'
-  if (d.toDateString() === yesterday.toDateString()) return 'Yesterday'
-  return d.toLocaleDateString('en-US', {
-    month: 'long', day: 'numeric',
-    ...(d.getFullYear() !== now.getFullYear() ? { year: 'numeric' } : {}),
-  })
-}
-
 function renderMarkdown(text) {
   return String(text)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -25,18 +13,10 @@ const SUGGESTIONS = [
   'Who is my strongest candidate right now?',
   "What's the overall health of my hiring pipeline?",
   'Compare my top candidates for the most active role',
-  'What are common interview red flags to watch for?',
+  'Which candidates are awaiting my decision?',
   'How can I reduce my time-to-hire?',
-  'What salary range is competitive for my open roles?',
+  'Summarise notice periods across my shortlist',
 ]
-
-function TrashIcon() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
-      <path d="M2.5 3.5h8M5.5 3.5V2.5h2v1M4.5 3.5v7h4v-7h-4z" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
-    </svg>
-  )
-}
 
 export default function ClientChat() {
   const { user } = useAuth()
@@ -51,7 +31,6 @@ export default function ClientChat() {
     deleteConversation, clearCurrentConversation, sendMessage,
   } = useChat(user?.id)
 
-  // On mount: load conversations and auto-open the most recent
   useEffect(() => {
     if (!user?.id) return
     loadConversations().then(convs => {
@@ -60,7 +39,6 @@ export default function ClientChat() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id])
 
-  // Auto-scroll to bottom on new messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, sending])
@@ -84,11 +62,8 @@ export default function ClientChat() {
     await deleteConversation(id)
     if (wasActive) {
       const remaining = conversations.filter(c => c.id !== id)
-      if (remaining.length > 0) {
-        await switchConversation(remaining[Math.min(idx, remaining.length - 1)].id)
-      } else {
-        clearCurrentConversation()
-      }
+      if (remaining.length > 0) await switchConversation(remaining[Math.min(idx, remaining.length - 1)].id)
+      else clearCurrentConversation()
     }
   }
 
@@ -111,40 +86,18 @@ export default function ClientChat() {
     e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px'
   }
 
-  // Build message items with date separators
-  const items = []
-  let lastDate = null
-  for (const msg of messages) {
-    const label = getDateLabel(msg.created_at)
-    if (label !== lastDate) {
-      items.push({ type: 'sep', label, id: `sep-${msg.id}` })
-      lastDate = label
-    }
-    items.push({ type: 'msg', msg, id: String(msg.id) })
-  }
-
-  const activeConv = conversations.find(c => c.id === activeId)
-
   return (
-    <div className="hchat-page">
-
-      {/* Mobile backdrop */}
+    <div className="client-chat-wrap">
       {sidebarOpen && (
-        <div className="hchat-sidebar-backdrop" onClick={() => setSidebarOpen(false)} />
+        <div className="client-chat-backdrop" onClick={() => setSidebarOpen(false)} />
       )}
 
       {/* ── Conversation sidebar ── */}
-      <div className={`hchat-sidebar ${sidebarOpen ? 'open' : ''}`}>
-        <div className="hchat-sidebar-top">
-          <button className="hchat-new-conv-btn" onClick={handleNew}>
-            <svg width="11" height="11" viewBox="0 0 11 11" fill="none" style={{ flexShrink: 0 }}>
-              <path d="M5.5 1v9M1 5.5h9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-            </svg>
-            New Conversation
-          </button>
+      <div className={`chat-side${sidebarOpen ? ' open' : ''}`}>
+        <div className="chat-side-top">
+          <button className="chat-new" onClick={handleNew}>+ New chat</button>
         </div>
-
-        <div className="hchat-sidebar-list">
+        <div className="chat-convs">
           {convsLoading ? (
             <div style={{ display: 'flex', justifyContent: 'center', padding: '24px 0' }}>
               <span className="spinner" style={{ width: 14, height: 14 }} />
@@ -153,154 +106,107 @@ export default function ClientChat() {
             <p style={{ padding: '14px 12px', fontSize: 12, color: 'var(--text-3)', fontWeight: 300 }}>
               No conversations yet.
             </p>
-          ) : (
-            conversations.map(conv => (
-              <div
-                key={conv.id}
-                className={`hchat-conv-item ${conv.id === activeId ? 'active' : ''}`}
-                onClick={() => handleSwitch(conv.id)}
-              >
-                <div className="hchat-conv-body">
-                  <div className="hchat-conv-title">{conv.title}</div>
-                  <div className="hchat-conv-date">
-                    {new Date(conv.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                  </div>
-                </div>
-                <button
-                  className="hchat-conv-del"
-                  onClick={e => handleDelete(e, conv.id)}
-                  title="Delete conversation"
-                >
-                  <TrashIcon />
-                </button>
+          ) : conversations.map(conv => (
+            <div
+              key={conv.id}
+              className={`chat-conv${conv.id === activeId ? ' active' : ''}`}
+              onClick={() => handleSwitch(conv.id)}
+            >
+              <div className="cc-t">{conv.title}</div>
+              <div className="cc-d">
+                {new Date(conv.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
               </div>
-            ))
-          )}
+            </div>
+          ))}
         </div>
       </div>
 
       {/* ── Main chat area ── */}
-      <div className="hchat-main">
-
-        {/* Header */}
-        <div className="hchat-page-head">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
-            <button
-              className="hchat-menu-btn hchat-menu-btn-mobile"
-              onClick={() => setSidebarOpen(o => !o)}
-              title="Conversations"
-            >
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <path d="M2 4h12M2 8h12M2 12h8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-              </svg>
-            </button>
-            <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'var(--accent)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 500, flexShrink: 0 }}>OS</div>
-            <div>
-              <strong style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--text)', fontFamily: 'var(--font-body)' }}>One Select Assistant</strong>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-3)' }}>Pipeline copilot · always on</span>
-            </div>
-          </div>
+      <div className="chat-main">
+        {/* Head */}
+        <div className="chat-head">
           <button
-            className="btn btn-secondary"
-            style={{ flexShrink: 0, fontSize: 11, padding: '6px 12px' }}
-            onClick={handleNew}
+            className="chat-mobile-menu"
+            onClick={() => setSidebarOpen(o => !o)}
+            aria-label="Conversations"
           >
-            + New chat
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M2 4h12M2 8h12M2 12h8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+            </svg>
           </button>
+          <div className="chat-av">OS</div>
+          <div>
+            <strong>One Select Assistant</strong>
+            <span>Pipeline copilot · always on</span>
+          </div>
         </div>
 
         {/* Messages */}
-        <div className="hchat-page-msgs">
+        <div className="chat-msgs">
           {loading ? (
             <div style={{ display: 'flex', justifyContent: 'center', padding: '64px 0' }}>
               <span className="spinner" style={{ width: 24, height: 24 }} />
             </div>
           ) : messages.length === 0 ? (
-            <div className="hchat-empty" style={{ flex: 1, padding: '48px 24px' }}>
-              <div className="hchat-empty-icon" style={{ fontSize: 44 }}>◎</div>
-              <h4 style={{
-                fontSize: 22, fontFamily: 'var(--font-head)', fontWeight: 400,
-                marginBottom: 8, color: 'var(--text)', textTransform: 'none', letterSpacing: 0,
-              }}>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '48px 24px' }}>
+              <div style={{ fontSize: 44, opacity: 0.18, marginBottom: 16 }}>◎</div>
+              <h3 style={{ fontFamily: 'var(--font-head)', fontSize: 22, fontWeight: 400, marginBottom: 8, color: 'var(--text)' }}>
                 Your AI Hiring Advisor
-              </h4>
-              <p style={{ fontSize: 14, maxWidth: 440, lineHeight: 1.7, marginBottom: 32 }}>
-                I have live access to your pipeline, candidate scores, and interview data.
-                Ask me anything.
+              </h3>
+              <p style={{ fontSize: 14, color: 'var(--text-3)', maxWidth: 440, lineHeight: 1.7, marginBottom: 0 }}>
+                I have live access to your pipeline, candidate scores, and interview data. Ask me anything.
               </p>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center', maxWidth: 520 }}>
-                {SUGGESTIONS.map(s => (
-                  <button
-                    key={s}
-                    className="sug"
-                    onClick={() => { setInput(s); inputRef.current?.focus() }}
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
             </div>
           ) : (
-            items.map(item =>
-              item.type === 'sep' ? (
-                <div key={item.id} className="hchat-date-sep">
-                  <span>{item.label}</span>
-                </div>
-              ) : (
-                <div key={item.id} className={`hchat-row ${item.msg.role}`}>
-                  <div className="hchat-row-av" style={{ width: 30, height: 30, fontSize: 9 }}>
-                    {item.msg.role === 'assistant' ? 'OS' : 'You'}
-                  </div>
-                  <div
-                    className="hchat-bubble-msg"
-                    dangerouslySetInnerHTML={{ __html: renderMarkdown(item.msg.message) }}
-                  />
-                </div>
-              )
-            )
+            messages.map(msg => (
+              <div key={msg.id} className={`crow ${msg.role === 'user' ? 'user' : 'bot'}`}>
+                <div className="crow-av">{msg.role === 'user' ? 'You' : 'OS'}</div>
+                <div
+                  className="cbubble"
+                  dangerouslySetInnerHTML={{ __html: renderMarkdown(msg.message) }}
+                />
+              </div>
+            ))
           )}
 
           {sending && (
-            <div className="hchat-typing-row">
-              <div style={{
-                width: 30, height: 30, borderRadius: '50%',
-                background: 'var(--accent)', color: '#fff', flexShrink: 0,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontFamily: 'var(--font-mono)', fontSize: 9,
-              }}>OS</div>
-              <div className="hchat-typing-bubble">
+            <div className="crow bot">
+              <div className="crow-av">OS</div>
+              <div className="cbubble">
                 <div className="typing-dots"><span /><span /><span /></div>
               </div>
             </div>
           )}
-
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Input */}
-        <div className="hchat-page-input">
+        {/* Suggestions — shown only on empty state */}
+        {messages.length === 0 && !loading && (
+          <div className="chat-suggest">
+            {SUGGESTIONS.map(s => (
+              <button key={s} className="sug" onClick={() => { setInput(s); inputRef.current?.focus() }}>
+                {s}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Input bar */}
+        <div className="chat-input-bar">
           <textarea
             ref={inputRef}
-            className="hchat-input"
+            className="chat-input"
             value={input}
             onChange={handleTextareaChange}
             onKeyDown={handleKeyDown}
-            placeholder="Ask about your candidates, pipeline health, or get hiring advice… (Enter to send, Shift+Enter for new line)"
+            placeholder="Ask about your candidates, jobs, or pipeline…"
             rows={1}
             autoFocus
           />
-          <button
-            className="hchat-send"
-            onClick={handleSend}
-            disabled={!input.trim() || sending}
-            style={{ width: 42, height: 42, borderRadius: 8 }}
-          >
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-              <path d="M16 9H2M16 9L10 3M16 9L10 15" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
+          <button className="chat-send" onClick={handleSend} disabled={!input.trim() || sending}>
+            ↑
           </button>
         </div>
-
       </div>
     </div>
   )

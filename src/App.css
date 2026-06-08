@@ -605,13 +605,124 @@ select option { background: var(--surface2); color: var(--text); }
 .hchat-send:hover:not(:disabled) { background: var(--accent-hover); }
 .hchat-send:disabled { opacity: 0.4; cursor: not-allowed; }
 
-/* Full chat page — row layout with sidebar */
-.hchat-page {
-  display: flex; flex-direction: row;
-  height: 100vh; overflow: hidden;
+/* ── Client chat page (reference-exact layout) ───────────────────── */
+.client-chat-wrap {
+  display: flex; height: 100vh; overflow: hidden; background: var(--surface);
+}
+.client-chat-backdrop {
+  position: fixed; inset: 0; z-index: 998; background: rgba(0,0,0,0.55);
 }
 
 /* Conversation sidebar */
+.chat-side {
+  width: 236px; flex-shrink: 0;
+  display: flex; flex-direction: column;
+  border-right: 1px solid var(--border);
+  background: var(--surface-2); overflow: hidden;
+}
+.chat-side-top { padding: 14px 12px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.chat-new {
+  width: 100%; display: flex; align-items: center; justify-content: center; gap: 7px;
+  padding: 9px; background: var(--accent); color: #fff; border: none;
+  border-radius: var(--r); font-family: var(--font-mono); font-size: 10px;
+  font-weight: 500; text-transform: uppercase; letter-spacing: .08em; cursor: pointer;
+  transition: background .12s;
+}
+.chat-new:hover { background: var(--accent-hover); }
+.chat-convs { flex: 1; overflow-y: auto; padding: 6px; }
+.chat-conv {
+  padding: 10px; border-radius: var(--r); cursor: pointer;
+  border-left: 2px solid transparent; margin-bottom: 2px; transition: background .12s;
+}
+.chat-conv:hover { background: var(--surface-3); }
+.chat-conv.active { background: var(--accent-d); border-left-color: var(--accent); }
+.chat-conv .cc-t { font-size: 12px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chat-conv.active .cc-t { color: var(--accent); font-weight: 500; }
+.chat-conv .cc-d { font-family: var(--font-mono); font-size: 9px; color: var(--text-3); margin-top: 3px; }
+
+/* Main chat column */
+.chat-main { flex: 1; display: flex; flex-direction: column; min-width: 0; background: var(--surface); }
+.chat-head {
+  padding: 15px 22px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 11px; flex-shrink: 0; background: var(--surface);
+}
+.chat-av {
+  width: 36px; height: 36px; border-radius: 50%; background: var(--accent);
+  color: #fff; display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-mono); font-size: 11px; font-weight: 500; flex-shrink: 0;
+}
+.chat-head strong { font-size: 13px; color: var(--text); display: block; font-family: var(--font-body); font-weight: 600; }
+.chat-head span   { font-family: var(--font-mono); font-size: 10px; color: var(--text-3); }
+.chat-mobile-menu {
+  display: none; background: none; border: none; cursor: pointer; color: var(--text-3);
+  padding: 6px; border-radius: var(--r); align-items: center; justify-content: center;
+  transition: color .12s, background .12s;
+}
+.chat-mobile-menu:hover { color: var(--text); background: var(--surface-2); }
+
+/* Messages */
+.chat-msgs {
+  flex: 1; overflow-y: auto; padding: 24px;
+  display: flex; flex-direction: column; gap: 14px; background: var(--surface);
+}
+.crow { display: flex; gap: 9px; align-items: flex-end; max-width: 78%; }
+.crow.user { flex-direction: row-reverse; align-self: flex-end; }
+.crow.bot  { align-self: flex-start; }
+.crow-av {
+  width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-mono); font-size: 8px; font-weight: 500;
+}
+.crow.bot  .crow-av { background: var(--accent); color: #fff; }
+.crow.user .crow-av { background: var(--surface-3); color: var(--text-3); }
+.cbubble { padding: 10px 14px; font-size: 13.5px; line-height: 1.65; border-radius: 12px; white-space: pre-wrap; }
+.crow.bot  .cbubble { background: var(--surface-2); border: 1px solid var(--border); color: var(--text); border-bottom-left-radius: 3px; }
+.crow.user .cbubble { background: var(--accent); color: #fff; border-bottom-right-radius: 3px; }
+
+/* Suggestions */
+.chat-suggest { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 24px 12px; background: var(--surface); }
+.sug {
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r);
+  padding: 7px 12px; font-size: 12px; color: var(--text-2); cursor: pointer;
+  font-family: var(--font-body); transition: border-color .12s, color .12s;
+}
+.sug:hover { border-color: var(--accent); color: var(--accent); }
+
+/* Input bar */
+.chat-input-bar {
+  flex-shrink: 0; padding: 14px 22px; border-top: 1px solid var(--border);
+  display: flex; gap: 10px; align-items: flex-end; background: var(--surface);
+}
+.chat-input {
+  flex: 1; background: var(--surface-2); border: 1px solid var(--border-2);
+  border-radius: var(--r); color: var(--text); font-family: var(--font-body);
+  font-size: 13.5px; padding: 10px 12px; outline: none; resize: none;
+  line-height: 1.5; max-height: 120px; transition: border-color .12s;
+}
+.chat-input:focus { border-color: var(--accent); }
+.chat-input::placeholder { color: var(--text-3); }
+.chat-send {
+  width: 40px; height: 40px; border-radius: var(--r); background: var(--accent);
+  border: none; color: #fff; cursor: pointer; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center; font-size: 15px;
+  transition: background .12s;
+}
+.chat-send:hover    { background: var(--accent-hover); }
+.chat-send:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Mobile: sidebar overlays */
+@media (max-width: 640px) {
+  .chat-side {
+    position: fixed; left: 0; top: 0; bottom: 0; z-index: 999;
+    transform: translateX(-100%); transition: transform 0.22s ease;
+    box-shadow: 4px 0 24px rgba(0,0,0,0.5);
+  }
+  .chat-side.open { transform: translateX(0); }
+  .chat-mobile-menu { display: flex; }
+}
+
+/* Legacy hchat-sidebar — keep for backward compat */
+.hchat-page { display: flex; flex-direction: row; height: 100vh; overflow: hidden; }
 .hchat-sidebar {
   width: 236px; flex-shrink: 0;
   display: flex; flex-direction: column;
