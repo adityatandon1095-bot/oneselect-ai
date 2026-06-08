@@ -28,6 +28,9 @@
   --accent-d:     rgba(205,127,69,0.12);
   --accent-d2:    rgba(205,127,69,0.20);
 
+  /* Neutral (warm grey — used for funnel stage 1 and channel bars) */
+  --neutral: #7A6F5E;
+
   /* Semantic colours */
   --green:  #2A6E3A;
   --green-d: rgba(42,110,58,0.12);

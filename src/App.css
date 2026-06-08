@@ -924,6 +924,66 @@ select option { background: var(--surface2); color: var(--text); }
 /* ── score-pill nowrap ───────────────────────────────────────────── */
 .score-pill { white-space: nowrap; }
 
+/* ── Candidate cards (dashboard shortlist grid) ─────────────────── */
+.cand-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 14px;
+}
+.cand-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r-lg); padding: 18px 20px;
+  display: flex; flex-direction: column; gap: 14px;
+  cursor: pointer; position: relative;
+  transition: border-color .15s, transform .15s;
+}
+.cand-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+.cand-for {
+  font-family: var(--font-mono); font-size: 9px;
+  text-transform: uppercase; letter-spacing: .12em; color: var(--text-3);
+}
+.cand-for b { color: var(--accent); font-weight: 500; }
+.cand-main { display: flex; align-items: flex-start; gap: 13px; }
+.cand-avatar {
+  width: 46px; height: 46px; border-radius: var(--r); flex-shrink: 0;
+  background: var(--accent-d); border: 1px solid rgba(205,127,69,.28);
+  color: var(--accent); font-family: var(--font-head);
+  font-size: 19px; font-weight: 500;
+  display: flex; align-items: center; justify-content: center;
+}
+.cand-id { flex: 1; min-width: 0; }
+.cand-name { font-size: 15px; font-weight: 400; color: var(--text); font-family: var(--font-head); }
+.cand-role { font-size: 12px; color: var(--text-3); font-weight: 300; margin-top: 1px; }
+.cand-role b { color: var(--text-2); font-weight: 400; }
+/* Override .score-ring for 46px dashboard rings */
+.cand-card .score-ring { width: 46px; height: 46px; flex-shrink: 0; }
+.cand-card .score-ring svg { transform: rotate(-90deg); display: block; }
+.score-ring .ring-bg { stroke: var(--border); }
+.ring-cap {
+  font-family: var(--font-mono); font-size: 6.5px;
+  text-transform: uppercase; letter-spacing: .06em;
+  color: var(--text-3); margin-top: 1px;
+}
+.cand-skills { display: flex; flex-wrap: wrap; gap: 6px; }
+.skill {
+  font-family: var(--font-mono); font-size: 10px; color: var(--text-2);
+  background: var(--surface-2); border: 1px solid var(--border-2);
+  border-radius: var(--r); padding: 3px 8px; white-space: nowrap;
+}
+.cand-foot {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; padding-top: 13px; border-top: 1px solid var(--border);
+}
+.cand-meta { display: flex; align-items: center; gap: 10px; }
+.cand-exp  { font-family: var(--font-mono); font-size: 10px; color: var(--text-3); }
+.cand-view {
+  font-family: var(--font-mono); font-size: 10px;
+  text-transform: uppercase; letter-spacing: .08em;
+  color: var(--accent); display: flex; align-items: center; gap: 4px;
+  opacity: 0; transition: opacity .15s;
+}
+.cand-card:hover .cand-view { opacity: 1; }
+
 /* ── Funnel + chips responsive ───────────────────────────────────── */
 @media (max-width: 1000px) {
   .roles-row  { grid-template-columns: repeat(3, 1fr); }

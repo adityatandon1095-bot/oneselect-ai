@@ -36,8 +36,7 @@ export default function ClientDashboard() {
   const [passwordError,  setPasswordError]  = useState('')
   const [passwordSaving, setPasswordSaving] = useState(false)
 
-  const initRef    = useRef(false)
-  const sourcingRef = useRef(null)
+  const initRef = useRef(false)
 
   useEffect(() => {
     if (!user || profileLoading) return
@@ -95,7 +94,7 @@ export default function ClientDashboard() {
 
   function triggerBars() {
     requestAnimationFrame(() => requestAnimationFrame(() => {
-      sourcingRef.current?.querySelectorAll('.fstage-track i, .chan-bar i, .rc-meter i')
+      document.querySelectorAll('.fstage-track i, .chan-bar i, .rc-meter i')
         .forEach(b => { b.style.width = getComputedStyle(b).getPropertyValue('--w') || '0%' })
     }))
   }
@@ -395,7 +394,7 @@ export default function ClientDashboard() {
 
       {/* ── Role context chips ── */}
       {stats.jobs > 0 && (
-        <div className="roles-row" ref={sourcingRef}>
+        <div className="roles-row">
           {/* All roles chip */}
           {(() => {
             const s = jobChipStats('all')
@@ -447,7 +446,7 @@ export default function ClientDashboard() {
 
       {/* ── Sourcing Activity ── */}
       {stats.candidates > 0 && (
-        <div className="section-card" style={{ marginBottom: 20 }} ref={stats.jobs === 0 ? sourcingRef : undefined}>
+        <div className="section-card" style={{ marginBottom: 20 }}>
           <div className="section-card-head">
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <h3>Sourcing Activity</h3>
