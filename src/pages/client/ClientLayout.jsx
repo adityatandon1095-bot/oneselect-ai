@@ -82,7 +82,7 @@ export default function ClientLayout() {
           <img src="/oneselect-logo.png" alt="One Select" style={{ width: '100%', maxWidth: 160, height: 'auto', objectFit: 'contain', display: 'block' }} />
         </div>
         {profile?.company_name && (
-          <div className="sidebar-company">{profile.company_name}</div>
+          <div className="sidebar-company"><span className="biz-dot" />{profile.company_name}</div>
         )}
 
         <nav className="sidebar-nav" style={{ flex: 1, overflowY: 'auto' }}>

@@ -1,0 +1,1091 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>One Select · Client Portal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+:root{
+  /* Page chrome & sidebar — navy per brief */
+  --bg:#0D0F1A; --navy:#0D0F1A; --navy-surface:#161A2A; --navy-border:#212741;
+  --navy-text:#9AA8C8; --navy-text-2:#6878A0;
+
+  /* Content surfaces (cream / parchment) */
+  --surface:#E8E2D6; --surface-2:#DFD8CB; --surface-3:#D6CEBF;
+  --border:#C8C0B0; --border-2:#B8B0A0;
+
+  /* Text on light surfaces */
+  --text:#0F0C08; --text-2:#1E1508; --text-3:#3D3428;
+
+  /* Accent — bronze */
+  --accent:#CD7F45; --accent-hover:#DA8E52;
+  --accent-d:rgba(205,127,69,0.12); --accent-d2:rgba(205,127,69,0.22);
+
+  /* Semantic */
+  --green:#2A6E3A; --green-d:rgba(42,110,58,0.12);
+  --amber:#A0620A; --amber-d:rgba(160,98,10,0.12);
+  --red:#B83232;   --red-d:rgba(184,50,50,0.10);
+  --neutral:#7A6F5E;
+
+  --font-head:'Cormorant Garamond',Georgia,serif;
+  --font-body:'DM Sans',system-ui,sans-serif;
+  --font-mono:'DM Mono','Courier New',monospace;
+
+  --r:6px; --r-lg:10px; --r-full:9999px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  background:var(--bg); color:var(--text);
+  font-family:var(--font-body); font-size:14px; font-weight:300; line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+}
+h2,h3,h4{font-family:var(--font-head);font-weight:500;line-height:1.2;color:var(--text)}
+.mono{font-family:var(--font-mono)}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:var(--navy)}
+::-webkit-scrollbar-thumb{background:var(--navy-border);border-radius:4px}
+::-webkit-scrollbar-thumb:hover{background:var(--navy-text-2)}
+
+/* ── Layout ─────────────────────────────────────────────── */
+.layout{display:flex;height:100vh;overflow:hidden}
+
+/* ── Sidebar ────────────────────────────────────────────── */
+.sidebar{
+  width:228px;flex-shrink:0;background:var(--navy);
+  border-right:1px solid var(--navy-border);
+  display:flex;flex-direction:column;height:100vh;overflow:hidden;
+}
+.sidebar-brand{padding:24px 20px 20px;border-bottom:1px solid var(--navy-border);display:flex;justify-content:center}
+.sidebar-brand svg{width:100px;height:auto;display:block}
+.sidebar-company{
+  padding:11px 20px;border-bottom:1px solid var(--navy-border);
+  font-family:var(--font-mono);font-size:10px;color:var(--navy-text-2);
+  text-transform:uppercase;letter-spacing:0.14em;
+  display:flex;align-items:center;gap:7px;
+}
+.sidebar-company .biz-dot{width:5px;height:5px;border-radius:50%;background:var(--accent)}
+.sidebar-nav{padding:10px 12px;flex:1;overflow-y:auto}
+.nav-section{
+  font-family:var(--font-mono);font-size:10px;text-transform:uppercase;
+  letter-spacing:0.14em;color:var(--navy-text-2);padding:16px 14px 8px;
+}
+.nav-item{
+  display:flex;align-items:center;gap:11px;padding:8px 14px;border-radius:var(--r);
+  border-left:2px solid transparent;font-size:12.5px;font-weight:400;
+  color:var(--navy-text);text-decoration:none;margin-bottom:1px;cursor:pointer;
+  transition:color .12s,border-color .12s,background .12s;
+}
+.nav-item:hover{color:#fff;background:var(--navy-surface)}
+.nav-item.active{
+  color:var(--accent);border-left-color:var(--accent);background:var(--accent-d);
+  border-radius:0 var(--r) var(--r) 0;
+}
+.nav-icon{width:16px;text-align:center;font-size:13px;flex-shrink:0;opacity:.45;transition:opacity .12s}
+.nav-item.active .nav-icon{opacity:1}
+.nav-badge{
+  margin-left:auto;font-family:var(--font-mono);font-size:9px;font-weight:500;
+  background:var(--accent);color:#fff;border-radius:var(--r-full);
+  padding:1px 7px;letter-spacing:.04em;
+}
+.sidebar-footer{padding:14px 16px;border-top:1px solid var(--navy-border);flex-shrink:0}
+.sf-user{display:flex;align-items:center;gap:9px;margin-bottom:12px}
+.sf-avatar{
+  width:28px;height:28px;border-radius:var(--r);flex-shrink:0;
+  background:var(--accent-d2);border:1px solid rgba(205,127,69,.35);
+  color:var(--accent);font-family:var(--font-head);font-size:14px;
+  display:flex;align-items:center;justify-content:center;
+}
+.sf-meta{min-width:0}
+.sf-name{font-size:12px;color:var(--navy-text);font-weight:400;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sf-email{font-family:var(--font-mono);font-size:9px;color:var(--navy-text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sf-signout{
+  width:100%;background:transparent;border:1px solid var(--navy-border);color:var(--navy-text-2);
+  font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:.1em;
+  padding:8px;border-radius:var(--r);cursor:pointer;transition:color .12s,border-color .12s;
+}
+.sf-signout:hover{color:var(--accent);border-color:var(--accent)}
+
+/* ── Content ────────────────────────────────────────────── */
+.content{flex:1;overflow-y:auto;min-width:0;background:var(--bg)}
+.page{padding:34px 40px 90px;max-width:1180px}
+.page-head{
+  display:flex;align-items:flex-start;justify-content:space-between;gap:16px;
+  margin-bottom:26px;padding-bottom:22px;border-bottom:1px solid var(--navy-border);
+}
+.page-head h2{font-size:32px;font-weight:300;letter-spacing:.01em;color:#F0EDE8;margin-bottom:5px;white-space:nowrap}
+.page-head .sub{font-size:12px;color:var(--navy-text-2);font-weight:400}
+.page-head .sub b{color:var(--navy-text);font-weight:500}
+.head-actions{display:flex;align-items:center;gap:10px}
+
+/* segmented date filter */
+.seg{display:flex;background:var(--navy-surface);border:1px solid var(--navy-border);border-radius:var(--r);padding:3px}
+.seg button{
+  background:transparent;border:none;cursor:pointer;color:var(--navy-text);
+  font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:.08em;
+  padding:6px 12px;border-radius:4px;transition:color .12s,background .12s;
+}
+.seg button.active{background:var(--accent);color:#fff}
+.btn-primary{
+  display:inline-flex;align-items:center;gap:7px;background:var(--accent);color:#fff;
+  border:1px solid var(--accent);border-radius:var(--r);
+  font-family:var(--font-mono);font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:.08em;
+  padding:9px 16px;cursor:pointer;transition:background .12s;white-space:nowrap;
+}
+.btn-primary:hover{background:var(--accent-hover)}
+
+/* ── Section card ───────────────────────────────────────── */
+.section-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);margin-bottom:20px;overflow:hidden}
+.section-card-head{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:16px 22px;border-bottom:1px solid var(--border);
+}
+.sch-left{display:flex;align-items:baseline;gap:12px}
+.section-card-head h3{font-size:18px;font-weight:400}
+.sch-caption{font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--text-3);display:flex;align-items:center;gap:6px}
+.live-dot{width:6px;height:6px;border-radius:50%;background:var(--green);position:relative}
+.live-dot::after{content:'';position:absolute;inset:-4px;border-radius:50%;border:1.5px solid var(--green);opacity:0;animation:pulse 2.4s ease-out infinite}
+@keyframes pulse{0%{transform:scale(.7);opacity:.5}70%{transform:scale(1.5);opacity:0}100%{opacity:0}}
+.sch-link{font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--accent);text-decoration:none;cursor:pointer}
+.sch-link:hover{text-decoration:underline}
+.page-head-light h3{color:#F0EDE8;font-size:19px}
+.page-head-light .sch-caption{color:var(--navy-text-2)}
+
+/* ── Sourcing funnel widget ─────────────────────────────── */
+.funnel{
+  display:grid;
+  grid-template-columns:1fr auto 1fr auto 1fr auto 1fr;
+  align-items:stretch;padding:26px 26px 8px;
+}
+.fstage{display:flex;flex-direction:column;gap:9px;padding:4px 8px}
+.fstage-top{display:flex;align-items:center;gap:8px}
+.fdot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.fdot.neutral{background:var(--neutral)} .fdot.accent{background:var(--accent)}
+.fdot.amber{background:var(--amber)} .fdot.green{background:var(--green)}
+.fstage-label{font-family:var(--font-mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.1em;color:var(--text-3)}
+.fnum{font-family:var(--font-mono);font-size:42px;font-weight:500;line-height:1;color:var(--text);letter-spacing:-.01em}
+.fstage.s-matched .fnum{color:var(--accent)}
+.fstage.s-review .fnum{color:var(--amber)}
+.fstage.s-shortlist .fnum{color:var(--green)}
+.fstage-sub{font-family:var(--font-mono);font-size:10.5px;color:var(--text-3);font-weight:400}
+.fstage-sub b{color:var(--text-2);font-weight:500}
+
+.fconn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:0 6px;min-width:64px}
+.fconn-pct{font-family:var(--font-mono);font-size:12px;font-weight:500;color:var(--text-2)}
+.fconn-arrow{display:flex;align-items:center;gap:0;color:var(--border-2)}
+.fconn-line{width:30px;height:1px;background:var(--border-2)}
+.fconn-tip{font-size:11px;color:var(--border-2);margin-left:-2px}
+.fconn-cap{font-family:var(--font-mono);font-size:8px;text-transform:uppercase;letter-spacing:.1em;color:var(--text-3)}
+
+/* funnel ribbon — div based, narrowing bars */
+.funnel-ribbon{display:flex;align-items:center;justify-content:flex-start;gap:6px;padding:2px 26px 24px}
+.frib{display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:5px;border:1px solid;transform-origin:left center}
+.frib.s1{flex:1.55} .frib.s2{flex:1.25} .frib.s3{flex:1.0} .frib.s4{flex:.8}
+.frib .frv{font-family:var(--font-mono);font-size:13px;font-weight:500;line-height:1}
+.frib .frl{font-family:var(--font-mono);font-size:8.5px;text-transform:uppercase;letter-spacing:.1em;margin-top:3px;opacity:.7}
+.frib.s1{background:rgba(122,111,94,0.12);border-color:rgba(122,111,94,0.55);color:#5a5142}
+.frib.s2{background:var(--accent-d);border-color:rgba(205,127,69,0.6);color:var(--accent)}
+.frib.s3{background:var(--amber-d);border-color:rgba(160,98,10,0.55);color:var(--amber)}
+.frib.s4{background:var(--green-d);border-color:rgba(42,110,58,0.6);color:var(--green)}
+
+/* funnel footer stat strip */
+.funnel-strip{
+  display:grid;grid-template-columns:repeat(3,1fr);
+  border-top:1px solid var(--border);
+}
+.fstrip-item{padding:16px 26px;display:flex;flex-direction:column;gap:3px;border-right:1px solid var(--border)}
+.fstrip-item:last-child{border-right:none}
+.fstrip-val{font-family:var(--font-mono);font-size:20px;font-weight:500;color:var(--text)}
+.fstrip-val .unit{font-size:12px;color:var(--text-3);margin-left:3px}
+.fstrip-label{font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--text-3)}
+
+/* ── Candidate grid ─────────────────────────────────────── */
+.cand-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:14px}
+.cand-card{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);
+  padding:18px 20px;display:flex;flex-direction:column;gap:14px;cursor:pointer;
+  transition:border-color .15s,transform .15s;position:relative;
+}
+.cand-card:hover{border-color:var(--accent);transform:translateY(-2px)}
+.cand-for{font-family:var(--font-mono);font-size:9px;text-transform:uppercase;letter-spacing:.12em;color:var(--text-3)}
+.cand-for b{color:var(--accent);font-weight:500}
+.cand-main{display:flex;align-items:flex-start;gap:13px}
+.cand-avatar{
+  width:46px;height:46px;border-radius:var(--r);flex-shrink:0;
+  background:var(--accent-d);border:1px solid rgba(205,127,69,.28);
+  color:var(--accent);font-family:var(--font-head);font-size:19px;font-weight:500;
+  display:flex;align-items:center;justify-content:center;
+}
+.cand-id{flex:1;min-width:0}
+.cand-name{font-size:15px;font-weight:400;color:var(--text);font-family:var(--font-head)}
+.cand-role{font-size:12px;color:var(--text-3);font-weight:300;margin-top:1px}
+.cand-role b{color:var(--text-2);font-weight:400}
+.score-ring{position:relative;width:46px;height:46px;flex-shrink:0}
+.score-ring svg{transform:rotate(-90deg)}
+.score-ring .ring-bg{stroke:var(--border)}
+.score-ring .ring-fg{stroke:var(--accent);stroke-linecap:round;transition:stroke-dashoffset 1s ease}
+.ring-inner{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.ring-val{font-family:var(--font-mono);font-size:13px;font-weight:600;color:var(--text);line-height:1}
+.ring-cap{font-family:var(--font-mono);font-size:6.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-3);margin-top:1px}
+
+.cand-skills{display:flex;flex-wrap:wrap;gap:6px}
+.skill{
+  font-family:var(--font-mono);font-size:10px;color:var(--text-2);
+  background:var(--surface-2);border:1px solid var(--border-2);
+  border-radius:var(--r);padding:3px 8px;white-space:nowrap;
+}
+.cand-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;padding-top:13px;border-top:1px solid var(--border)}
+.cand-meta{display:flex;align-items:center;gap:10px}
+.badge{
+  display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:var(--r-full);
+  font-family:var(--font-mono);font-size:9px;font-weight:500;text-transform:uppercase;letter-spacing:.07em;white-space:nowrap;
+}
+.badge::before{content:'';width:5px;height:5px;border-radius:50%;background:currentColor}
+.badge-green{background:var(--green-d);color:var(--green)}
+.badge-amber{background:var(--amber-d);color:var(--amber)}
+.badge-neutral{background:var(--surface-2);color:var(--text-3)}
+.cand-exp{font-family:var(--font-mono);font-size:10px;color:var(--text-3)}
+.cand-view{font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--accent);display:flex;align-items:center;gap:4px;opacity:0;transition:opacity .15s}
+.cand-card:hover .cand-view{opacity:1}
+
+/* role context rail */
+.roles-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px}
+.role-chip{
+  display:flex;align-items:center;gap:9px;background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--r);padding:9px 14px;cursor:pointer;transition:border-color .15s;
+}
+.role-chip:hover{border-color:var(--accent)}
+.role-chip.active{border-color:var(--accent);background:#E4D6C4}
+.role-chip>div{display:flex;flex-direction:column;gap:2px;min-width:0}
+.role-chip .rc-title{font-size:12.5px;color:var(--text);font-weight:400;white-space:nowrap;line-height:1.25}
+.role-chip .rc-count{font-family:var(--font-mono);font-size:10px;color:var(--text-3);white-space:nowrap;line-height:1.2}
+.role-chip .rc-bar{width:5px;height:26px;border-radius:3px;background:var(--accent);flex-shrink:0;opacity:.85}
+.role-chip.active .rc-count{color:var(--text-2)}
+.role-chip.active .rc-title{color:var(--accent);font-weight:500}
+.role-chip.all.active .rc-bar{background:var(--accent)}
+
+@media (max-width:1000px){
+  .funnel{grid-template-columns:1fr 1fr;gap:18px 0;row-gap:20px}
+  .fconn{display:none}
+  .funnel-strip{grid-template-columns:1fr}
+  .fstrip-item{border-right:none;border-bottom:1px solid var(--border)}
+}
+@media (max-width:760px){
+  .sidebar{display:none}
+  .page{padding:22px 18px 70px}
+  .page-head{flex-wrap:wrap}
+  .funnel{grid-template-columns:1fr 1fr}
+}
+@media (prefers-reduced-motion:reduce){
+  .live-dot::after{animation:none}
+}
+
+/* ── View switching ── */
+.view{display:none}
+.view.active{display:block}
+.nav-item{-webkit-user-select:none;user-select:none;white-space:nowrap}
+
+/* ── Buttons ── */
+.btn-secondary,.btn-ghost{display:inline-flex;align-items:center;gap:6px;border-radius:var(--r);font-family:var(--font-mono);font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:.08em;padding:8px 14px;cursor:pointer;white-space:nowrap;transition:border-color .12s,color .12s,background .12s}
+.btn-secondary{background:transparent;color:var(--text-2);border:1px solid var(--border-2)}
+.btn-secondary:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-d)}
+/* secondary buttons that sit on the navy page background need light text */
+.head-actions .btn-secondary,.filter-bar .btn-secondary,#candBack{color:var(--navy-text);border-color:var(--navy-border)}
+.head-actions .btn-secondary:hover,.filter-bar .btn-secondary:hover,#candBack:hover{color:var(--accent);border-color:var(--accent);background:transparent}
+.btn-ghost{background:transparent;color:var(--text-3);border:1px solid transparent;padding:6px 10px}
+.btn-ghost:hover{color:var(--text);background:var(--surface-2)}
+.btn-sm{font-size:10px;padding:5px 11px}
+.btn-green{color:var(--green);border-color:rgba(42,110,58,.5)}
+.btn-green:hover{background:var(--green-d);border-color:var(--green);color:var(--green)}
+.btn-red{color:var(--red);border-color:rgba(184,50,50,.45)}
+.btn-red:hover{background:var(--red-d);border-color:var(--red);color:var(--red)}
+
+/* ── Metric cards ── */
+.metrics-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px}
+.metric-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:18px 20px 16px;display:flex;flex-direction:column;gap:6px;position:relative}
+.metric-card::before{content:'';position:absolute;top:16px;left:18px;width:6px;height:6px;border-radius:50%;background:var(--text-3)}
+.metric-card.green::before{background:var(--green)} .metric-card.blue::before{background:var(--accent)} .metric-card.amber::before{background:var(--amber)}
+.metric-val{font-family:var(--font-mono);font-size:30px;font-weight:500;color:var(--text);line-height:1;padding-left:16px;margin-top:4px}
+.metric-label{font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--text-3);padding-left:16px}
+.metric-card.green .metric-val{color:var(--green)} .metric-card.blue .metric-val{color:var(--accent)} .metric-card.amber .metric-val{color:var(--amber)}
+
+/* ── Section body / table rows ── */
+.section-body{padding:20px 22px}
+.section-card-head .badge{font-size:9px}
+.table-row{display:flex;align-items:center;gap:12px;padding:13px 22px;border-bottom:1px solid var(--border);transition:background .1s}
+.table-row:last-child{border-bottom:none}
+.table-row.clickable{cursor:pointer}
+.table-row.clickable:hover{background:var(--surface-2)}
+.table-row.dim{opacity:.55}
+.col-main{flex:1;min-width:0;display:flex;align-items:center;gap:11px}
+.col-name{font-size:13.5px;font-weight:500;color:var(--text)}
+.col-sub{font-size:12px;color:var(--text-3);margin-top:2px;font-weight:300;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.col-main>div:last-child{min-width:0}
+.col-right{flex-shrink:0;display:flex;align-items:center;gap:9px;flex-wrap:wrap;justify-content:flex-end}
+.mini-avatar{width:36px;height:36px;border-radius:var(--r);flex-shrink:0;background:var(--accent-d);border:1px solid rgba(205,127,69,.28);color:var(--accent);font-family:var(--font-head);font-size:16px;font-weight:500;display:flex;align-items:center;justify-content:center}
+.job-code{font-family:var(--font-mono);font-size:10px;color:var(--text-3);background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r);padding:1px 6px;margin-right:8px;letter-spacing:.04em}
+.salary{font-family:var(--font-mono);font-size:10px;color:var(--green);margin-left:7px}
+.muted-mono{font-family:var(--font-mono);font-size:11px;color:var(--text-3)}
+.score-pill{font-family:var(--font-mono);font-size:13px;font-weight:600}
+
+/* ── Tabs (on navy) ── */
+.tabbar{display:flex;gap:2px;margin-bottom:22px;border-bottom:1px solid var(--navy-border)}
+.tab{padding:10px 16px;border:none;background:none;cursor:pointer;font-family:var(--font-mono);font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--navy-text);border-bottom:2px solid transparent;margin-bottom:-1px;transition:color .12s}
+.tab:hover{color:#F0EDE8}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.tab .tcount{margin-left:6px;opacity:.85}
+
+/* ── Filter bar ── */
+.filter-bar{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;align-items:center}
+.search-input,.sel{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);color:var(--text);font-family:var(--font-body);font-size:12px;padding:8px 12px;outline:none;transition:border-color .12s,box-shadow .12s}
+.search-input{width:230px}
+.search-input::placeholder{color:var(--text-3)}
+.search-input:focus,.sel:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-d)}
+.sel{min-width:180px;cursor:pointer;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%233D3428' stroke-width='1.2'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 11px center;padding-right:30px}
+
+/* ── Forms ── */
+.field{display:flex;flex-direction:column;gap:6px}
+.field label{font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:var(--text-3)}
+.field input,.field textarea{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r);color:var(--text);font-family:var(--font-body);font-size:13px;padding:9px 12px;outline:none;width:100%;transition:border-color .15s,box-shadow .15s}
+.field textarea{resize:vertical;min-height:80px;line-height:1.6}
+.field input:focus,.field textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-d)}
+.field input[readonly]{opacity:.55;cursor:not-allowed}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.span-2{grid-column:span 2}
+.form-actions{display:flex;gap:10px;align-items:center;margin-top:18px}
+.saved-note{font-family:var(--font-mono);font-size:11px;color:var(--green);letter-spacing:.06em}
+.check-row{display:flex;align-items:flex-start;gap:12px;margin-bottom:16px;cursor:pointer}
+.check-row input{margin-top:2px;accent-color:var(--accent);width:15px;height:15px;flex-shrink:0}
+.check-title{font-size:13px;font-weight:500;color:var(--text)}
+.check-desc{font-size:12px;color:var(--text-3);margin-top:2px}
+.kv-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.kv-row>div:first-child{flex:1}
+.kv-title{font-size:13px;font-weight:500;color:var(--text)}
+.kv-desc{font-size:12px;color:var(--text-3);margin-top:2px;line-height:1.6}
+
+/* ── Profile detail ── */
+.profile-hero{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:22px;margin-bottom:16px;display:flex;align-items:flex-start;gap:18px}
+.profile-avatar-lg{width:52px;height:52px;border-radius:var(--r);background:var(--accent-d);border:1px solid rgba(205,127,69,.28);display:flex;align-items:center;justify-content:center;font-size:22px;color:var(--accent);font-family:var(--font-head);flex-shrink:0}
+.profile-id{flex:1;min-width:0}
+.profile-id h3{font-size:22px;font-weight:400;margin-bottom:3px}
+.profile-id p{font-size:13px;color:var(--text-2);margin:0}
+.ring-lg{position:relative;width:72px;height:72px;flex-shrink:0}
+.ring-lg svg{transform:rotate(-90deg)}
+.ring-lg .ring-inner .big{font-family:var(--font-mono);font-size:20px;font-weight:600;color:var(--text)}
+.ring-lg .ring-inner .cap{font-family:var(--font-mono);font-size:7px;text-transform:uppercase;letter-spacing:.08em;color:var(--text-3);margin-top:2px}
+.score-dim{display:grid;grid-template-columns:150px 1fr 40px;align-items:center;gap:12px;margin-bottom:11px}
+.score-dim:last-child{margin-bottom:0}
+.dim-label{font-size:12.5px;color:var(--text-2)}
+.dim-track{height:3px;background:var(--border);border-radius:2px;overflow:hidden}
+.dim-fill{height:100%;border-radius:2px}
+.dim-val{font-family:var(--font-mono);font-size:11px;color:var(--text-2);text-align:right}
+.profile-grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.profile-section{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:18px 20px}
+.profile-section.full{grid-column:span 2}
+.profile-section h4{font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--text-3);margin-bottom:14px;font-weight:500}
+.bullet{display:flex;gap:8px;align-items:flex-start;font-size:13px;color:var(--text-2);line-height:1.5;margin-bottom:8px}
+.bullet:last-child{margin-bottom:0}
+.bdot{width:5px;height:5px;border-radius:50%;flex-shrink:0;margin-top:7px}
+.insight{font-size:13px;color:var(--text-2);line-height:1.7;font-style:italic;font-family:var(--font-head);font-size:15px}
+
+/* ── Rank table (Reports) ── */
+.rank-head,.rank-row{display:grid;grid-template-columns:30px 1fr 60px 60px 60px 60px 60px 66px 96px;gap:8px;align-items:center}
+.rank-head{padding:9px 22px;background:var(--surface-2);font-family:var(--font-mono);font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-3);border-bottom:1px solid var(--border)}
+.rank-head>div:nth-child(n+3){text-align:right}
+.rank-row{padding:12px 22px;border-bottom:1px solid var(--border)}
+.rank-row:last-child{border-bottom:none}
+.rank-num{font-family:var(--font-mono);font-size:11px;color:var(--text-3)}
+.rank-name{font-size:13px;font-weight:500;color:var(--accent);cursor:pointer}
+.rank-name:hover{text-decoration:underline}
+.rank-role{font-size:11px;color:var(--text-3);margin-top:1px}
+.rank-cell{font-family:var(--font-mono);font-size:12px;font-weight:600;text-align:right}
+.verdict{font-family:var(--font-mono);font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.04em;padding:2px 7px;border-radius:var(--r);white-space:nowrap;justify-self:start}
+
+/* ── Chat (AI Assistant) ── */
+#view-chat.active{display:flex;height:100%}
+.chat-wrap{display:flex;flex:1;min-height:0;background:var(--surface);overflow:hidden}
+.chat-side{width:236px;flex-shrink:0;border-right:1px solid var(--border);display:flex;flex-direction:column;background:var(--surface-2)}
+.chat-side-top{padding:14px 12px;border-bottom:1px solid var(--border)}
+.chat-new{width:100%;display:flex;align-items:center;justify-content:center;gap:7px;padding:9px;background:var(--accent);color:#fff;border:none;border-radius:var(--r);font-family:var(--font-mono);font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.08em;cursor:pointer}
+.chat-new:hover{background:var(--accent-hover)}
+.chat-convs{flex:1;overflow-y:auto;padding:6px}
+.chat-conv{padding:10px;border-radius:var(--r);cursor:pointer;border-left:2px solid transparent;margin-bottom:2px}
+.chat-conv:hover{background:var(--surface-3)}
+.chat-conv.active{background:var(--accent-d);border-left-color:var(--accent)}
+.chat-conv .cc-t{font-size:12px;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chat-conv.active .cc-t{color:var(--accent);font-weight:500}
+.chat-conv .cc-d{font-family:var(--font-mono);font-size:9px;color:var(--text-3);margin-top:3px}
+.chat-main{flex:1;display:flex;flex-direction:column;min-width:0}
+.chat-head{padding:15px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:11px;flex-shrink:0}
+.chat-av{width:36px;height:36px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-size:11px;font-weight:500;flex-shrink:0}
+.chat-head strong{font-size:13px;color:var(--text);display:block;font-family:var(--font-body);font-weight:600}
+.chat-head span{font-family:var(--font-mono);font-size:10px;color:var(--text-3)}
+.chat-msgs{flex:1;overflow-y:auto;padding:24px;display:flex;flex-direction:column;gap:14px}
+.crow{display:flex;gap:9px;align-items:flex-end;max-width:78%}
+.crow.user{flex-direction:row-reverse;align-self:flex-end}
+.crow.bot{align-self:flex-start}
+.crow-av{width:26px;height:26px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-size:8px;font-weight:500}
+.crow.bot .crow-av{background:var(--accent);color:#fff}
+.crow.user .crow-av{background:var(--surface-3);color:var(--text-3)}
+.cbubble{padding:10px 14px;font-size:13.5px;line-height:1.65;border-radius:12px;white-space:pre-wrap}
+.crow.bot .cbubble{background:var(--surface-2);border:1px solid var(--border);color:var(--text);border-bottom-left-radius:3px}
+.crow.user .cbubble{background:var(--accent);color:#fff;border-bottom-right-radius:3px}
+.chat-suggest{display:flex;flex-wrap:wrap;gap:8px;padding:0 24px 12px}
+.sug{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r);padding:7px 12px;font-size:12px;color:var(--text-2);cursor:pointer;transition:border-color .12s,color .12s}
+.sug:hover{border-color:var(--accent);color:var(--accent)}
+.chat-input-bar{flex-shrink:0;padding:14px 22px;border-top:1px solid var(--border);display:flex;gap:10px;align-items:flex-end}
+.chat-input{flex:1;background:var(--surface-2);border:1px solid var(--border-2);border-radius:var(--r);color:var(--text);font-family:var(--font-body);font-size:13.5px;padding:10px 12px;outline:none;resize:none;line-height:1.5;max-height:120px}
+.chat-input:focus{border-color:var(--accent)}
+.chat-send{width:40px;height:40px;border-radius:var(--r);background:var(--accent);border:none;color:#fff;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:15px}
+.chat-send:hover{background:var(--accent-hover)}
+.typing span{display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--text-3);margin:0 1px;animation:tdot 1.1s infinite}
+.typing span:nth-child(2){animation-delay:.18s}.typing span:nth-child(3){animation-delay:.36s}
+@keyframes tdot{0%,80%,100%{transform:scale(.7);opacity:.35}40%{transform:scale(1);opacity:1}}
+#view-chat .page{padding:0;max-width:none;display:flex;flex-direction:column;height:100%}
+
+@media (max-width:900px){
+  .metrics-row{grid-template-columns:1fr 1fr}
+  .form-grid{grid-template-columns:1fr}
+  .span-2{grid-column:span 1}
+  .rank-head>div:nth-child(n+3):not(:nth-child(8)):not(:nth-child(9)){display:none}
+  .rank-row>.rank-cell:not(:last-of-type){display:none}
+  .rank-head,.rank-row{grid-template-columns:30px 1fr 66px 96px}
+  .chat-side{display:none}
+}
+</style>
+</head>
+<body>
+<div class="layout">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <svg viewBox="0 0 200 150" fill="none" aria-label="One Select">
+        <defs>
+          <linearGradient id="bronzeGrad" x1="0.5" y1="0" x2="0.5" y2="1">
+            <stop offset="0%" stop-color="#8A6A34"></stop>
+            <stop offset="45%" stop-color="#C49A52"></stop>
+            <stop offset="100%" stop-color="#E0B96A"></stop>
+          </linearGradient>
+        </defs>
+        <polyline points="80,70 96,18 96,128 103,128" stroke="url(#bronzeGrad)" stroke-width="3.2" stroke-linecap="square" stroke-linejoin="miter"></polyline>
+        <polyline points="86,70 102,18 102,128 109,128" stroke="url(#bronzeGrad)" stroke-width="3.2" stroke-linecap="square" stroke-linejoin="miter"></polyline>
+        <polyline points="92,70 108,18 108,128 115,128" stroke="url(#bronzeGrad)" stroke-width="3.2" stroke-linecap="square" stroke-linejoin="miter"></polyline>
+        <polyline points="98,70 114,18 114,128 121,128" stroke="url(#bronzeGrad)" stroke-width="3.2" stroke-linecap="square" stroke-linejoin="miter"></polyline>
+        <text x="100" y="148" text-anchor="middle" font-family="'DM Sans',Arial,sans-serif" font-size="17.5" font-weight="700" letter-spacing="0.2em" fill="#B9C2D8">ONE SELECT</text>
+      </svg>
+    </div>
+    <div class="sidebar-company"><span class="biz-dot"></span>Northwind Robotics</div>
+
+    <nav class="sidebar-nav">
+      <div class="nav-section">Client Portal</div>
+      <a class="nav-item active" data-view="dashboard"><span class="nav-icon">◈</span>Dashboard</a>
+      <a class="nav-item" data-view="jobs"><span class="nav-icon">◫</span>My Jobs<span class="nav-badge">4</span></a>
+      <a class="nav-item" data-view="candidates"><span class="nav-icon">◉</span>Candidates<span class="nav-badge">9</span></a>
+      <a class="nav-item" data-view="reports"><span class="nav-icon">◧</span>Reports</a>
+      <a class="nav-item" data-view="chat"><span class="nav-icon">◎</span>AI Assistant</a>
+      <a class="nav-item" data-view="settings"><span class="nav-icon">◷</span>Settings</a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="sf-user">
+        <div class="sf-avatar">M</div>
+        <div class="sf-meta">
+          <div class="sf-name">Maya Okonkwo</div>
+          <div class="sf-email"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="4d202c342c0d23223f39253a2423293f222f2239242e3e632e2220">[email&#160;protected]</a></div>
+        </div>
+      </div>
+      <button class="sf-signout">Sign out</button>
+    </div>
+  </aside>
+
+  <!-- Content -->
+  <main class="content">
+    <div class="view active" id="view-dashboard" data-screen-label="Dashboard"><div class="page">
+
+      <div class="page-head">
+        <div>
+          <h2>Dashboard</h2>
+          <div class="sub">Sourcing overview for <b>Northwind Robotics</b> · 4 active roles</div>
+        </div>
+        <div class="head-actions">
+          <div class="seg" id="dateSeg">
+            <button data-r="7">7D</button>
+            <button class="active" data-r="30">30D</button>
+            <button data-r="90">QTR</button>
+          </div>
+          <button class="btn-primary">⤓ Export Report</button>
+        </div>
+      </div>
+
+      <!-- Role context -->
+      <div class="roles-row" id="rolesRow">
+        <div class="role-chip all active" data-role="all"><span class="rc-bar"></span><div><div class="rc-title">All roles</div><div class="rc-count">9 shortlisted · 42 in review</div></div></div>
+        <div class="role-chip" data-role="Senior Robotics Engineer"><span class="rc-bar"></span><div><div class="rc-title">Senior Robotics Engineer</div><div class="rc-count">2 shortlisted</div></div></div>
+        <div class="role-chip" data-role="Embedded Systems Lead"><span class="rc-bar"></span><div><div class="rc-title">Embedded Systems Lead</div><div class="rc-count">3 shortlisted</div></div></div>
+        <div class="role-chip" data-role="Computer Vision Engineer"><span class="rc-bar"></span><div><div class="rc-title">Computer Vision Engineer</div><div class="rc-count">2 shortlisted</div></div></div>
+        <div class="role-chip" data-role="Controls Engineer"><span class="rc-bar"></span><div><div class="rc-title">Controls Engineer</div><div class="rc-count">2 shortlisted</div></div></div>
+      </div>
+
+      <!-- Sourcing Activity widget -->
+      <div class="section-card">
+        <div class="section-card-head">
+          <div class="sch-left">
+            <h3>Sourcing Activity</h3>
+            <span class="sch-caption"><span class="live-dot"></span>Live · last 30 days</span>
+          </div>
+          <a class="sch-link" data-goto="candidates">View full pipeline →</a>
+        </div>
+
+        <div class="funnel">
+          <div class="fstage s-scanned">
+            <div class="fstage-top"><span class="fdot neutral"></span><span class="fstage-label">Profiles Scanned</span></div>
+            <div class="fnum" data-count="2847">2,847</div>
+            <div class="fstage-sub"><b>+312</b> this week · 6 sources</div>
+          </div>
+          <div class="fconn">
+            <span class="fconn-pct">6.5%</span>
+            <span class="fconn-arrow"><span class="fconn-line"></span><span class="fconn-tip">▶</span></span>
+            <span class="fconn-cap">match rate</span>
+          </div>
+          <div class="fstage s-matched">
+            <div class="fstage-top"><span class="fdot accent"></span><span class="fstage-label">Matched</span></div>
+            <div class="fnum" data-count="184">184</div>
+            <div class="fstage-sub"><b>82</b> avg. match score</div>
+          </div>
+          <div class="fconn">
+            <span class="fconn-pct">22.8%</span>
+            <span class="fconn-arrow"><span class="fconn-line"></span><span class="fconn-tip">▶</span></span>
+            <span class="fconn-cap">advanced</span>
+          </div>
+          <div class="fstage s-review">
+            <div class="fstage-top"><span class="fdot amber"></span><span class="fstage-label">Under Review</span></div>
+            <div class="fnum" data-count="42">42</div>
+            <div class="fstage-sub"><b>14</b> with recruiter notes</div>
+          </div>
+          <div class="fconn">
+            <span class="fconn-pct">21.4%</span>
+            <span class="fconn-arrow"><span class="fconn-line"></span><span class="fconn-tip">▶</span></span>
+            <span class="fconn-cap">shortlisted</span>
+          </div>
+          <div class="fstage s-shortlist">
+            <div class="fstage-top"><span class="fdot green"></span><span class="fstage-label">Shortlisted</span></div>
+            <div class="fnum" data-count="9">9</div>
+            <div class="fstage-sub"><b>4</b> awaiting your decision</div>
+          </div>
+        </div>
+
+        <!-- funnel ribbon -->
+        <div class="funnel-ribbon">
+          <div class="frib s1" style="height:60px"><span class="frv">2,847</span><span class="frl">Scanned</span></div>
+          <div class="frib s2" style="height:46px"><span class="frv">184</span><span class="frl">Matched</span></div>
+          <div class="frib s3" style="height:34px"><span class="frv">42</span><span class="frl">Review</span></div>
+          <div class="frib s4" style="height:24px"><span class="frv">9</span></div>
+        </div>
+
+        <!-- footer stat strip -->
+        <div class="funnel-strip">
+          <div class="fstrip-item">
+            <div class="fstrip-val">6<span class="unit">days</span></div>
+            <div class="fstrip-label">Avg. time to shortlist</div>
+          </div>
+          <div class="fstrip-item">
+            <div class="fstrip-val">82<span class="unit">/100</span></div>
+            <div class="fstrip-label">Avg. match score</div>
+          </div>
+          <div class="fstrip-item">
+            <div class="fstrip-val">3.2<span class="unit">×</span></div>
+            <div class="fstrip-label">Faster vs. market avg.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Shortlisted Candidates -->
+      <div class="section-card-head page-head-light" style="border:none;padding:8px 2px 14px;background:transparent;margin-top:6px">
+        <div class="sch-left">
+          <h3>Shortlisted Candidates</h3>
+          <span class="sch-caption">9 candidates · 5 new</span>
+        </div>
+        <a class="sch-link" data-goto="candidates">View all →</a>
+      </div>
+
+      <div class="cand-grid" id="candGrid">
+        <!-- cards injected -->
+      </div>
+
+    </div></div><!-- /view-dashboard -->
+
+    <!-- ===== MY JOBS ===== -->
+    <div class="view" id="view-jobs" data-screen-label="My Jobs"><div class="page">
+      <div class="page-head">
+        <div>
+          <h2>My Jobs</h2>
+          <div class="sub"><b>4</b> active · 2 closed</div>
+        </div>
+        <div class="head-actions">
+          <button class="btn-secondary">+ Quick Add</button>
+          <button class="btn-primary">✦ Post a Job</button>
+        </div>
+      </div>
+      <div id="jobsActive"></div>
+      <div id="jobsClosed"></div>
+    </div></div>
+
+    <!-- ===== CANDIDATES ===== -->
+    <div class="view" id="view-candidates" data-screen-label="Candidates"><div class="page">
+      <div id="candListWrap">
+        <div class="page-head">
+          <div>
+            <h2>Candidates</h2>
+            <div class="sub"><b>9</b> candidates total · across 4 roles</div>
+          </div>
+          <div class="filter-bar">
+            <input class="search-input" id="candSearch" type="search" placeholder="Search name, role, skill…" />
+            <select class="sel" id="candJobFilter">
+              <option value="all">All Jobs</option>
+              <option>Senior Robotics Engineer</option>
+              <option>Embedded Systems Lead</option>
+              <option>Computer Vision Engineer</option>
+              <option>Controls Engineer</option>
+            </select>
+            <button class="btn-secondary btn-sm">⤓ CSV</button>
+          </div>
+        </div>
+        <div class="tabbar" id="candTabs">
+          <button class="tab active" data-tab="approved">Approved<span class="tcount">2</span></button>
+          <button class="tab" data-tab="review">For Review<span class="tcount">5</span></button>
+          <button class="tab" data-tab="all">All<span class="tcount">9</span></button>
+        </div>
+        <div class="section-card"><div id="candRows"></div></div>
+      </div>
+      <div id="candDetailWrap" style="display:none"></div>
+    </div></div>
+
+    <!-- ===== REPORTS ===== -->
+    <div class="view" id="view-reports" data-screen-label="Reports"><div class="page">
+      <div class="page-head">
+        <div>
+          <h2>Reports</h2>
+          <div class="sub">Interview results, rankings & comparison</div>
+        </div>
+        <div class="filter-bar">
+          <select class="sel"><option value="all">All Jobs</option><option>Senior Robotics Engineer</option><option>Embedded Systems Lead</option></select>
+          <button class="btn-secondary btn-sm" onclick="window.print()">⎙ Print</button>
+        </div>
+      </div>
+      <div class="metrics-row" id="repMetrics"></div>
+      <div class="tabbar" id="repTabs">
+        <button class="tab active" data-rep="ranked">Ranked List</button>
+        <button class="tab" data-rep="compare">Side-by-Side</button>
+      </div>
+      <div id="repRanked"></div>
+      <div id="repCompare" style="display:none"></div>
+    </div></div>
+
+    <!-- ===== AI ASSISTANT ===== -->
+    <div class="view" id="view-chat" data-screen-label="AI Assistant"><div class="page">
+      <div class="chat-wrap">
+        <div class="chat-side">
+          <div class="chat-side-top"><button class="chat-new">+ New chat</button></div>
+          <div class="chat-convs" id="chatConvs"></div>
+        </div>
+        <div class="chat-main">
+          <div class="chat-head">
+            <div class="chat-av">OS</div>
+            <div><strong>One Select Assistant</strong><span>Pipeline copilot · always on</span></div>
+          </div>
+          <div class="chat-msgs" id="chatMsgs"></div>
+          <div class="chat-suggest" id="chatSuggest"></div>
+          <div class="chat-input-bar">
+            <textarea class="chat-input" id="chatInput" rows="1" placeholder="Ask about your candidates, jobs, or pipeline…"></textarea>
+            <button class="chat-send" id="chatSend">↑</button>
+          </div>
+        </div>
+      </div>
+    </div></div>
+
+    <!-- ===== SETTINGS ===== -->
+    <div class="view" id="view-settings" data-screen-label="Settings"><div class="page">
+      <div class="page-head"><div><h2>Settings</h2><div class="sub">Manage your account & notifications</div></div></div>
+
+      <div class="section-card">
+        <div class="section-card-head"><h3>Profile</h3></div>
+        <div class="section-body">
+          <div class="form-grid">
+            <div class="field"><label>Email</label><input type="email" value="maya@northwindrobotics.com" readonly /></div>
+            <div class="field"><label>Full Name</label><input type="text" value="Maya Okonkwo" /></div>
+            <div class="field"><label>Job Title</label><input type="text" value="Head of Talent" /></div>
+            <div class="field"><label>Phone</label><input type="tel" value="+44 7700 901234" /></div>
+            <div class="field span-2"><label>Company Name</label><input type="text" value="Northwind Robotics" /></div>
+          </div>
+          <div class="form-actions"><button class="btn-primary save-btn">Save Changes</button><span class="saved-note" style="display:none">✓ Saved</span></div>
+        </div>
+      </div>
+
+      <div class="section-card">
+        <div class="section-card-head"><h3>Role &amp; Access</h3></div>
+        <div class="section-body">
+          <div class="kv-row">
+            <div><div class="kv-title">Client</div><div class="kv-desc">Access to your jobs, candidates and reports. Sourcing & screening is run by your One Select recruiter.</div></div>
+            <span class="badge badge-blue">Client</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-card">
+        <div class="section-card-head"><h3>Email Notifications</h3></div>
+        <div class="section-body" id="notifBody"></div>
+      </div>
+
+      <div class="section-card">
+        <div class="section-card-head"><h3>Subscription</h3></div>
+        <div class="section-body">
+          <div class="kv-row">
+            <div>
+              <div class="kv-title">Scale · Annual</div>
+              <div class="kv-desc">Unlimited roles · priority sourcing · HRIS webhook</div>
+              <div style="font-family:var(--font-mono);font-size:12px;color:var(--accent);margin-top:5px">£1,499 / month</div>
+              <div style="font-size:11px;color:var(--text-3);margin-top:3px">Active since 14 January 2026</div>
+            </div>
+            <span class="badge badge-green">Active</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-card">
+        <div class="section-card-head"><h3>Team Access</h3><span class="section-card-sub muted-mono">Read-only colleagues</span></div>
+        <div class="section-body">
+          <div class="filter-bar" style="justify-content:flex-start;margin-bottom:16px">
+            <input class="search-input" style="width:240px" placeholder="colleague@northwindrobotics.com" />
+            <button class="btn-primary btn-sm save-btn">Send Invite</button>
+            <span class="saved-note" style="display:none">✓ Invite sent</span>
+          </div>
+          <div class="table-row" style="padding-left:0;padding-right:0">
+            <div class="col-main"><div class="mini-avatar">JR</div><div><div class="col-name">Jonas Reyes</div><div class="col-sub"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="18727776796b5876776a6c706f71767c6a777a776c717b6b367b7775">[email&#160;protected]</a> · added 2 Feb 2026</div></div></div>
+            <div class="col-right"><span class="badge badge-neutral">Read-only</span><button class="btn-ghost btn-sm remove-row" style="color:var(--red)">Remove</button></div>
+          </div>
+        </div>
+      </div>
+    </div></div>
+
+  </main>
+
+</div>
+
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
+/* ───────── Data ───────── */
+const JOBS = [
+  {code:'OS-241',title:'Senior Robotics Engineer',exp:6,skills:['ROS 2','C++','SLAM'],sal:'£85–110k',cands:14,date:'22 May',status:'active'},
+  {code:'OS-238',title:'Embedded Systems Lead',exp:8,skills:['RTOS','Embedded C','STM32'],sal:'£90–120k',cands:9,date:'08 May',status:'active'},
+  {code:'OS-235',title:'Computer Vision Engineer',exp:5,skills:['PyTorch','OpenCV','CUDA'],sal:'£80–105k',cands:11,date:'07 May',status:'active'},
+  {code:'OS-230',title:'Controls Engineer',exp:7,skills:['MATLAB','Simulink','Kalman'],sal:'£75–95k',cands:8,date:'06 May',status:'pending_review'},
+  {code:'OS-212',title:'Firmware Engineer (Intern)',exp:1,skills:['C','FreeRTOS'],sal:'£42–52k',cands:6,date:'12 Apr',status:'closed'},
+  {code:'OS-204',title:'QA Automation Engineer',exp:4,skills:['Python','Selenium'],sal:'£50–65k',cands:5,date:'02 Apr',status:'closed'},
+];
+
+const CAND = [
+  {n:'Aarav Mehta',init:'AM',role:'Senior Robotics Engineer',co:'Boston Dynamics',forRole:'Senior Robotics Engineer',screen:96,interview:94,rec:'Strong Hire',dims:[92,88,95,90,93],approved:true,avail:'available',exp:'8 yrs',skills:['ROS 2','C++','SLAM','Control Systems'],isNew:true,summary:'Senior robotics engineer with deep autonomy and motion-planning experience across legged and wheeled platforms.',strengths:['Led SLAM stack for a legged platform','Strong C++ and real-time systems','Clear, structured communicator'],flags:['Has not worked with ROS 2 in production yet']},
+  {n:'Lena Fischer',init:'LF',role:'Embedded Systems Lead',co:'Bosch',forRole:'Embedded Systems Lead',screen:93,interview:91,rec:'Strong Hire',dims:[95,84,90,88,94],approved:null,avail:'notice',availLabel:'1 mo notice',exp:'11 yrs',skills:['RTOS','Embedded C','STM32','CAN bus'],isNew:true,summary:'Embedded lead with 11 years shipping safety-critical firmware for automotive and industrial robotics.',strengths:['Owned firmware for ASIL-D systems','Mentored a team of 6 engineers','Exceptional depth on RTOS internals'],flags:['Compensation expectation at top of band']},
+  {n:'Diego Santos',init:'DS',role:'Computer Vision Engineer',co:'Zoox',forRole:'Computer Vision Engineer',screen:90,interview:88,rec:'Hire',dims:[90,82,86,88,80],approved:null,avail:'available',exp:'6 yrs',skills:['PyTorch','OpenCV','CUDA','3D Recon'],isNew:true,summary:'Perception engineer focused on 3D reconstruction and real-time inference for autonomous vehicles.',strengths:['Shipped CUDA-optimised perception pipeline','Strong applied ML fundamentals'],flags:['Less exposure to classical robotics']},
+  {n:'Priya Nair',init:'PN',role:'Controls Engineer',co:'ABB Robotics',forRole:'Controls Engineer',screen:88,interview:86,rec:'Hire',dims:[84,80,88,85,82],approved:true,avail:'passive',availLabel:'Passive',exp:'7 yrs',skills:['MATLAB','Simulink','Kalman','Motion Planning'],summary:'Controls engineer specialising in state estimation and trajectory optimisation for industrial arms.',strengths:['Deep control theory background','Published on Kalman filtering'],flags:['Currently passive — slower to move']},
+  {n:'Tomás Varga',init:'TV',role:'Firmware Engineer',co:'Skydio',forRole:'Embedded Systems Lead',screen:85,interview:84,rec:'Hire',dims:[86,78,82,84,76],approved:null,avail:'available',exp:'5 yrs',skills:['Zephyr','Embedded C','BLE','Sensor Fusion'],isNew:true,summary:'Firmware engineer from the drone space with strong sensor-fusion and low-power experience.',strengths:['Hands-on Zephyr and BLE','Available immediately'],flags:['Fewer years than the role ideally wants']},
+  {n:'Sara Lindqvist',init:'SL',role:'Robotics SW Engineer',co:'Husqvarna',forRole:'Senior Robotics Engineer',screen:83,interview:82,rec:'Borderline',dims:[80,82,78,80,72],approved:null,avail:'notice',availLabel:'2 wk notice',exp:'4 yrs',skills:['ROS','Python','Gazebo','Nav2'],isNew:true,summary:'Robotics software engineer with strong ROS and simulation experience on outdoor autonomous platforms.',strengths:['Solid ROS / Nav2 navigation work','Good simulation discipline'],flags:['Junior for a senior title','Limited C++ depth']},
+  {n:'Marcus Bell',init:'MB',role:'Controls Engineer',co:'Dyson',forRole:'Controls Engineer',screen:79,interview:null,rec:null,approved:null,avail:'available',exp:'6 yrs',skills:['MATLAB','PID','LabVIEW'],isNew:true,summary:'Controls engineer from consumer robotics — invited to complete the AI interview.'},
+  {n:'Yuki Tanaka',init:'YT',role:'CV Engineer',co:'Sony',forRole:'Computer Vision Engineer',screen:77,interview:null,rec:null,approved:null,avail:'available',exp:'5 yrs',skills:['PyTorch','ONNX','TensorRT'],summary:'Computer-vision engineer with strong edge-inference experience — interview pending.'},
+  {n:'Olivia Grant',init:'OG',role:'Embedded Engineer',co:'Arm',forRole:'Embedded Systems Lead',screen:64,interview:58,rec:'Reject',dims:[60,55,58,62,54],approved:false,avail:'available',exp:'3 yrs',skills:['C','FreeRTOS'],summary:'Early-career embedded engineer; screened in but did not clear the interview bar for a lead role.',strengths:['Eager and coachable'],flags:['Too junior for a lead position','Gaps on systems design']},
+];
+
+const RECC = {'Strong Hire':'var(--green)','Hire':'var(--accent)','Borderline':'var(--amber)','Reject':'var(--red)'};
+const RECB = {'Strong Hire':'var(--green-d)','Hire':'var(--accent-d)','Borderline':'var(--amber-d)','Reject':'var(--red-d)'};
+const DIMLABELS = ['Technical','Communication','Role Fit','Problem Solving','Experience'];
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const R = 20, C = 2 * Math.PI * R;
+function dimColor(v){return v>=70?'var(--green)':v>=50?'var(--accent)':'var(--red)'}
+function ringSVG(score,size,sw){const r=size/2-sw,c=2*Math.PI*r,off=c*(1-score/100);return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="var(--border)" stroke-width="${sw}"/><circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="${dimColor(score)}" stroke-width="${sw}" stroke-linecap="round" stroke-dasharray="${c.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}"/></svg>`}
+
+/* ───────── Dashboard cards ───────── */
+function availBadge(c){
+  if(c.avail==='available') return '<span class="badge badge-green">Available</span>';
+  if(c.avail==='notice') return '<span class="badge badge-amber">'+c.availLabel+'</span>';
+  return '<span class="badge badge-neutral">'+(c.availLabel||'Passive')+'</span>';
+}
+document.getElementById('candGrid').innerHTML = CAND.slice(0,6).map(c=>`
+  <div class="cand-card" data-cand="${c.n}">
+    <div class="cand-for">For · <b>${c.forRole}</b>${c.isNew?' &nbsp;·&nbsp; <span style="color:var(--green)">NEW</span>':''}</div>
+    <div class="cand-main">
+      <div class="cand-avatar">${c.init}</div>
+      <div class="cand-id">
+        <div class="cand-name">${c.n}</div>
+        <div class="cand-role">${c.role} · <b>${c.co}</b></div>
+      </div>
+      <div class="score-ring">
+        <svg width="46" height="46" viewBox="0 0 46 46">
+          <circle class="ring-bg" cx="23" cy="23" r="${R}" fill="none" stroke-width="3"/>
+          <circle class="ring-fg" data-score="${c.screen}" cx="23" cy="23" r="${R}" fill="none" stroke-width="3" stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${C.toFixed(1)}"/>
+        </svg>
+        <div class="ring-inner"><div class="ring-val">${c.screen}</div><div class="ring-cap">match</div></div>
+      </div>
+    </div>
+    <div class="cand-skills">${c.skills.map(s=>`<span class="skill">${s}</span>`).join('')}</div>
+    <div class="cand-foot">
+      <div class="cand-meta">${availBadge(c)}<span class="cand-exp">${c.exp} exp</span></div>
+      <span class="cand-view">View profile →</span>
+    </div>
+  </div>`).join('');
+
+/* ───────── My Jobs ───────── */
+function jobRow(j){
+  const statusBadge = j.status==='pending_review'?'<span class="badge badge-amber">Under Review</span>':'';
+  return `<div class="table-row clickable" data-job="${j.title}">
+    <div class="col-main"><div style="flex:1;min-width:0">
+      <div class="col-name"><span class="job-code">${j.code}</span>${j.title}</div>
+      <div class="col-sub">${j.exp}+ yrs · ${j.skills.join(', ')}<span class="salary">${j.sal}</span></div>
+    </div></div>
+    <div class="col-right">${statusBadge}<span class="muted-mono">${j.cands} candidates</span><span class="muted-mono">${j.date}</span>
+      <button class="btn-secondary btn-sm" onclick="event.stopPropagation()">Close</button></div>
+  </div>`;
+}
+function jobRowClosed(j){
+  return `<div class="table-row dim">
+    <div class="col-main"><div style="flex:1;min-width:0">
+      <div class="col-name"><span class="job-code">${j.code}</span>${j.title}</div>
+      <div class="col-sub">${j.exp}+ yrs · ${j.cands} candidates</div>
+    </div></div>
+    <div class="col-right"><span class="badge badge-amber">closed</span><button class="btn-secondary btn-sm">Reopen</button></div>
+  </div>`;
+}
+(function(){
+  const active = JOBS.filter(j=>j.status!=='closed'), closed = JOBS.filter(j=>j.status==='closed');
+  document.getElementById('jobsActive').innerHTML =
+    `<div class="section-card"><div class="section-card-head"><h3>Active</h3><span class="badge badge-green">${active.length}</span></div>${active.map(jobRow).join('')}</div>`;
+  document.getElementById('jobsClosed').innerHTML =
+    `<div class="section-card"><div class="section-card-head"><h3>Closed</h3><span class="badge badge-amber">${closed.length}</span></div>${closed.map(jobRowClosed).join('')}</div>`;
+})();
+
+/* ───────── Candidates ───────── */
+let candTab = 'approved', candQuery = '', candJob = 'all';
+function candStatus(c){
+  if(c.approved===true) return '<span class="badge badge-green">Approved</span>';
+  if(c.approved===false) return '<span class="badge badge-red">Rejected</span>';
+  if(c.interview==null) return '<span class="badge badge-amber">Interview Pending</span>';
+  return '<span class="badge badge-neutral">For Review</span>';
+}
+function candRow(c,i){
+  const rec = c.rec?`<span class="score-pill" style="color:${RECC[c.rec]}">${c.rec}</span>`:'';
+  const iv = c.interview!=null?`<span class="muted-mono">IV ${(c.interview/10).toFixed(1)}</span>`:'';
+  const actions = c.approved===null && c.interview!=null
+    ? `<button class="btn-secondary btn-sm btn-green" data-approve="${c.n}">✓ Approve</button><button class="btn-secondary btn-sm btn-red" data-reject="${c.n}">✕ Reject</button>`
+    : '';
+  return `<div class="table-row clickable" data-open="${c.n}">
+    <div class="col-main"><div class="mini-avatar">${c.init}</div><div>
+      <div class="col-name">${c.n}</div><div class="col-sub">${c.role} · ${c.co} · ${c.exp}</div>
+    </div></div>
+    <div class="col-right">
+      <span class="muted-mono">Scr ${(c.screen/10).toFixed(1)}</span>${iv}${rec}${candStatus(c)}${actions}
+    </div>
+  </div>`;
+}
+function renderCand(){
+  let list = CAND.filter(c=>candJob==='all'||c.forRole===candJob);
+  if(candQuery.trim()){
+    const w = candQuery.toLowerCase().split(/\s+/);
+    list = list.filter(c=>{const hay=[c.n,c.role,c.co,...c.skills].join(' ').toLowerCase();return w.every(x=>hay.includes(x))});
+  }
+  const approved = list.filter(c=>c.approved===true);
+  const review = list.filter(c=>c.approved===null);
+  let shown = candTab==='approved'?approved:candTab==='review'?review:list;
+  // tab counts (from full set, not search)
+  const full = CAND.filter(c=>candJob==='all'||c.forRole===candJob);
+  document.querySelector('[data-tab="approved"] .tcount').textContent = full.filter(c=>c.approved===true).length;
+  document.querySelector('[data-tab="review"] .tcount').textContent = full.filter(c=>c.approved===null).length;
+  document.querySelector('[data-tab="all"] .tcount').textContent = full.length;
+  const rows = shown.length ? shown.map(candRow).join('')
+    : `<div style="padding:40px;text-align:center;color:var(--text-3);font-size:13px">No candidates in this view.</div>`;
+  document.getElementById('candRows').innerHTML = rows;
+}
+function openCand(name){
+  const c = CAND.find(x=>x.n===name); if(!c) return;
+  const ring = c.interview!=null
+    ? `<div class="ring-lg">${ringSVG(c.interview,72,5)}<div class="ring-inner"><div class="big">${(c.interview/10).toFixed(1)}</div><div class="cap">${c.rec}</div></div></div>`
+    : '';
+  const dims = c.dims ? `<div class="profile-section"><h4>Interview Assessment</h4>${c.dims.map((v,i)=>`
+      <div class="score-dim"><span class="dim-label">${DIMLABELS[i]}</span><div class="dim-track"><div class="dim-fill" style="width:${v}%;background:${dimColor(v)}"></div></div><span class="dim-val">${(v/10).toFixed(1)}</span></div>`).join('')}</div>` : '';
+  const sf = (c.strengths||c.flags) ? `<div class="profile-section"><h4>Strengths & Flags</h4>
+      ${(c.strengths||[]).map(s=>`<div class="bullet"><span class="bdot" style="background:var(--green)"></span>${s}</div>`).join('')}
+      ${(c.flags||[]).map(f=>`<div class="bullet"><span class="bdot" style="background:var(--red)"></span>${f}</div>`).join('')}</div>` : '';
+  const pendingNote = c.interview==null ? `<div class="profile-section full"><h4>Interview Status</h4><div style="font-family:var(--font-mono);font-size:14px;color:var(--amber)">Interview pending — candidate invited to complete their AI video interview.</div></div>` : '';
+  const summary = c.summary ? `<div class="profile-section full"><h4>Summary</h4><p class="insight">${c.summary}</p></div>` : '';
+  const grid = (dims||sf||pendingNote||summary) ? `<div class="profile-grid2">${dims}${sf}${summary}${pendingNote}</div>` : '';
+  document.getElementById('candListWrap').style.display='none';
+  const w = document.getElementById('candDetailWrap');
+  w.style.display='block';
+  w.innerHTML = `
+    <button class="btn-secondary" id="candBack" style="margin-bottom:18px">← Back to list</button>
+    <div class="profile-hero">
+      <div class="profile-avatar-lg">${c.init}</div>
+      <div class="profile-id">
+        <h3>${c.n}</h3>
+        <p>${c.role} · ${c.co} · ${c.exp} exp</p>
+        <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap">
+          <span class="badge ${c.approved===false?'badge-red':'badge-green'}">Screen ${(c.screen/10).toFixed(1)}/10</span>
+          ${availBadge(c)}
+          ${c.approved===true?'<span class="badge badge-green">Approved by you</span>':''}
+        </div>
+        <div class="cand-skills" style="margin-top:12px">${c.skills.map(s=>`<span class="skill">${s}</span>`).join('')}</div>
+      </div>
+      ${ring}
+    </div>
+    ${grid}`;
+  document.getElementById('candBack').onclick = ()=>{w.style.display='none';document.getElementById('candListWrap').style.display='block'};
+  document.querySelector('.content').scrollTop = 0;
+}
+
+/* ───────── Reports ───────── */
+(function(){
+  const ivd = CAND.filter(c=>c.interview!=null);
+  const m = [
+    ['blue', ivd.length, 'Interviewed'],
+    ['green', CAND.filter(c=>c.rec==='Strong Hire').length, 'Strong Hire'],
+    ['', CAND.filter(c=>['Strong Hire','Hire'].includes(c.rec)).length, 'Hire +'],
+    ['amber', CAND.filter(c=>c.interview==null).length, 'Yet to Interview'],
+  ];
+  document.getElementById('repMetrics').innerHTML = m.map(([cls,v,l])=>`<div class="metric-card ${cls}"><span class="metric-val">${v}</span><span class="metric-label">${l}</span></div>`).join('');
+
+  const ranked = [...ivd].sort((a,b)=>b.interview-a.interview);
+  const head = `<div class="rank-head"><div>#</div><div>Candidate</div>${DIMLABELS.map(l=>`<div>${l.slice(0,5)}</div>`).join('')}<div>Overall</div><div>Verdict</div></div>`;
+  const rows = ranked.map((c,i)=>`<div class="rank-row">
+    <div class="rank-num">#${i+1}</div>
+    <div><div class="rank-name" data-open="${c.n}">${c.n}</div><div class="rank-role">${c.role}</div></div>
+    ${c.dims.map(v=>`<div class="rank-cell" style="color:${dimColor(v)}">${v}</div>`).join('')}
+    <div class="rank-cell" style="font-size:14px;color:${dimColor(c.interview)}">${c.interview}</div>
+    <div><span class="verdict" style="color:${RECC[c.rec]};background:${RECB[c.rec]}">${c.rec}</span></div>
+  </div>`).join('');
+  document.getElementById('repRanked').innerHTML = `<div class="section-card"><div class="section-card-head"><h3>Ranked — Best to Worst</h3><span class="badge badge-green">${ranked.length} interviewed</span></div>${head}${rows}</div>`;
+
+  document.getElementById('repCompare').innerHTML = `<div class="cand-grid">${ranked.map((c,i)=>`
+    <div class="profile-section" style="border-top:3px solid ${RECC[c.rec]};position:relative">
+      <div style="position:absolute;top:16px;right:16px;width:24px;height:24px;border-radius:50%;background:${i===0?'var(--accent)':'var(--surface-2)'};color:${i===0?'#fff':'var(--text-3)'};display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-size:10px;font-weight:700">${i+1}</div>
+      <div class="rank-name" data-open="${c.n}" style="font-size:14px">${c.n}</div>
+      <div class="rank-role" style="margin-bottom:12px">${c.role}</div>
+      <div style="display:flex;align-items:baseline;gap:4px;margin-bottom:12px"><span style="font-family:var(--font-head);font-size:36px;color:${dimColor(c.interview)};line-height:1">${c.interview}</span><span class="muted-mono">/100</span></div>
+      <span class="verdict" style="color:${RECC[c.rec]};background:${RECB[c.rec]}">${c.rec}</span>
+      <div style="margin-top:14px;display:flex;flex-direction:column;gap:8px">${c.dims.map((v,j)=>`
+        <div><div style="display:flex;justify-content:space-between;margin-bottom:3px"><span class="muted-mono" style="font-size:9px;text-transform:uppercase;white-space:nowrap">${DIMLABELS[j]}</span><span class="muted-mono" style="color:${dimColor(v)}">${v}</span></div><div class="dim-track"><div class="dim-fill" style="width:${v}%;background:${dimColor(v)}"></div></div></div>`).join('')}</div>
+    </div>`).join('')}</div>`;
+})();
+
+/* ───────── AI Assistant ───────── */
+const SUGGEST = ["Who are my strongest candidates?","Who's awaiting my review?","Summarise notice periods","Which roles are falling behind?"];
+document.getElementById('chatSuggest').innerHTML = SUGGEST.map(s=>`<span class="sug">${s}</span>`).join('');
+const GREET = {role:'bot',text:"Hi Maya 👋 I'm your pipeline copilot. I can pull up candidates, compare them, flag what needs your attention, and summarise sourcing activity across your 4 active roles. What would you like to know?"};
+function answer(q){
+  q = q.toLowerCase();
+  if(/strong|best|top|standout/.test(q)) return "Your two standout candidates are Aarav Mehta (9.4, Strong Hire) for Senior Robotics Engineer and Lena Fischer (9.1, Strong Hire) for Embedded Systems Lead. Both cleared screening and interview comfortably — Aarav is available immediately, Lena is on a 1-month notice.";
+  if(/review|awaiting|waiting|decide|decision/.test(q)) return "6 candidates are awaiting your decision: Lena Fischer, Diego Santos, Tomás Varga, Sara Lindqvist, plus Marcus Bell & Yuki Tanaka once their interviews land. Lena and Diego have been waiting 3+ days — worth prioritising.";
+  if(/notice|availab|start/.test(q)) return "Availability across your shortlist: Aarav, Diego, Tomás and Marcus are available immediately; Sara is on 2 weeks' notice; Lena on 1 month; Priya is passive. Average time-to-start ≈ 2.5 weeks.";
+  if(/behind|falling|slow|stuck|lag/.test(q)) return "Controls Engineer (OS-230) is still under review by your recruiter with no shortlist yet — it's the slowest role. Computer Vision Engineer is progressing well with 2 shortlisted and 88+ interview scores.";
+  if(/compare|vs|versus|lena|tom/.test(q)) return "Lena Fischer edges Tomás Varga overall: 9.1 vs 8.4. She's stronger on Technical (9.5 vs 8.6) and Experience (9.4 vs 7.6). Tomás wins on availability (immediate vs 1-month notice) and is 6 years more junior, so a lower cost.";
+  return "Across your 4 active roles you have 9 shortlisted candidates and 42 under review, with an average match score of 82. Want me to break that down by role, score, or availability?";
+}
+let CONVS, threads, activeConv;
+function freshThread(){return [{...GREET}]}
+CONVS = [
+  {t:'Strongest candidates this week', d:'Today', seed:'Who are my strongest candidates?'},
+  {t:'Compare Lena vs Tomás', d:'Yesterday', seed:'Compare Lena vs Tomás'},
+  {t:'Notice periods summary', d:'2 days ago', seed:'Summarise notice periods'},
+];
+threads = CONVS.map(c=>{const t=freshThread(); t.push({role:'user',text:c.seed}); t.push({role:'bot',text:answer(c.seed)}); return t;});
+activeConv = 0;
+function renderConvs(){
+  document.getElementById('chatConvs').innerHTML = CONVS.map((c,i)=>`<div class="chat-conv ${i===activeConv?'active':''}" data-conv="${i}"><div class="cc-t">${c.t}</div><div class="cc-d">${c.d}</div></div>`).join('');
+}
+function updateSuggest(){document.getElementById('chatSuggest').style.display = threads[activeConv].some(m=>m.role==='user')?'none':'flex';}
+function paintChat(){
+  const wrap = document.getElementById('chatMsgs');
+  wrap.innerHTML = threads[activeConv].map(m=>`<div class="crow ${m.role}"><div class="crow-av">${m.role==='bot'?'OS':'M'}</div><div class="cbubble">${m.typing?'<span class="typing"><span></span><span></span><span></span></span>':m.text}</div></div>`).join('');
+  wrap.scrollTop = wrap.scrollHeight;
+}
+function sendChat(text){
+  text = (text||'').trim(); if(!text) return;
+  threads[activeConv].push({role:'user',text});
+  const input = document.getElementById('chatInput'); input.value=''; input.style.height='auto';
+  updateSuggest(); paintChat();
+  threads[activeConv].push({role:'bot',typing:true}); paintChat();
+  setTimeout(()=>{const t=threads[activeConv]; t.pop(); t.push({role:'bot',text:answer(text)}); paintChat();}, reduce?0:750);
+}
+renderConvs(); paintChat(); updateSuggest();
+document.getElementById('chatConvs').addEventListener('click',e=>{const el=e.target.closest('[data-conv]'); if(!el)return; activeConv=+el.dataset.conv; renderConvs(); paintChat(); updateSuggest();});
+document.querySelector('.chat-new').addEventListener('click',()=>{CONVS.unshift({t:'New chat', d:'Now'}); threads.unshift(freshThread()); activeConv=0; renderConvs(); paintChat(); updateSuggest();});
+document.getElementById('chatSend').onclick = ()=>sendChat(document.getElementById('chatInput').value);
+document.getElementById('chatInput').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendChat(e.target.value)}});
+document.getElementById('chatInput').addEventListener('input',e=>{e.target.style.height='auto';e.target.style.height=Math.min(e.target.scrollHeight,120)+'px'});
+document.getElementById('chatSuggest').addEventListener('click',e=>{const s=e.target.closest('.sug'); if(s)sendChat(s.textContent)});
+
+/* ───────── Settings notifications ───────── */
+const NOTIF = [
+  ['New candidate shortlisted','When a candidate passes AI screening for your role',true],
+  ['Interview completed','When a candidate finishes their video interview',true],
+  ['Approval reminder','Nudges when candidates await your decision for 48h+',true],
+  ['Weekly digest','A summary of pipeline activity every Monday morning',false],
+];
+document.getElementById('notifBody').innerHTML = NOTIF.map(([t,d,on])=>`
+  <label class="check-row"><input type="checkbox" ${on?'checked':''}/><div><div class="check-title">${t}</div><div class="check-desc">${d}</div></div></label>`).join('')
+  + `<div class="form-actions"><button class="btn-primary save-btn">Save Preferences</button><span class="saved-note" style="display:none">✓ Saved</span></div>`;
+
+/* ───────── Nav switching ───────── */
+function showView(v){
+  document.querySelectorAll('.view').forEach(el=>el.classList.toggle('active', el.id==='view-'+v));
+  document.querySelectorAll('.nav-item').forEach(el=>el.classList.toggle('active', el.dataset.view===v));
+  document.querySelector('.content').scrollTop = 0;
+  if(v==='chat') paintChat();
+}
+document.querySelectorAll('.nav-item').forEach(el=>el.addEventListener('click',()=>showView(el.dataset.view)));
+document.addEventListener('click',e=>{
+  const g = e.target.closest('[data-goto]'); if(g){showView(g.dataset.goto); return;}
+  const jb = e.target.closest('[data-job]'); if(jb){const sel=document.getElementById('candJobFilter');const t=jb.dataset.job;if([...sel.options].some(o=>o.value===t)){sel.value=t;candJob=t;}else{sel.value='all';candJob='all';}candTab='all';document.querySelectorAll('#candTabs .tab').forEach(x=>x.classList.toggle('active',x.dataset.tab==='all'));renderCand();showView('candidates');return;}
+  const ap = e.target.closest('[data-approve]'); if(ap){const c=CAND.find(x=>x.n===ap.dataset.approve); if(c){c.approved=true; renderCand();} return;}
+  const rj = e.target.closest('[data-reject]'); if(rj){const c=CAND.find(x=>x.n===rj.dataset.reject); if(c){c.approved=false; renderCand();} return;}
+  const open = e.target.closest('[data-open]'); if(open){showView('candidates'); openCand(open.dataset.open); return;}
+  const card = e.target.closest('[data-cand]'); if(card){showView('candidates'); openCand(card.dataset.cand); return;}
+  const save = e.target.closest('.save-btn'); if(save){const n=save.parentElement.querySelector('.saved-note'); if(n){n.style.display='inline'; setTimeout(()=>n.style.display='none',2200);} return;}
+  const rm = e.target.closest('.remove-row'); if(rm){const row=rm.closest('.table-row'); if(row) row.remove(); return;}
+});
+
+/* Candidates controls */
+document.getElementById('candTabs').addEventListener('click',e=>{const t=e.target.closest('.tab');if(!t)return;candTab=t.dataset.tab;document.querySelectorAll('#candTabs .tab').forEach(x=>x.classList.remove('active'));t.classList.add('active');renderCand()});
+document.getElementById('candSearch').addEventListener('input',e=>{candQuery=e.target.value;renderCand()});
+document.getElementById('candJobFilter').addEventListener('change',e=>{candJob=e.target.value;renderCand()});
+renderCand();
+
+/* Reports tabs */
+document.getElementById('repTabs').addEventListener('click',e=>{const t=e.target.closest('.tab');if(!t)return;document.querySelectorAll('#repTabs .tab').forEach(x=>x.classList.remove('active'));t.classList.add('active');const ranked=t.dataset.rep==='ranked';document.getElementById('repRanked').style.display=ranked?'block':'none';document.getElementById('repCompare').style.display=ranked?'none':'block'});
+
+/* ───────── Dashboard animations ───────── */
+requestAnimationFrame(()=>requestAnimationFrame(()=>{
+  document.querySelectorAll('#view-dashboard .ring-fg').forEach(el=>{
+    const off = C*(1-(+el.dataset.score)/100);
+    el.style.strokeDashoffset = off.toFixed(1);
+  });
+}));
+function countUp(el,target,dur){
+  const start=performance.now();
+  (function tick(now){const p=Math.min(1,(now-start)/dur);el.textContent=Math.round(target*(1-Math.pow(1-p,3))).toLocaleString();if(p<1)requestAnimationFrame(tick);else el.textContent=target.toLocaleString();})(start);
+}
+if(!reduce){document.querySelectorAll('.fnum').forEach((el,i)=>{el.textContent='0';setTimeout(()=>countUp(el,+el.dataset.count,1100),120*i)});}
+
+/* Dashboard chrome (visual) */
+document.getElementById('dateSeg').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;document.querySelectorAll('#dateSeg button').forEach(x=>x.classList.remove('active'));b.classList.add('active')});
+document.getElementById('rolesRow').addEventListener('click',e=>{const chip=e.target.closest('.role-chip');if(!chip)return;const role=chip.dataset.role||'all';const sel=document.getElementById('candJobFilter');if(role!=='all'&&[...sel.options].some(o=>o.value===role)){sel.value=role;candJob=role;}else{sel.value='all';candJob='all';}candTab='all';document.querySelectorAll('#candTabs .tab').forEach(x=>x.classList.toggle('active',x.dataset.tab==='all'));renderCand();showView('candidates');});
+</script>
+
+<template id="__bundler_thumbnail">
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+    <rect width="100" height="100" fill="#0D0F1A"/>
+    <text x="50" y="58" text-anchor="middle" font-family="Georgia,serif" font-size="34" fill="#CD7F45">1</text>
+  </svg>
+</template>
+</body>
+</html>

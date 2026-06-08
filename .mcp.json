@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "magic": {
+      "type": "streamable-http",
+      "url": "https://mcp.21st.dev/api/mcp?apiKey=21st_sk_322701917d0583939b16b937f7f1e7eb7c976d28be4bcfcc94502c73fab75fa4"
+    }
+  }
+}
